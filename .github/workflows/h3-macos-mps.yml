@@ -18,6 +18,8 @@ name: H3 macOS MPS POC
 
 on:
   workflow_dispatch:
+  push:
+    branches: [master]
 
 env:
   PYTHONUNBUFFERED: "1"
