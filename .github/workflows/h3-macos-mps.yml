@@ -75,3 +75,18 @@ jobs:
             mvp/poc/macos_mps/results.json
             mvp/poc/macos_mps/results.md
           if-no-files-found: error
+
+      - name: Publish results to repo (ci-results branch, no re-trigger)
+        if: always()
+        shell: bash
+        run: |
+          if [ ! -f mvp/poc/macos_mps/results.json ]; then
+            echo "no results.json in this run; skipping publish"
+            exit 0
+          fi
+          git config user.name "h3-ci"
+          git config user.email "ci@gh-actions"
+          git add mvp/poc/macos_mps/results.json mvp/poc/macos_mps/results.md
+          git commit -q -m "h3: publish MPS results" --no-verify || echo "nothing to commit"
+          # push to a NON-master branch so it does not re-trigger this workflow
+          git push --force origin master:ci-results || echo "push to ci-results failed"
