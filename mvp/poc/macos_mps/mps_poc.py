@@ -549,42 +549,53 @@ def main(argv: list[str] | None = None) -> int:
         _write_report(args.out, report)
         return 0
 
-    # correctness (compare on a representative batch)
-    frames_c = generate_frames(32, seed=_SEED)
-    corr = correctness(frames_c, model, dim, device="mps", batch_size=8)
-    print(f"correctness cos_mean={corr['cos_mean']:.6f} "
-          f"max_abs_diff={corr['max_abs_diff']:.2e} "
-          f"norm_dev_mps={corr['norm_deviation_mps']:.2e}")
+    # correctness -> stability, wrapped in one try: any MPS op/runtime error is
+    # captured into the report (verdict NO_GO) instead of crashing the step, so
+    # the uploaded artifact carries the exact failure for diagnosis.
+    try:
+        # correctness (compare on a representative batch)
+        frames_c = generate_frames(32, seed=_SEED)
+        corr = correctness(frames_c, model, dim, device="mps", batch_size=8)
+        print(f"correctness cos_mean={corr['cos_mean']:.6f} "
+              f"max_abs_diff={corr['max_abs_diff']:.2e} "
+              f"norm_dev_mps={corr['norm_deviation_mps']:.2e}")
 
-    # throughput at batch 8 (representative)
-    frames_t = generate_frames(128, seed=_SEED)
-    perf_cpu = throughput(frames_t, model, dim, device="cpu", batch_size=8)
-    perf_mps = throughput(frames_t, model, dim, device="mps", batch_size=8)
-    print(f"throughput cpu={perf_cpu['frames_per_s']:.2f} fps "
-          f"mps={perf_mps['frames_per_s']:.2f} fps")
+        # throughput at batch 8 (representative)
+        frames_t = generate_frames(128, seed=_SEED)
+        perf_cpu = throughput(frames_t, model, dim, device="cpu", batch_size=8)
+        perf_mps = throughput(frames_t, model, dim, device="mps", batch_size=8)
+        print(f"throughput cpu={perf_cpu['frames_per_s']:.2f} fps "
+              f"mps={perf_mps['frames_per_s']:.2f} fps")
 
-    # per-batch sweep (light): report 3/8/32/128 fps for MPS
-    batch_sweep = []
-    for bs in (3, 8, 32, 128):
-        fb = generate_frames(bs, seed=_SEED)
-        r = throughput(fb, model, dim, device="mps", batch_size=bs)
-        batch_sweep.append(r)
-        print(f"  batch={bs}: {r['frames_per_s']:.2f} fps ({r['ms_per_frame']:.1f} ms/f)")
+        # per-batch sweep (light): report 3/8/32/128 fps for MPS
+        batch_sweep = []
+        for bs in (3, 8, 32, 128):
+            fb = generate_frames(bs, seed=_SEED)
+            r = throughput(fb, model, dim, device="mps", batch_size=bs)
+            batch_sweep.append(r)
+            print(f"  batch={bs}: {r['frames_per_s']:.2f} fps ({r['ms_per_frame']:.1f} ms/f)")
 
-    # stability (500 frames)
-    stab = stability(model, dim, device="mps", n=500, batch_size=16)
-    print(f"stability all_finite={stab['all_finite']} "
-          f"max_norm_dev={stab['max_norm_deviation']:.2e} "
-          f"fps={stab['frames_per_s']:.2f} exception={stab['exception']} "
-          f"fallback_warnings={stab['mps_fallback_warnings']}")
+        # stability (500 frames)
+        stab = stability(model, dim, device="mps", n=500, batch_size=16)
+        print(f"stability all_finite={stab['all_finite']} "
+              f"max_norm_dev={stab['max_norm_deviation']:.2e} "
+              f"fps={stab['frames_per_s']:.2f} exception={stab['exception']} "
+              f"fallback_warnings={stab['mps_fallback_warnings']}")
 
-    perf = {"batch8": {"cpu": perf_cpu, "mps": perf_mps},
-            "batch_sweep_mps": batch_sweep}
-    report = build_report(env, model_ok=True, model_source=model_source,
-                          correctness=corr, perf_cpu=perf_cpu, perf_mps=perf_mps,
-                          stab_mps=stab)
-    report["performance"]["batch_sweep_mps"] = batch_sweep
-    report["peak_rss_mb"] = peak_rss_mb()
+        perf = {"batch8": {"cpu": perf_cpu, "mps": perf_mps},
+                "batch_sweep_mps": batch_sweep}
+        report = build_report(env, model_ok=True, model_source=model_source,
+                              correctness=corr, perf_cpu=perf_cpu, perf_mps=perf_mps,
+                              stab_mps=stab)
+        report["performance"]["batch_sweep_mps"] = batch_sweep
+        report["peak_rss_mb"] = peak_rss_mb()
+    except Exception as exc:  # noqa: BLE001 - capture any MPS op/runtime error
+        err = f"{type(exc).__name__}: {exc}"
+        print(f"H3 POC raised during MPS run: {err}")
+        report = build_report(env, model_ok=True, model_source=model_source,
+                              correctness=None, perf_cpu=None, perf_mps=None,
+                              stab_mps={"exception": err, "n": 0},
+                              note=f"H3 POC raised: {err}")
     _write_report(args.out, report)
     return 0
 
