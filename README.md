@@ -55,5 +55,8 @@ D:\claudework\video-dedup-tool\.venv\Scripts\python.exe src/benchmark.py --engin
 - **real/**: 真实素材（用户提供）
 
 ## 结论
+git config user.name bsaizne
+git config user.email hx1987508215@gmail.com
+
 
 见 `benchmark_report.md`。所有结论基于实际实验结果，非 README 推断。
