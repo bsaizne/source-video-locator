@@ -53,7 +53,7 @@ engines/
 tools/
 
 # ----------------- Research code / phase reports (not product deliverables) -- #
-src/
+/src/
 benchmark_report*.md
 
 # ----------------------- Generated env / report snapshots ------------------- #
