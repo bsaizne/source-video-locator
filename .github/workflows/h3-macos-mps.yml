@@ -1,0 +1,72 @@
+# H3 macOS Apple Silicon (PyTorch MPS) feasibility POC — GitHub Actions CI.
+#
+# Runs on a real macOS ARM64 (Apple Silicon) hosted runner and compares CPU vs MPS
+# on the frozen DINOv2 ViT-S/14 model. Manual-only (workflow_dispatch) so it does
+# not consume macOS runners on every push. See mvp/poc/macos_mps/README.md.
+#
+# - Verifies `uname -m = arm64` (real Apple Silicon, not Intel).
+# - Installs a macOS PyTorch wheel (arm64, with MPS) — NOT the Windows CPU build.
+# - App/Bench never run the full 2.mkv here; only fixed test frames 3/8/32/128/500.
+# - Download + verify the DINOv2 weight (size/sha256); MODEL_DOWNLOAD_BLOCKED is
+#   reported honestly if the network blocks it — no faked pass.
+# - Uploads results.json + results.md as a workflow artifact.
+
+name: H3 macOS MPS POC
+
+on:
+  workflow_dispatch:
+
+env:
+  PYTHONUNBUFFERED: "1"
+
+jobs:
+  mps-poc:
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify Apple Silicon (arm64) runner
+        shell: bash
+        run: |
+          echo "uname -m: $(uname -m)"
+          echo "macOS: $(sw_vers -productVersion)"
+          echo "machine: $(sysctl -n machdep.cpu.brand_string || true)"
+          test "$(uname -m)" = "arm64" || {
+            echo "::error::expected arm64 (Apple Silicon) runner, got $(uname -m)"
+            exit 1
+          }
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          architecture: "arm64"
+
+      - name: Cache pip + DINOv2 weights
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/pip
+            ${{ github.workspace }}/.cache/dinov2_weights
+          key: h3-mps-cache-v1
+
+      - name: Install deps (PyTorch w/ MPS, opencv, numpy, psutil)
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch opencv-python numpy psutil
+          python -c "import torch; print('torch', torch.__version__, 'mps_built', torch.backends.mps.is_built(), 'mps_avail', torch.backends.mps.is_available())"
+
+      - name: Run MPS POC
+        run: |
+          python mvp/poc/macos_mps/mps_poc.py \
+            --weights-dir "${{ github.workspace }}/.cache/dinov2_weights" \
+            --out mvp/poc/macos_mps/results.json
+
+      - name: Upload results artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: h3-mps-results
+          path: |
+            mvp/poc/macos_mps/results.json
+            mvp/poc/macos_mps/results.md
+          if-no-files-found: error
