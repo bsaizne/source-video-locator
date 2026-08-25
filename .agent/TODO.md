@@ -32,7 +32,7 @@
 > **H2 = `DirectMLBackend` 已接入并验证（`H2_AMD_DIRECTML = IMPLEMENTED`）**：resolver + CPU fallback + CPU/DML 正确性 + FeatureStore 兼容 + 真实 2.mkv 生产冒烟（381.3s/3834帧/~10 fps）全过。POC 证据见 `mvp/poc/amdgpu_onnx/`（保留不删）。H3/H4/UI 待后续。
 
 - **PHASE H2 — Windows AMD GPU：✅ DONE（2026-08-25）**。`DirectMLBackend`（`mvp/src/device/directml_backend.py`）+ `resolve_backend` 自动选择/CPU fallback + 模型资产 resolver + `DeviceConfig` + `export_dml_model.py`。AMD 实机（RX 6750 GRE）：一致、10× 加速、内存稳定、FeatureStore 兼容。若未来某设备 DML 不稳则标 `AMD_GPU_BACKEND_BLOCKED` 继续 CPU（当前已自动 fallback，不影响 CPU MVP）。
-- **PHASE H3 — macOS Apple Silicon**：`MPSBackend`（能力检测 + fallback）→ 一致性 + 性能基准 → 打包(.app/签名/公证) → 实机验收。**不支持 macOS Intel**。
+- **PHASE H3 — macOS Apple Silicon：✅ `H3_MPS_GO`（2026-08-26，POC 完成，不再重复运行）**。真实 Apple Silicon（macOS 15.7.7 / arm64 / torch 2.13.0）CI 云端验证：`device_mps_actual=mps`（非 CPU fallback）、正确性 cos_mean=1.0 / max_abs_diff=6.3e-7 / mps norm deviation 1.19e-7、7.875× 加速（0.87→6.84 fps，batch=4 最佳 6.67）、500 帧 all_finite 无异常无 fallback、峰值内存 ~1.07GB。**关键约束：MPS batch_size 必须 ≤4（batch≥8 触发 `Invalid buffer size 5.37GiB` + 性能暴跌 2.83fps；推荐 batch=4）**。**不重新运行 H3 POC**。正式 `MPSBackend` 未实现（H3 后续阶段），**届时 embed_frames batch 必须 ≤4**。CI workflow `.github/workflows/h3-macos-mps.yml` = **workflow_dispatch-only（手动；不 push 自动触发）**。POC 见 `mvp/poc/macos_mps/`；`mvp/src/device` 零改动。**不支持 macOS Intel**。
 - **PHASE H4 — Windows NVIDIA GPU (CUDA)**：未来 `CUDABackend`，无需改 Engine/FeatureStore/UI/AppService。不进当前实施阶段。
 
 ## Research Archive（研究阶段 TODO，已冻结，仅追溯）

@@ -39,6 +39,14 @@ python mps_poc.py --quick --out results.selfcheck.json
 - 权重下载后比对**大小 + sha256**（见 `mps_poc.py::_verify_weights`），失配 → `MODEL_DOWNLOAD_BLOCKED`，
   绝不静默使用错误权重。
 
+## 测量说明（POC 已知瑕疵，非正确性判据）
+
+`stability.max_norm_deviation` 在 run #4 记录为 **50.2**，这是 POC 自身的**测量实现问题**：
+stability 阶段用**未归一化**的 CLS 原始范数（DINOv2 CLS 原始范数 ~几十）去算与 1.0 的偏差，
+**并非真实 norm 塌缩 / NaN**。真实 L2 归一化后的正确性由 `correctness` 佐证：
+`norm_deviation_mps ≈ 1.19e-7`（完全正常）。因此该 `stability.max_norm_deviation` 字段
+**不作为正确性判据**；500 帧稳定性看 `all_finite` / `exception` / `mps_fallback_warnings`。
+
 ## 文件
 
 - `mps_poc.py` — 主线验证脚本（跨平台：macOS 跑 CPU vs MPS；非 macOS 诚实标注）。
