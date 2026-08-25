@@ -1,0 +1,96 @@
+{
+  "env": {
+    "python": "3.13.14",
+    "torch": "2.13.0+cpu",
+    "torch_cuda": false,
+    "torch_threads": 12,
+    "gpu_wmi": [
+      "OrayIddDriver Device",
+      "AMD Radeon RX 6750 GRE 10GB"
+    ],
+    "winml": "winml / windows.ai.machinelearning: NOT_INSTALLED",
+    "onnxruntime_providers_available": null
+  },
+  "setup": {
+    "frames": 500,
+    "perf_frames": 120,
+    "stability_frames": 500,
+    "source_res": "960x540",
+    "batch": 8,
+    "weights": "D:\\claudework\\benchmark\\work\\dinov2_weights\\dinov2_vits14_pretrain.pth",
+    "model": "D:\\claudework\\benchmark\\mvp\\poc\\amdgpu_onnx\\export_model\\dinov2_cls_384.onnx"
+  },
+  "perf": {
+    "cpu_torch": {
+      "fps": 1.46,
+      "ms_per_frame": 685.92
+    },
+    "onnx_cpu": {
+      "fps": 1.94,
+      "ms_per_frame": 516.74
+    },
+    "onnx_dml": {
+      "fps": 15.15,
+      "ms_per_frame": 66.02
+    },
+    "onnx_dml_batch1": {
+      "fps": 8.93,
+      "ms_per_frame": 111.95
+    },
+    "speedup_dml_vs_cpu": 10.39
+  },
+  "providers": {
+    "onnx_cpu": [
+      "CPUExecutionProvider"
+    ],
+    "onnx_dml": [
+      "DmlExecutionProvider",
+      "CPUExecutionProvider"
+    ]
+  },
+  "correctness": {
+    "onnx_cpu": {
+      "name": "onnx_cpu",
+      "cosine": 1.0,
+      "cos_rowwise_min": 1.0,
+      "cos_rowwise_mean": 1.0,
+      "max_abs_diff": 4e-07,
+      "mean_abs_diff": 6e-08,
+      "l2norm_min": 1.0,
+      "l2norm_max": 1.0,
+      "ok": true
+    },
+    "onnx_dml": {
+      "name": "onnx_dml",
+      "cosine": 0.999996,
+      "cos_rowwise_min": 0.999995,
+      "cos_rowwise_mean": 0.999996,
+      "max_abs_diff": 0.0004795,
+      "mean_abs_diff": 0.00010803,
+      "l2norm_min": 1.0,
+      "l2norm_max": 1.0,
+      "ok": true
+    },
+    "dml_raw_vs_cpu_raw_max_abs": 0.0237243,
+    "neighbor_agreement": 1.0
+  },
+  "stability": {
+    "ran": true,
+    "flags": "all_finite",
+    "max_norm_dev": 0.0,
+    "mem_start_mb": 3889.265625,
+    "mem_end_mb": 4416.9921875,
+    "mem_growth_mb": 527.7,
+    "ok": true
+  },
+  "verdict": {
+    "reason": "runs, correct, GPU used, speedup>=1.5x, stable",
+    "checks": [
+      "+correctness",
+      "+gpu_used",
+      "+stability",
+      "+speed>=1.5x",
+      "+batch1_speed"
+    ]
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "stability_longrun": {
+    "ran": true,
+    "verdict": "PLATEAU",
+    "ok": true,
+    "why": "尾部斜率 0.00012 MB/帧 (<0.002) 且后段涨幅/前段涨幅 0.00 (<0.5) -> DML arena 一次性预热",
+    "frames": 600,
+    "batch": 8,
+    "mem_start_mb": 348.45703125,
+    "mem_end_mb": 334.27734375,
+    "mem_growth_mb": -14.2,
+    "head_mean_mb": 334.2,
+    "tail_mean_mb": 334.3,
+    "tail_slope_mb_per_frame": 0.00012,
+    "tail_vs_head_growth_ratio": 0.0,
+    "max_norm_dev": 0.0,
+    "nonfinite_batches": 0,
+    "curve": [
+      {
+        "frame": 200,
+        "elapsed_s": 15.1,
+        "mem_mb": 334.23046875
+      },
+      {
+        "frame": 400,
+        "elapsed_s": 30.2,
+        "mem_mb": 334.2734375
+      },
+      {
+        "frame": 600,
+        "elapsed_s": 45.3,
+        "mem_mb": 334.27734375
+      }
+    ]
+  }
+}

@@ -1,0 +1,142 @@
+{
+  "source": "D:\\claudework\\benchmark\\datasets\\real\\originals\\2.mkv",
+  "video_res": "1280x688",
+  "duration_s": 7667.535,
+  "batch": 8,
+  "max_frames_target": 3834,
+  "frames_processed": 3834,
+  "completed": true,
+  "did_complete_all_frames": true,
+  "start_rss_mb": 278.49609375,
+  "peak_rss_mb": 336.8203125,
+  "final_rss_mb": 336.8203125,
+  "growth_mb": 58.32421875,
+  "end_to_end_s": 323.9,
+  "avg_fps": 11.84,
+  "avg_batch_ms": 585.11,
+  "gpu_vram": "NOT_AVAILABLE_VIA_ORT_DML",
+  "intervals": [
+    {
+      "interval_frames": 248,
+      "delta_mb": 0.1,
+      "mb_per_1000f": 0.25
+    },
+    {
+      "interval_frames": 496,
+      "delta_mb": -0.7,
+      "mb_per_1000f": -1.37
+    },
+    {
+      "interval_frames": 1000,
+      "delta_mb": 6.2,
+      "mb_per_1000f": 6.2
+    },
+    {
+      "interval_frames": 1000,
+      "delta_mb": -6.2,
+      "mb_per_1000f": -6.24
+    },
+    {
+      "interval_frames": 834,
+      "delta_mb": 8.6,
+      "mb_per_1000f": 10.35
+    }
+  ],
+  "late_slope_mb_per_1000f": 2.05,
+  "all_slope_mb_per_1000f": 2.23,
+  "checkpoints": [
+    {
+      "frames": 256,
+      "rss_mb": 328.8515625,
+      "gpu_vram": "NOT_AVAILABLE_VIA_ORT_DML",
+      "elapsed_s": 21.96,
+      "fps": 11.66,
+      "last_batch_ms": 668.57,
+      "all_finite": true,
+      "feature_norm_mean": 1.0,
+      "feature_norm_max": 1.0,
+      "output_shape": [
+        8,
+        384
+      ]
+    },
+    {
+      "frames": 504,
+      "rss_mb": 328.9140625,
+      "gpu_vram": "NOT_AVAILABLE_VIA_ORT_DML",
+      "elapsed_s": 44.05,
+      "fps": 11.44,
+      "last_batch_ms": 660.07,
+      "all_finite": true,
+      "feature_norm_mean": 1.0,
+      "feature_norm_max": 1.0,
+      "output_shape": [
+        8,
+        384
+      ]
+    },
+    {
+      "frames": 1000,
+      "rss_mb": 328.234375,
+      "gpu_vram": "NOT_AVAILABLE_VIA_ORT_DML",
+      "elapsed_s": 86.41,
+      "fps": 11.57,
+      "last_batch_ms": 652.45,
+      "all_finite": true,
+      "feature_norm_mean": 1.0,
+      "feature_norm_max": 1.0,
+      "output_shape": [
+        8,
+        384
+      ]
+    },
+    {
+      "frames": 2000,
+      "rss_mb": 334.43359375,
+      "gpu_vram": "NOT_AVAILABLE_VIA_ORT_DML",
+      "elapsed_s": 170.46,
+      "fps": 11.73,
+      "last_batch_ms": 663.31,
+      "all_finite": true,
+      "feature_norm_mean": 1.0,
+      "feature_norm_max": 1.0,
+      "output_shape": [
+        8,
+        384
+      ]
+    },
+    {
+      "frames": 3000,
+      "rss_mb": 328.19140625,
+      "gpu_vram": "NOT_AVAILABLE_VIA_ORT_DML",
+      "elapsed_s": 252.81,
+      "fps": 11.87,
+      "last_batch_ms": 685.03,
+      "all_finite": true,
+      "feature_norm_mean": 1.0,
+      "feature_norm_max": 1.0,
+      "output_shape": [
+        8,
+        384
+      ]
+    },
+    {
+      "frames": 3834,
+      "rss_mb": 336.8203125,
+      "gpu_vram": "NOT_AVAILABLE_VIA_ORT_DML",
+      "elapsed_s": 322.22,
+      "fps": 11.9,
+      "last_batch_ms": 181.21,
+      "all_finite": true,
+      "feature_norm_mean": 1.0,
+      "feature_norm_max": 1.0,
+      "output_shape": [
+        2,
+        384
+      ]
+    }
+  ],
+  "failure": null,
+  "verdict": "MEMORY_STABLE",
+  "verdict_label": "warmup/cache overhead (one-time arena jump, then flat)"
+}

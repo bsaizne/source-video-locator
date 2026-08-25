@@ -1,0 +1,88 @@
+# --- Source Video Locator — repository hygiene -------------------------------
+# .gitignore governs what lands in git. Design goal: this repo holds the MVP
+# product code (mvp/), CI workflows (.github/), project state (.agent/) and design
+# documents. It does NOT hold: video datasets, model weights, extracted features,
+# third-party engines, tool binaries, or generated artifacts. See AGENTS.md.
+
+# ----------------------------- Python --------------------------------------- #
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ----------------------------- Video datasets ------------------------------- #
+datasets/
+*.mkv
+*.mp4
+*.mov
+*.avi
+*.webm
+*.flv
+*.m4v
+
+# ------------------------- Work / caches / outputs -------------------------- #
+work/
+results/
+logs/
+tmp/
+cache/
+diagnostics/
+verification_cases/
+
+# ---------------------- Extracted features / serialized --------------------- #
+*.npy
+*.npz
+*.stale
+*.pkl
+
+# --------------------- Model weights / trained assets ----------------------- #
+*.pth
+*.pt
+*.pth.tar
+*.onnx
+*.onnx.data
+*.ckpt
+*.safetensors
+
+# ---------------------- Third-party / tool binaries ------------------------- #
+engines/
+tools/
+
+# ----------------- Research code / phase reports (not product deliverables) -- #
+src/
+benchmark_report*.md
+
+# ----------------------- Generated env / report snapshots ------------------- #
+benchmark-*.agentctx.json
+benchmark_results.json
+environment.json
+report_summary.json
+benchmark_report.html
+*.log
+
+# --------------------- Secrets / credentials (never commit) ------------------ #
+.env
+.env.*
+*.pem
+*.key
+*.pfx
+*.jks
+id_rsa
+id_rsa.pub
+id_dsa
+id_ed25519
+credentials*
+
+# ------------------------------ IDE / OS temp -------------------------------- #
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
