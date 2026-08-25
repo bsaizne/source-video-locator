@@ -23,6 +23,8 @@
 
 **MVP 产品化 — Stage 1（编码）进行中**：已完成第 1~7 项 + **H2（Windows AMD GPU / DirectMLBackend 已接入并验证，`H2_AMD_DIRECTML=IMPLEMENTED`）**。**第 8 项 PySide6 UI 仍暂停**（用户重定向；此前已完成 DirectML POC→Preflight→接入）。算法研究 Phase 1~19 已冻结收尾。
 
+> **2026-08-26 — H3（macOS Apple Silicon）进行中，当前 H3-0（GitHub repo setup）已完成**：`bsaizne/source-video-locator`（private；master=2 commits；push 走 **SSH**——本机网络 HTTPS 443 被阻断、SSH 22/443 可达；DNS=小米路由 192.168.31.1 解析到 GitHub 20.205.243.x 段但 443 握手超时）。本地原非 git → 已 `git init` + 完整 `.gitignore`（排视频/权重/特征/第三方引擎/工具二进制/研究代码 `src/`/phase 报告/生成物/凭据/IDE）+ 入仓：`mvp/`、`.github/workflows/h3-macos-mps.yml`（`workflow_dispatch`, macos-15 arm64）、`.agent/`、设计/研究结论文档。**H3 POC 脚本（`mvp/poc/macos_mps/mps_poc.py`，只读复用冻结模型，校验权重 size/sha256、确认实际 device、捕获 fallback、产出 results.json/.md）与 CI workflow 已就绪，但尚未在真实 Apple Silicon 运行（H3 verdict 待触发）**。`mvp/src/device` 零改动；无 MPSBackend / UI / H4。
+
 ---
 
 ## Current Task
@@ -59,6 +61,7 @@
 
 ## Next Actions
 
+- **H3 CI 触发（用户手动）**：GitHub Actions → H3 macOS MPS POC → Run workflow（真实 Apple Silicon CPU vs MPS；H3 verdict = GO/CONDITIONAL/NO_GO；产物 results.json/.md artifact）。H3 尚不接入 `mvp/src/device`（POC 阶段）。
 - **第 8 项**：PySide6 UI（Home→Index→Results→Export + 预览 + 手动修正 + 批量导出），消费 `SourceLocatorService`（`build_original_index` / `locate` / `export_results` / `load_results` + `ProgressStage` 进度条 + `CancellationToken` 取消），结果卡片用 `domain.Result`（edited/original/confidence/alternatives/montage_flag/failure_reason）。
 - 之后：第 9 项 打包验收 + 性能基准 + Confidence 标定。
 - **研究护栏（贯穿）**：不新增 backbone/VLM、不改相似度/检索/排序/定位/置信语义、不改 GT、不重跑研究 benchmark、不把已证伪变体与 patch/multi-scale 引入 runtime、不做大规模 sweep。仅当真实用户数据证明某类失败显著影响产品价值，才另立新的 Research Phase。
