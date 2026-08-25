@@ -4,6 +4,9 @@
 # on the frozen DINOv2 ViT-S/14 model. Manual-only (workflow_dispatch) so it does
 # not consume macOS runners on every push. See mvp/poc/macos_mps/README.md.
 #
+# NOTE (reindex): this file lives on the default branch (master). If GitHub
+# Actions has not listed it yet, this push forces a fresh index scan.
+#
 # - Verifies `uname -m = arm64` (real Apple Silicon, not Intel).
 # - Installs a macOS PyTorch wheel (arm64, with MPS) — NOT the Windows CPU build.
 # - App/Bench never run the full 2.mkv here; only fixed test frames 3/8/32/128/500.
