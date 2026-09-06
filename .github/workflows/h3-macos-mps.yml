@@ -138,6 +138,12 @@ jobs:
           export SVL_DINOV2_WEIGHTS="$PWD/$W"
           echo "SVL_DINOV2_WEIGHTS=$PWD/$W" >> "$GITHUB_ENV"
 
+      - name: Install ffmpeg (macos runner image does not ship it)
+        run: |
+          which ffmpeg || brew install ffmpeg
+          which ffmpeg && ffmpeg -version | head -1
+          which ffprobe && ffprobe -version | head -1
+
       - name: Build backend bundle (PyInstaller onedir + ffmpeg + weights)
         run: python mvp/scripts/build_backend_mac.py
 
