@@ -66,9 +66,11 @@ export function createBackendConfig(overrides: Partial<BackendConfig> = {}): Bac
  * so the main process just points them at the bundled binaries — no mvp/src change.
  */
 function mediaEnv(backendDir: string): Record<string, string> {
+  // mac 打包的 PyInstaller 产物无 .exe 后缀（build_backend_mac.py 装配 ffmpeg/ffprobe 同名无后缀）
+  const exe = process.platform === 'win32' ? '.exe' : ''
   return {
-    MEDIA_FFMPEG: path.join(backendDir, 'ffmpeg.exe'),
-    MEDIA_FFPROBE: path.join(backendDir, 'ffprobe.exe'),
+    MEDIA_FFMPEG: path.join(backendDir, `ffmpeg${exe}`),
+    MEDIA_FFPROBE: path.join(backendDir, `ffprobe${exe}`),
   }
 }
 

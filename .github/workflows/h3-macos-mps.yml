@@ -96,6 +96,69 @@ jobs:
           if-no-files-found: error
 
   # ---- 以下为原 POC job ----
+  # ---- mac 安装包（unsigned zip）: 测试绿了才打包 ----
+  # PyInstaller 打 mac arm64 后端（MPS）+ DINOv2 权重随包 + electron-builder zip。
+  # 未签名: 下载后需 `xattr -cr Video\ Locator.app`（或右键打开）绕过 Gatekeeper。
+  macos-package:
+    needs: mvp-tests-macos
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          architecture: "arm64"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Cache pip + weights
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/pip
+            ${{ github.workspace }}/.cache/dinov2_weights
+          key: h3-mps-cache-v1
+
+      - name: Install backend build deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch numpy opencv-python fastapi uvicorn pyinstaller rapidocr-onnxruntime
+
+      - name: Download DINOv2 weights
+        run: |
+          mkdir -p .cache/dinov2_weights
+          W=.cache/dinov2_weights/dinov2_vits14_pretrain.pth
+          if [ ! -f "$W" ]; then
+            curl -fL --retry 3 -o "$W" "https://dl.fbaipublicfiles.com/dinov2/dinov2_vits14/dinov2_vits14_pretrain.pth"
+          fi
+          export SVL_DINOV2_WEIGHTS="$PWD/$W"
+          echo "SVL_DINOV2_WEIGHTS=$PWD/$W" >> "$GITHUB_ENV"
+
+      - name: Build backend bundle (PyInstaller onedir + ffmpeg + weights)
+        run: python mvp/scripts/build_backend_mac.py
+
+      - name: Build UI + electron app (mac arm64 zip)
+        working-directory: mvp/ui
+        run: |
+          npm ci
+          npm run build
+          npm run compile:electron
+          npx electron-builder --mac --arm64
+
+      - name: Upload mac package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: video-locator-mac-arm64
+          path: |
+            mvp/ui/release/*.zip
+            mvp/ui/release/*arm64*
+          if-no-files-found: error
+
+  # ---- 以下为原 POC job ----
   mps-poc:
     runs-on: macos-15
     steps:

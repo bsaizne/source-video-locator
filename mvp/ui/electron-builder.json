@@ -21,8 +21,28 @@
   ],
   "win": {
     "target": [
-      { "target": "dir" }
+      {
+        "target": "dir"
+      }
     ],
     "signAndEditExecutable": false
+  },
+  "mac": {
+    "target": [
+      {
+        "target": "zip",
+        "arch": [
+          "arm64"
+        ]
+      },
+      {
+        "target": "dir",
+        "arch": [
+          "arm64"
+        ]
+      }
+    ],
+    "identity": null,
+    "category": "public.app-category.video"
   }
 }
