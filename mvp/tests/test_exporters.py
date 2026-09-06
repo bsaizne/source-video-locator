@@ -278,8 +278,10 @@ class TestFCP7XML(unittest.TestCase):
         self.assertEqual(main_item.findtext("start"), "0")  # 0s @30
         self.assertEqual(main_item.findtext("end"), "60")   # 2s @30
         file_el = root.find(".//clipitem/file")
-        self.assertEqual(file_el.findtext("pathurl"),
-                         "file://localhost/D:/src/2.mkv")
+        # 平台中立: 相对/盘符路径经 _pathurl(resolve) 的接线正确性 + 文件名后缀
+        from app.exporters import _pathurl
+        self.assertEqual(file_el.findtext("pathurl"), _pathurl("D:/src/2.mkv"))
+        self.assertTrue(file_el.findtext("pathurl").endswith("2.mkv"))
         self.assertIn("scene-pool candidate", text)
         # 素材率 23.976 -> ntsc TRUE；序列率 30.0 -> ntsc FALSE
         self.assertEqual(root.find(".//clipitem/file/rate/ntsc").text, "TRUE")

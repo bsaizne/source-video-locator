@@ -129,5 +129,8 @@ def _sys_memory_gb() -> tuple[float, float]:
     # unix / macOS
     page_size = os.sysconf("SC_PAGE_SIZE")
     total = os.sysconf("SC_PHYS_PAGES") * page_size / (1024 ** 3)
-    avail = os.sysconf("SC_AVPHYS_PAGES") * page_size / (1024 ** 3)
+    try:
+        avail = os.sysconf("SC_AVPHYS_PAGES") * page_size / (1024 ** 3)
+    except (ValueError, OSError):
+        avail = total  # macOS 无 SC_AVPHYS_PAGES; memory_info 为信息性展示
     return float(total), float(avail)

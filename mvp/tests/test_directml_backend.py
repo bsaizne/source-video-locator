@@ -22,7 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))  # -> mvp/s
 import numpy as np
 
 import device as dev
-from device import CPUBackend, DirectMLBackend, DeviceBackend, directml_available, resolve_backend
+from device import CPUBackend, DirectMLBackend, DeviceBackend, directml_available, mps_available, resolve_backend
 from engine.feature_store import FeatureStore
 
 BENCH = Path(__file__).resolve().parents[2]
@@ -53,14 +53,15 @@ class ResolverFallbackTest(unittest.TestCase):
         self.assertIsInstance(ok, bool)
         self.assertIsInstance(reason, str)
 
-    def test_auto_and_directml_fallback_to_cpu_when_unavailable(self):
-        # 模拟"无 DirectML"环境 -> 必须自动 CPU fallback，不能让 AMD 支持破坏 CPU MVP
+    def test_auto_and_directml_fallback_when_unavailable(self):
+        # 模拟"无 DirectML"环境 -> Windows 上 CPU fallback; macOS 上 auto 优先 MPS（H3）。
+        expected = "mps" if (sys.platform == "darwin" and mps_available()[0]) else "cpu"
         with patch.object(dev, "directml_available", return_value=(False, "simulated-unavailable")):
             b_auto = resolve_backend("auto")
-            self.assertEqual(b_auto.device_type(), "cpu")
-            self.assertIsInstance(b_auto, CPUBackend)
+            self.assertEqual(b_auto.device_type(), expected)
             b_dml = resolve_backend("directml")
-            self.assertEqual(b_dml.device_type(), "cpu")
+            self.assertEqual(b_dml.device_type(), "cpu")   # directml 偏好在非 Windows 平台恒 CPU
+            self.assertIsInstance(b_auto, CPUBackend if expected == "cpu" else dev.MPSBackend)
             self.assertIsInstance(b_dml, CPUBackend)
 
     def test_provider_init_failure_falls_back_to_cpu(self):
