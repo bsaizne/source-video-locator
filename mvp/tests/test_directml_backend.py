@@ -64,12 +64,14 @@ class ResolverFallbackTest(unittest.TestCase):
             self.assertIsInstance(b_auto, CPUBackend if expected == "cpu" else dev.MPSBackend)
             self.assertIsInstance(b_dml, CPUBackend)
 
-    def test_provider_init_failure_falls_back_to_cpu(self):
-        # 即使探测通过，DirectMLBackend 构造失败也必须 fallback（§7 情形 4）
+    def test_provider_init_failure_falls_back(self):
+        # 即使探测通过，DirectMLBackend 构造失败也必须 fallback（§7 情形 4）。
+        # macOS: auto 走 MPS 分支（不经 DirectML 构造）→ 期望 mps; Windows → cpu。
         with patch.object(dev, "directml_available", return_value=(True, "ok")), \
                 patch.object(dev, "DirectMLBackend", side_effect=dev.DeviceError("boom")):
             be = resolve_backend("auto")
-            self.assertEqual(be.device_type(), "cpu")
+            expected = "mps" if (sys.platform == "darwin" and mps_available()[0]) else "cpu"
+            self.assertEqual(be.device_type(), expected)
 
     def test_directml_backend_importable_even_without_gpu(self):
         self.assertTrue(callable(DirectMLBackend))
