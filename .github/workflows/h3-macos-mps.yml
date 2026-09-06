@@ -46,10 +46,10 @@ jobs:
             ${{ github.workspace }}/.cache/dinov2_weights
           key: h3-mps-cache-v1
 
-      - name: Install deps (PyTorch w/ MPS, numpy)
+      - name: Install deps (PyTorch w/ MPS, opencv, numpy)
         run: |
           python -m pip install --upgrade pip
-          pip install torch numpy
+          pip install torch numpy opencv-python
           python -c "import torch; print('torch', torch.__version__, 'mps_avail', torch.backends.mps.is_available())"
 
       - name: Download DINOv2 weights (same cache as POC)
