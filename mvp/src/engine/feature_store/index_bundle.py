@@ -14,11 +14,19 @@ class IndexBundle:
 
     - ``features``：[T, 384] float32，L2 归一化 DINOv2 CLS。
     - ``times``：[T] float32，每帧绝对时间(秒)。与 features 行完全对齐，供定位/预览换算。
+    - ``scenes``：[S,2] float32 场景起止秒（Phase 21 召回扩展层）；None=旧索引无场景表（扩池降级）。
+    - ``scene_feats``：[S,384] float32 L2 场景指纹，与 scenes 行对齐；None 同上。
+    - ``events``：[E,2] float32 事件单元起止秒（方向 A 完整阶段 2026-09-05）；None=旧索引无事件表。
+    - ``event_feats``：[E,384] float32 L2 事件代表指纹，与 events 行对齐；None 同上。
     """
 
     meta: IndexMeta
     features: np.ndarray
     times: np.ndarray
+    scenes: np.ndarray | None = None
+    scene_feats: np.ndarray | None = None
+    events: np.ndarray | None = None
+    event_feats: np.ndarray | None = None
 
     @property
     def num_frames(self) -> int:

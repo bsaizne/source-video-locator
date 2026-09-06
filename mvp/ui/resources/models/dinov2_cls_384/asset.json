@@ -1,0 +1,32 @@
+{
+  "name": "dinov2_cls_384",
+  "model": "dinov2_vits14_cls_384",
+  "feature_model": "dinov2_vits14",
+  "feature_version": "handwritten_vits14_cls_384d@0.5_l2",
+  "opset": 17,
+  "input": {
+    "name": "input",
+    "shape": [
+      1,
+      3,
+      518,
+      518
+    ],
+    "dtype": "float32"
+  },
+  "output": {
+    "name": "embedding",
+    "shape": [
+      "N",
+      384
+    ],
+    "dtype": "float32"
+  },
+  "backend_compatibility": [
+    "directml",
+    "cpu"
+  ],
+  "normalization": "L2 applied at DirectMLBackend.embed_frames (matches CPUBackend)",
+  "source": "frozen DinoV2Small (tanh-GELU, final LayerNorm, CLS token)",
+  "exported_at": "2026-08-25T15:23:03+00:00"
+}

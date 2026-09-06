@@ -1,0 +1,127 @@
+[
+  {
+    "seg": 0,
+    "gt": [
+      1126.0,
+      1138.0
+    ],
+    "scene": [
+      968.0,
+      984.0
+    ],
+    "m0": [
+      996.0,
+      998.0
+    ],
+    "n_moments": 1,
+    "scene_center": 976.0,
+    "moment_center": 997.0,
+    "moment_in_gt": false,
+    "moment_width": 2.0
+  },
+  {
+    "seg": 1,
+    "gt": [
+      1288.0,
+      1312.0
+    ],
+    "scene": [
+      1287.0,
+      1310.0
+    ],
+    "m0": [
+      1308.0,
+      1310.0
+    ],
+    "n_moments": 1,
+    "scene_center": 1298.5,
+    "moment_center": 1309.0,
+    "moment_in_gt": true,
+    "moment_width": 2.0
+  },
+  {
+    "seg": 2,
+    "gt": [
+      1332.0,
+      1348.0
+    ],
+    "scene": [
+      1327.0,
+      1346.0
+    ],
+    "m0": null,
+    "n_moments": 0,
+    "scene_center": 1336.5,
+    "moment_center": null,
+    "moment_in_gt": false,
+    "moment_width": 0.0
+  },
+  {
+    "seg": 3,
+    "gt": [
+      1340.0,
+      1348.0
+    ],
+    "scene": [
+      1343.0,
+      1347.0
+    ],
+    "m0": null,
+    "n_moments": 0,
+    "scene_center": 1345.0,
+    "moment_center": null,
+    "moment_in_gt": false,
+    "moment_width": 0.0
+  },
+  {
+    "seg": 4,
+    "gt": [
+      1374.0,
+      1392.0
+    ],
+    "scene": [
+      1393.0,
+      1396.0
+    ],
+    "m0": null,
+    "n_moments": 0,
+    "scene_center": 1394.5,
+    "moment_center": null,
+    "moment_in_gt": false,
+    "moment_width": 0.0
+  },
+  {
+    "seg": 5,
+    "gt": [
+      1394.0,
+      1416.0
+    ],
+    "scene": [
+      1403.0,
+      1419.0
+    ],
+    "m0": null,
+    "n_moments": 0,
+    "scene_center": 1411.0,
+    "moment_center": null,
+    "moment_in_gt": false,
+    "moment_width": 0.0
+  },
+  {
+    "seg": 6,
+    "gt": [
+      1578.0,
+      1602.0
+    ],
+    "scene": [
+      1580.0,
+      1587.0
+    ],
+    "m0": null,
+    "n_moments": 0,
+    "scene_center": 1583.5,
+    "moment_center": null,
+    "moment_in_gt": false,
+    "moment_width": 0.0
+  }
+]

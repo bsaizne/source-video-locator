@@ -6,7 +6,8 @@
 from .config import (AppConfig, ConfidenceConfig, DeviceConfig, MediaConfig,
                      PipelineConfig, load_config)
 from .errors import ConfigError, LocatorError
-from .logging import configure_logging, get_logger
+from .logging import (configure_logging, get_logger, get_session_id,
+                      new_session_id, set_session_id)
 from .paths import app_data_dir, ensure_dir, export_root, index_root
 
 __all__ = [
@@ -20,6 +21,9 @@ __all__ = [
     "LocatorError",
     "configure_logging",
     "get_logger",
+    "get_session_id",
+    "new_session_id",
+    "set_session_id",
     "app_data_dir",
     "ensure_dir",
     "export_root",

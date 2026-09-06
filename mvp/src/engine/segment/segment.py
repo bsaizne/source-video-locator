@@ -45,11 +45,14 @@ class ShotSegment:
     携带 ``feats``/``times`` 切片（numpy 读视图，不 copy），可直接喂给
     ``produce_candidates`` / ``localize_segment``（第 7 项 app service 逐段调用）。
     属 engine 层（可含 numpy），与 ``Hits``/``LocalizationResult`` 同级；domain 禁 numpy。
+
+    ``card_ratio``：段内黑底文字卡帧占比（card_guard,app 层填充;0=非卡片段）。
     """
 
     span: TimeSpan     # [首帧时间, 末帧时间]（绝对秒）
     feats: np.ndarray  # [nq,384] L2 归一化
     times: np.ndarray  # [nq] float，升序绝对时间，与 feats 行对齐
+    card_ratio: float = 0.0
 
     @property
     def nq(self) -> int:
@@ -112,6 +115,45 @@ def detect_shots(ed_feats: np.ndarray, ed_times: np.ndarray, *,
     min_gap = max(1, int(round(min_shot_s * fps)))   # 帧数；NMS 与 merge 共用
     kept = _nms(cands, s, min_gap)
     return _merge_short(kept, s, min_gap, ed_times, ed_feats)
+
+
+def detect_shots_two_level(ed_feats: np.ndarray, ed_times: np.ndarray, *,
+                           cut_abs: float = SEG_CUT_ABS,
+                           z_thresh: float = SEG_Z_THRESH,
+                           smooth: int = SEG_SMOOTH,
+                           min_shot_s: float = SEG_MIN_SHOT_S,
+                           fps: float | None = None,
+                           max_shot_s: float = 8.0,
+                           fine_cut_factor: float = 0.75,
+                           fine_z_factor: float = 0.85,
+                           fine_min_shot_s: float = 0.6) -> list[ShotSegment]:
+    """两级切分:一级按常规参数切;超长块(> ``max_shot_s``)在块内用放宽参数重切。
+
+    动机(GT v3 实证):快剪解说里 13-24s 的长块是多个子镜头的拼接,块级均值
+    embedding 会淹没子镜头——检索明明命中(如夜读书架 2809)却在聚类/门控层丢失,
+    或子镜头横跨两个长块边界被截断。二级细分让查询单元 ≈ 单镜头。
+
+    精细遍参数 = 常规参数 × factor(cut_abs×0.75 / z×0.85 / min_shot 0.6s),
+    只在**块内部**生效(边界处的一级结果保留);重切产出 <2 片则保留原块。
+    """
+    shots = detect_shots(ed_feats, ed_times, cut_abs=cut_abs, z_thresh=z_thresh,
+                         smooth=smooth, min_shot_s=min_shot_s, fps=fps)
+    if max_shot_s <= 0:
+        return shots
+    out: list[ShotSegment] = []
+    for shot in shots:
+        if shot.span.width <= max_shot_s or shot.nq < 4:
+            out.append(shot)
+            continue
+        sub = detect_shots(shot.feats, shot.times,
+                           cut_abs=cut_abs * fine_cut_factor,
+                           z_thresh=z_thresh * fine_z_factor,
+                           smooth=smooth, min_shot_s=fine_min_shot_s, fps=fps)
+        if len(sub) >= 2:
+            out.extend(sub)
+        else:
+            out.append(shot)
+    return out
 
 
 # --------------------------------------------------------------------------- #

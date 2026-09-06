@@ -10,13 +10,13 @@
 - Current Hardware Target：**PHASE H1 = Windows CPU**（第一优先级）。
 - Current Known Limitations：见 §8。
 
-## 1. 研究冻结护栏（贯穿全程）
+## 1. 研究冻结护栏（贯穿全程）→ 2026-09-01 用户逐条拍板（权威见 `.agent/DECISIONS.md`）
 
-- 不新增视觉 backbone / 不新增 VLM/LLM runtime / 不改相似度/检索/排序/定位/置信语义。
-- 不进默认 runtime：17A/18/19 已证伪变体、patch/multi-scale、ORB-BOW、TransVCL、cut-aware、per-query 邻域投票。
-- 不改 GT、不重跑研究 benchmark、不做大规模 sweep。
-- 研究代码（experiments/diagnostics）保留，物理隔离在 mvp/src 之外；产品以"提取函数/公式"方式复用，不 import 研究脚本。
-- 若未来真实用户数据证明某类失败明显影响产品价值 → **单独开启新的 Research Phase**（另立），不是在本 Phase 无限优化。
+- **已解除**：不新增视觉 backbone / 不新增 VLM/LLM runtime / 不改相似度/检索/排序/定位/置信语义（可改，改动嵌入语义须 bump `feature_version` 重建索引）。
+- **已解除**：不进默认 runtime（17A/18/19 已证伪变体、patch/multi-scale、ORB-BOW、TransVCL、cut-aware、per-query 邻域投票）——已证伪变体可重评估，patch/multi-scale 可进 runtime。
+- **已解除**：不改 GT、不重跑研究 benchmark、不做大规模 sweep。
+- **保留**：研究代码（experiments/diagnostics）保留，物理隔离在 mvp/src 之外；产品以"提取函数/公式"方式复用，不 import 研究脚本；不伪造结果/如实标 BLOCKED。
+- **保留**：若未来真实用户数据证明某类失败明显影响产品价值 → **单独开启新的 Research Phase**（另立），不是在本 Phase 无限优化。
 
 ## 2. PHASE H1 — Windows CPU（第一优先级）
 

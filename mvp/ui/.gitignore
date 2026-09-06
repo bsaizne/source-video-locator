@@ -1,0 +1,13 @@
+node_modules
+dist
+out
+.vite
+*.log
+.DS_Store
+release
+resources/backend/backend.exe
+resources/backend/_internal
+resources/backend/ffmpeg.exe
+resources/backend/ffprobe.exe
+resources/models/dinov2_cls_384/dinov2_cls_384.onnx
+resources/models/dinov2_cls_384/dinov2_cls_384.onnx.data

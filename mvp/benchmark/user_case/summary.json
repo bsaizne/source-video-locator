@@ -1,0 +1,786 @@
+{
+  "device": {
+    "preferred": "auto",
+    "actual_device_name": "directml",
+    "actual_device_type": "amd",
+    "is_accelerator": true,
+    "fallback": false,
+    "available_devices": [
+      "cpu",
+      "directml"
+    ]
+  },
+  "locate_elapsed_s": 509.7,
+  "segments": [
+    {
+      "idx": 0,
+      "edited": [
+        0.0,
+        5.5
+      ],
+      "original": [
+        833.0,
+        844.0
+      ],
+      "confidence": "LOW",
+      "score": 0.4249,
+      "reasons": [
+        "multiple_evidence_regions",
+        "high_query_coverage",
+        "query_coverage_dispersed",
+        "stable_temporal_localization",
+        "low_candidate_margin",
+        "multiple_similar_candidates",
+        "possible_montage",
+        "dark_scene_semantic_confusion"
+      ],
+      "montage_flag": true,
+      "failure_reason": null,
+      "candidate_rank": 1,
+      "alternatives": [
+        [
+          833.0,
+          844.0,
+          "MEDIUM"
+        ]
+      ]
+    },
+    {
+      "idx": 1,
+      "edited": [
+        6.0,
+        7.5
+      ],
+      "original": [
+        996.0,
+        998.0
+      ],
+      "confidence": "HIGH",
+      "score": 0.8956,
+      "reasons": [
+        "single_evidence_region",
+        "frame_precise_moment",
+        "high_query_coverage",
+        "stable_temporal_localization"
+      ],
+      "montage_flag": false,
+      "failure_reason": null,
+      "candidate_rank": 1,
+      "alternatives": []
+    },
+    {
+      "idx": 2,
+      "edited": [
+        8.0,
+        10.5
+      ],
+      "original": [
+        1579.0,
+        1583.0
+      ],
+      "confidence": "MEDIUM",
+      "score": 0.6762,
+      "reasons": [
+        "single_evidence_region",
+        "high_query_coverage",
+        "stable_temporal_localization",
+        "dark_scene_semantic_confusion"
+      ],
+      "montage_flag": false,
+      "failure_reason": null,
+      "candidate_rank": 1,
+      "alternatives": []
+    },
+    {
+      "idx": 3,
+      "edited": [
+        11.0,
+        12.0
+      ],
+      "original": [
+        1014.0,
+        1016.0
+      ],
+      "confidence": "HIGH",
+      "score": 0.9426,
+      "reasons": [
+        "single_evidence_region",
+        "frame_precise_moment",
+        "high_query_coverage",
+        "stable_temporal_localization"
+      ],
+      "montage_flag": false,
+      "failure_reason": null,
+      "candidate_rank": 1,
+      "alternatives": []
+    },
+    {
+      "idx": 4,
+      "edited": [
+        12.5,
+        14.0
+      ],
+      "original": [
+        1048.0,
+        1050.0
+      ],
+      "confidence": "HIGH",
+      "score": 0.8946,
+      "reasons": [
+        "single_evidence_region",
+        "frame_precise_moment",
+        "high_query_coverage",
+        "stable_temporal_localization"
+      ],
+      "montage_flag": false,
+      "failure_reason": null,
+      "candidate_rank": 1,
+      "alternatives": []
+    },
+    {
+      "idx": 5,
+      "edited": [
+        14.5,
+        24.0
+      ],
+      "original": [
+        1048.0,
+        1076.0
+      ],
+      "confidence": "LOW",
+      "score": 0.4722,
+      "reasons": [
+        "multiple_evidence_regions",
+        "high_query_coverage",
+        "query_coverage_dispersed",
+        "stable_temporal_localization",
+        "low_candidate_margin",
+        "multiple_similar_candidates",
+        "possible_montage"
+      ],
+      "montage_flag": true,
+      "failure_reason": null,
+      "candidate_rank": 1,
+      "alternatives": [
+        [
+          1048.0,
+          1076.0,
+          "MEDIUM"
+        ],
+        [
+          1130.0,
+          1147.0,
+          "MEDIUM"
+        ],
+        [
+          1208.0,
+          1237.0,
+          "MEDIUM"
+        ]
+      ]
+    },
+    {
+      "idx": 6,
+      "edited": [
+        24.5,
+        34.5
+      ],
+      "original": [
+        1326.5,
+        1341.5
+      ],
+      "confidence": "LOW",
+      "score": 0.4706,
+      "reasons": [
+        "multiple_evidence_regions",
+        "frame_precise_moment",
+        "high_query_coverage",
+        "query_coverage_dispersed",
+        "stable_temporal_localization",
+        "low_candidate_margin",
+        "multiple_similar_candidates",
+        "possible_montage"
+      ],
+      "montage_flag": true,
+      "failure_reason": null,
+      "candidate_rank": 1,
+      "alternatives": [
+        [
+          1303.0,
+          1311.0,
+          "MEDIUM"
+        ],
+        [
+          1374.0,
+          1393.0,
+          "MEDIUM"
+        ]
+      ]
+    },
+    {
+      "idx": 7,
+      "edited": [
+        35.0,
+        36.5
+      ],
+      "original": [
+        1403.0,
+        1405.0
+      ],
+      "confidence": "HIGH",
+      "score": 0.7978,
+      "reasons": [
+        "single_evidence_region",
+        "high_query_coverage",
+        "temporal_outlier_repair"
+      ],
+      "montage_flag": false,
+      "failure_reason": null,
+      "candidate_rank": 1,
+      "alternatives": []
+    },
+    {
+      "idx": 8,
+      "edited": [
+        37.0,
+        39.0
+      ],
+      "original": [
+        1415.0,
+        1419.0
+      ],
+      "confidence": "MEDIUM",
+      "score": 0.6776,
+      "reasons": [
+        "single_evidence_region",
+        "high_query_coverage",
+        "stable_temporal_localization",
+        "dark_scene_semantic_confusion"
+      ],
+      "montage_flag": false,
+      "failure_reason": null,
+      "candidate_rank": 1,
+      "alternatives": []
+    },
+    {
+      "idx": 9,
+      "edited": [
+        39.5,
+        51.0
+      ],
+      "original": [
+        1571.5,
+        1586.5
+      ],
+      "confidence": "LOW",
+      "score": 0.4071,
+      "reasons": [
+        "multiple_evidence_regions",
+        "frame_precise_moment",
+        "high_query_coverage",
+        "query_coverage_dispersed",
+        "low_candidate_margin",
+        "multiple_similar_candidates",
+        "possible_montage",
+        "dark_scene_semantic_confusion"
+      ],
+      "montage_flag": true,
+      "failure_reason": null,
+      "candidate_rank": 1,
+      "alternatives": [
+        [
+          1423.0,
+          1435.0,
+          "MEDIUM"
+        ]
+      ]
+    },
+    {
+      "idx": 10,
+      "edited": [
+        51.5,
+        59.0
+      ],
+      "original": [
+        1607.5,
+        1609.5
+      ],
+      "confidence": "LOW",
+      "score": 0.452,
+      "reasons": [
+        "multiple_evidence_regions",
+        "frame_precise_moment",
+        "high_query_coverage",
+        "query_coverage_dispersed",
+        "stable_temporal_localization",
+        "low_candidate_margin",
+        "multiple_similar_candidates",
+        "possible_montage",
+        "dark_scene_semantic_confusion"
+      ],
+      "montage_flag": true,
+      "failure_reason": null,
+      "candidate_rank": 1,
+      "alternatives": [
+        [
+          1601.0,
+          1616.0,
+          "MEDIUM"
+        ]
+      ]
+    },
+    {
+      "idx": 11,
+      "edited": [
+        59.5,
+        62.5
+      ],
+      "original": [
+        1705.0,
+        1711.0
+      ],
+      "confidence": "MEDIUM",
+      "score": 0.6647,
+      "reasons": [
+        "single_evidence_region",
+        "high_query_coverage",
+        "stable_temporal_localization",
+        "dark_scene_semantic_confusion"
+      ],
+      "montage_flag": false,
+      "failure_reason": null,
+      "candidate_rank": 1,
+      "alternatives": []
+    },
+    {
+      "idx": 12,
+      "edited": [
+        63.0,
+        66.5
+      ],
+      "original": [
+        88.0,
+        90.0
+      ],
+      "confidence": "LOW",
+      "score": 0.3897,
+      "reasons": [
+        "multiple_evidence_regions",
+        "frame_precise_moment",
+        "high_query_coverage",
+        "query_coverage_dispersed",
+        "stable_temporal_localization",
+        "low_candidate_margin",
+        "multiple_similar_candidates",
+        "possible_montage"
+      ],
+      "montage_flag": true,
+      "failure_reason": null,
+      "candidate_rank": 1,
+      "alternatives": [
+        [
+          1746.0,
+          1752.0,
+          "MEDIUM"
+        ],
+        [
+          87.0,
+          91.0,
+          "MEDIUM"
+        ]
+      ]
+    },
+    {
+      "idx": 13,
+      "edited": [
+        67.0,
+        68.5
+      ],
+      "original": [
+        139.0,
+        141.0
+      ],
+      "confidence": "LOW",
+      "score": 0.8055,
+      "reasons": [
+        "multiple_evidence_regions",
+        "frame_precise_moment",
+        "high_query_coverage",
+        "stable_temporal_localization",
+        "multiple_similar_candidates",
+        "possible_montage"
+      ],
+      "montage_flag": false,
+      "failure_reason": null,
+      "candidate_rank": 1,
+      "alternatives": []
+    },
+    {
+      "idx": 14,
+      "edited": [
+        69.0,
+        72.0
+      ],
+      "original": [
+        1837.0,
+        1839.0
+      ],
+      "confidence": "HIGH",
+      "score": 0.8948,
+      "reasons": [
+        "single_evidence_region",
+        "frame_precise_moment",
+        "high_query_coverage",
+        "stable_temporal_localization"
+      ],
+      "montage_flag": false,
+      "failure_reason": null,
+      "candidate_rank": 1,
+      "alternatives": []
+    },
+    {
+      "idx": 15,
+      "edited": [
+        72.5,
+        74.5
+      ],
+      "original": [
+        1774.0,
+        1776.0
+      ],
+      "confidence": "HIGH",
+      "score": 0.8129,
+      "reasons": [
+        "single_evidence_region",
+        "frame_precise_moment",
+        "high_query_coverage"
+      ],
+      "montage_flag": false,
+      "failure_reason": null,
+      "candidate_rank": 1,
+      "alternatives": []
+    },
+    {
+      "idx": 16,
+      "edited": [
+        75.0,
+        78.0
+      ],
+      "original": [
+        1761.5,
+        1763.5
+      ],
+      "confidence": "HIGH",
+      "score": 0.8498,
+      "reasons": [
+        "single_evidence_region",
+        "frame_precise_moment",
+        "high_query_coverage"
+      ],
+      "montage_flag": false,
+      "failure_reason": null,
+      "candidate_rank": 1,
+      "alternatives": []
+    },
+    {
+      "idx": 17,
+      "edited": [
+        78.5,
+        80.5
+      ],
+      "original": [
+        1949.0,
+        1951.0
+      ],
+      "confidence": "HIGH",
+      "score": 0.8492,
+      "reasons": [
+        "single_evidence_region",
+        "high_query_coverage",
+        "stable_temporal_localization"
+      ],
+      "montage_flag": false,
+      "failure_reason": null,
+      "candidate_rank": 1,
+      "alternatives": []
+    },
+    {
+      "idx": 18,
+      "edited": [
+        81.0,
+        85.5
+      ],
+      "original": [
+        1809.0,
+        1811.0
+      ],
+      "confidence": "LOW",
+      "score": 0.3492,
+      "reasons": [
+        "multiple_evidence_regions",
+        "frame_precise_moment",
+        "high_query_coverage",
+        "query_coverage_dispersed",
+        "stable_temporal_localization",
+        "low_candidate_margin",
+        "multiple_similar_candidates",
+        "possible_montage",
+        "dark_scene_semantic_confusion"
+      ],
+      "montage_flag": true,
+      "failure_reason": null,
+      "candidate_rank": 1,
+      "alternatives": [
+        [
+          1809.0,
+          1813.0,
+          "MEDIUM"
+        ]
+      ]
+    },
+    {
+      "idx": 19,
+      "edited": [
+        86.0,
+        89.0
+      ],
+      "original": [
+        1828.0,
+        1840.0
+      ],
+      "confidence": "LOW",
+      "score": 0.4808,
+      "reasons": [
+        "multiple_evidence_regions",
+        "high_query_coverage",
+        "query_coverage_dispersed",
+        "low_candidate_margin",
+        "multiple_similar_candidates",
+        "possible_montage"
+      ],
+      "montage_flag": true,
+      "failure_reason": null,
+      "candidate_rank": 1,
+      "alternatives": [
+        [
+          1875.0,
+          1884.0,
+          "MEDIUM"
+        ]
+      ]
+    },
+    {
+      "idx": 20,
+      "edited": [
+        89.5,
+        104.5
+      ],
+      "original": [
+        2010.5,
+        2025.5
+      ],
+      "confidence": "LOW",
+      "score": 0.4566,
+      "reasons": [
+        "multiple_evidence_regions",
+        "high_query_coverage",
+        "query_coverage_dispersed",
+        "stable_temporal_localization",
+        "multiple_similar_candidates",
+        "possible_montage",
+        "dark_scene_semantic_confusion"
+      ],
+      "montage_flag": true,
+      "failure_reason": null,
+      "candidate_rank": 1,
+      "alternatives": [
+        [
+          1836.0,
+          1842.0,
+          "MEDIUM"
+        ],
+        [
+          3644.0,
+          3664.0,
+          "LOW"
+        ]
+      ]
+    },
+    {
+      "idx": 21,
+      "edited": [
+        105.0,
+        109.5
+      ],
+      "original": [
+        1976.0,
+        1978.0
+      ],
+      "confidence": "HIGH",
+      "score": 0.8598,
+      "reasons": [
+        "single_evidence_region",
+        "frame_precise_moment",
+        "high_query_coverage"
+      ],
+      "montage_flag": false,
+      "failure_reason": null,
+      "candidate_rank": 1,
+      "alternatives": []
+    },
+    {
+      "idx": 22,
+      "edited": [
+        110.0,
+        111.5
+      ],
+      "original": [
+        2060.5,
+        2062.5
+      ],
+      "confidence": "MEDIUM",
+      "score": 0.6156,
+      "reasons": [
+        "single_evidence_region",
+        "frame_precise_moment",
+        "high_query_coverage",
+        "dark_scene_semantic_confusion"
+      ],
+      "montage_flag": false,
+      "failure_reason": null,
+      "candidate_rank": 1,
+      "alternatives": []
+    },
+    {
+      "idx": 23,
+      "edited": [
+        112.0,
+        114.5
+      ],
+      "original": [
+        2064.0,
+        2066.0
+      ],
+      "confidence": "HIGH",
+      "score": 0.8658,
+      "reasons": [
+        "single_evidence_region",
+        "frame_precise_moment",
+        "high_query_coverage",
+        "stable_temporal_localization"
+      ],
+      "montage_flag": false,
+      "failure_reason": null,
+      "candidate_rank": 1,
+      "alternatives": []
+    },
+    {
+      "idx": 24,
+      "edited": [
+        115.0,
+        116.5
+      ],
+      "original": [
+        1916.0,
+        1918.0
+      ],
+      "confidence": "HIGH",
+      "score": 0.8558,
+      "reasons": [
+        "single_evidence_region",
+        "frame_precise_moment",
+        "high_query_coverage"
+      ],
+      "montage_flag": false,
+      "failure_reason": null,
+      "candidate_rank": 1,
+      "alternatives": []
+    },
+    {
+      "idx": 25,
+      "edited": [
+        117.0,
+        118.0
+      ],
+      "original": [
+        2065.5,
+        2069.5
+      ],
+      "confidence": "MEDIUM",
+      "score": 0.6872,
+      "reasons": [
+        "single_evidence_region",
+        "high_query_coverage",
+        "stable_temporal_localization",
+        "dark_scene_semantic_confusion"
+      ],
+      "montage_flag": false,
+      "failure_reason": null,
+      "candidate_rank": 1,
+      "alternatives": []
+    },
+    {
+      "idx": 26,
+      "edited": [
+        118.5,
+        120.5
+      ],
+      "original": [
+        2082.0,
+        2085.0
+      ],
+      "confidence": "HIGH",
+      "score": 0.8135,
+      "reasons": [
+        "single_evidence_region",
+        "high_query_coverage"
+      ],
+      "montage_flag": false,
+      "failure_reason": null,
+      "candidate_rank": 1,
+      "alternatives": []
+    },
+    {
+      "idx": 27,
+      "edited": [
+        121.0,
+        122.5
+      ],
+      "original": [
+        2160.0,
+        2162.0
+      ],
+      "confidence": "HIGH",
+      "score": 0.8188,
+      "reasons": [
+        "single_evidence_region",
+        "frame_precise_moment",
+        "high_query_coverage"
+      ],
+      "montage_flag": false,
+      "failure_reason": null,
+      "candidate_rank": 1,
+      "alternatives": []
+    },
+    {
+      "idx": 28,
+      "edited": [
+        123.0,
+        126.5
+      ],
+      "original": [
+        0.0,
+        0.0
+      ],
+      "confidence": "LOW",
+      "score": 0.0,
+      "reasons": [
+        "text_card_not_in_source"
+      ],
+      "montage_flag": false,
+      "failure_reason": "text_card_not_in_source",
+      "candidate_rank": 1,
+      "alternatives": []
+    }
+  ]
+}

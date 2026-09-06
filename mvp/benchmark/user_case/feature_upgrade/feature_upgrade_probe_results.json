@@ -1,0 +1,387 @@
+{
+  "started": "2026-08-30 16:33:58",
+  "probes": [
+    {
+      "id": "p26_hard",
+      "pair": "2mkv",
+      "query_t": 76.8,
+      "true_win": [
+        2808,
+        2811
+      ],
+      "note": "夜读书+手:CLS 硬混淆(ViT-S 0.31真/0.87错)",
+      "distract_wins": [
+        [
+          1237.0,
+          1264.0
+        ],
+        [
+          1682.0,
+          1703.0
+        ]
+      ],
+      "argmax": {
+        "s_full": 1769.0,
+        "s_local": null,
+        "b": 1250.0
+      },
+      "vit_s": {
+        "true_max": 0.5973,
+        "wrong_max": 0.6335,
+        "wrong_max_local": 0.6335,
+        "margin": -0.0361
+      },
+      "vit_b": {
+        "true_max": 0.4611,
+        "wrong_max": 0.4697,
+        "margin": -0.0086
+      },
+      "frames_embedded": 62
+    },
+    {
+      "id": "p08_brother",
+      "pair": "2mkv",
+      "query_t": 13.5,
+      "true_win": [
+        1108,
+        1110
+      ],
+      "note": "瞭望塔机位:兄弟 1048-1050",
+      "distract_wins": [
+        [
+          1048,
+          1050
+        ],
+        [
+          1017.0,
+          1048.0
+        ],
+        [
+          1156.0,
+          1181.0
+        ]
+      ],
+      "argmax": {
+        "s_full": 1035.0,
+        "s_local": null,
+        "b": 1038.0
+      },
+      "vit_s": {
+        "true_max": 0.8109,
+        "wrong_max": 0.8339,
+        "wrong_max_local": 0.8339,
+        "margin": -0.023
+      },
+      "vit_b": {
+        "true_max": 0.8253,
+        "wrong_max": 0.8259,
+        "margin": -0.0006
+      },
+      "frames_embedded": 71
+    },
+    {
+      "id": "p08b_brother",
+      "pair": "2mkv",
+      "query_t": 13.9,
+      "true_win": [
+        1048,
+        1050
+      ],
+      "note": "士兵特写:兄弟 1108-1110",
+      "distract_wins": [
+        [
+          1108,
+          1110
+        ],
+        [
+          1017.0,
+          1047.0
+        ],
+        [
+          1051.0,
+          1072.0
+        ]
+      ],
+      "argmax": {
+        "s_full": 1035.0,
+        "s_local": null,
+        "b": 1038.0
+      },
+      "vit_s": {
+        "true_max": 0.6309,
+        "wrong_max": 0.7687,
+        "wrong_max_local": 0.7687,
+        "margin": -0.1379
+      },
+      "vit_b": {
+        "true_max": 0.5238,
+        "wrong_max": 0.8045,
+        "margin": -0.2808
+      },
+      "frames_embedded": 65
+    },
+    {
+      "id": "p27_sign",
+      "pair": "2mkv",
+      "query_t": 85.5,
+      "true_win": [
+        1808,
+        1815
+      ],
+      "note": "WHAT字牌:同场景相似绿牌",
+      "distract_wins": [
+        [
+          1823.0,
+          1845.0
+        ],
+        [
+          1838.0,
+          1858.0
+        ]
+      ],
+      "argmax": {
+        "s_full": 1811.0,
+        "s_local": null,
+        "b": 1812.0
+      },
+      "vit_s": {
+        "true_max": 0.9126,
+        "wrong_max": 0.7109,
+        "wrong_max_local": 0.7109,
+        "margin": 0.2016
+      },
+      "vit_b": {
+        "true_max": 0.9251,
+        "wrong_max": 0.8029,
+        "margin": 0.1222
+      },
+      "frames_embedded": 52
+    },
+    {
+      "id": "p01_easy",
+      "pair": "2mkv",
+      "query_t": 0.8,
+      "true_win": [
+        2417,
+        2428
+      ],
+      "note": "金属球准备(sanity 易例)",
+      "distract_wins": [
+        [
+          2429.0,
+          2460.0
+        ],
+        [
+          2448.0,
+          2468.0
+        ]
+      ],
+      "argmax": {
+        "s_full": 2417.0,
+        "s_local": null,
+        "b": 2418.0
+      },
+      "vit_s": {
+        "true_max": 0.7869,
+        "wrong_max": 0.6257,
+        "wrong_max_local": 0.6257,
+        "margin": 0.1613
+      },
+      "vit_b": {
+        "true_max": 0.7676,
+        "wrong_max": 0.6085,
+        "margin": 0.159
+      },
+      "frames_embedded": 59
+    },
+    {
+      "id": "p04_easy",
+      "pair": "2mkv",
+      "query_t": 4.6,
+      "true_win": [
+        833,
+        845
+      ],
+      "note": "峡谷航拍(sanity 易例)",
+      "distract_wins": [
+        [
+          1359.0,
+          1382.0
+        ],
+        [
+          2318.0,
+          2343.0
+        ]
+      ],
+      "argmax": {
+        "s_full": 839.0,
+        "s_local": null,
+        "b": 840.0
+      },
+      "vit_s": {
+        "true_max": 0.84,
+        "wrong_max": 0.6776,
+        "wrong_max_local": 0.6776,
+        "margin": 0.1624
+      },
+      "vit_b": {
+        "true_max": 0.8233,
+        "wrong_max": 0.7215,
+        "margin": 0.1018
+      },
+      "frames_embedded": 71
+    },
+    {
+      "id": "p17_easy",
+      "pair": "2mkv",
+      "query_t": 36.0,
+      "true_win": [
+        1397,
+        1419
+      ],
+      "note": "铁丝网山脊(sanity 易例)",
+      "distract_wins": [
+        [
+          807.0,
+          828.0
+        ],
+        [
+          2062.0,
+          2085.0
+        ]
+      ],
+      "argmax": {
+        "s_full": 1403.0,
+        "s_local": null,
+        "b": 1404.0
+      },
+      "vit_s": {
+        "true_max": 0.7702,
+        "wrong_max": 0.3949,
+        "wrong_max_local": 0.3949,
+        "margin": 0.3753
+      },
+      "vit_b": {
+        "true_max": 0.7776,
+        "wrong_max": 0.4031,
+        "margin": 0.3745
+      },
+      "frames_embedded": 77
+    },
+    {
+      "id": "t3r10_adj",
+      "pair": "test3",
+      "query_t": 56.25,
+      "true_win": [
+        441.5,
+        447.0
+      ],
+      "note": "逃亡奔跑:真值≈444.5,错位447-449",
+      "distract_wins": [
+        [
+          447.0,
+          450.0
+        ],
+        [
+          302.0,
+          322.0
+        ],
+        [
+          309.0,
+          329.0
+        ]
+      ],
+      "argmax": {
+        "s_full": 447.0,
+        "s_local": null,
+        "b": 448.0
+      },
+      "vit_s": {
+        "true_max": 0.8541,
+        "wrong_max": 0.8541,
+        "wrong_max_local": 0.8541,
+        "margin": 0.0
+      },
+      "vit_b": {
+        "true_max": 0.8884,
+        "wrong_max": 0.8884,
+        "margin": 0.0
+      },
+      "frames_embedded": 44
+    },
+    {
+      "id": "t4r01_obs",
+      "pair": "test4",
+      "query_t": 1.25,
+      "true_win": [
+        3335,
+        3350
+      ],
+      "note": "同质滑梯(仅观察,定位区即窗口)",
+      "distract_wins": [
+        [
+          255.0,
+          275.0
+        ],
+        [
+          475.0,
+          495.0
+        ]
+      ],
+      "argmax": {
+        "s_full": 3339.0,
+        "s_local": null,
+        "b": 3340.0
+      },
+      "vit_s": {
+        "true_max": 0.7064,
+        "wrong_max": 0.5778,
+        "wrong_max_local": 0.5778,
+        "margin": 0.1286
+      },
+      "vit_b": {
+        "true_max": 0.7257,
+        "wrong_max": 0.6416,
+        "margin": 0.084
+      },
+      "frames_embedded": 66
+    },
+    {
+      "id": "t4r13_obs",
+      "pair": "test4",
+      "query_t": 66.0,
+      "true_win": [
+        3335,
+        3350
+      ],
+      "note": "同质滑梯(仅观察,定位区即窗口)",
+      "distract_wins": [
+        [
+          776.0,
+          798.0
+        ],
+        [
+          2030.0,
+          2050.0
+        ]
+      ],
+      "argmax": {
+        "s_full": 3342.0,
+        "s_local": null,
+        "b": 3340.0
+      },
+      "vit_s": {
+        "true_max": 0.6685,
+        "wrong_max": 0.6274,
+        "wrong_max_local": 0.6274,
+        "margin": 0.0411
+      },
+      "vit_b": {
+        "true_max": 0.7293,
+        "wrong_max": 0.6961,
+        "margin": 0.0333
+      },
+      "frames_embedded": 68
+    }
+  ]
+}

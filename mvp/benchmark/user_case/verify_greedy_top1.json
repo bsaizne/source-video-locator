@@ -1,0 +1,142 @@
+{
+  "backend": "directml",
+  "original": "D:\\video\\2.mkv",
+  "edited": "D:\\claudework\\benchmark\\datasets\\real\\edited\\1.mp4",
+  "segments": [
+    {
+      "seg": "1",
+      "edited": [
+        7.5,
+        8.5
+      ],
+      "gt_original": [
+        6599.5,
+        6600.5
+      ],
+      "n_query": 8,
+      "hit_rate": 0.0,
+      "top1_span": [
+        981.0,
+        3664.0
+      ],
+      "mean_top1_sim": 0.635,
+      "top1_median": 1281.0
+    },
+    {
+      "seg": "1",
+      "edited": [
+        19.0,
+        20.0
+      ],
+      "gt_original": [
+        6599.1,
+        6600.1
+      ],
+      "n_query": 8,
+      "hit_rate": 0.0,
+      "top1_span": [
+        1301.0,
+        1308.0
+      ],
+      "mean_top1_sim": 0.696,
+      "top1_median": 1301.0
+    },
+    {
+      "seg": "1",
+      "edited": [
+        27.0,
+        28.0
+      ],
+      "gt_original": [
+        6350.3,
+        6351.3
+      ],
+      "n_query": 8,
+      "hit_rate": 0.0,
+      "top1_span": [
+        1343.0,
+        1343.0
+      ],
+      "mean_top1_sim": 0.601,
+      "top1_median": 1343.0
+    },
+    {
+      "seg": "1",
+      "edited": [
+        28.5,
+        29.5
+      ],
+      "gt_original": [
+        6601.1,
+        6602.1
+      ],
+      "n_query": 8,
+      "hit_rate": 0.0,
+      "top1_span": [
+        1344.0,
+        1346.0
+      ],
+      "mean_top1_sim": 0.779,
+      "top1_median": 1345.0
+    },
+    {
+      "seg": "1",
+      "edited": [
+        30.0,
+        31.0
+      ],
+      "gt_original": [
+        1302.8,
+        1303.8
+      ],
+      "n_query": 8,
+      "hit_rate": 0.0,
+      "top1_span": [
+        1376.0,
+        1376.0
+      ],
+      "mean_top1_sim": 0.574,
+      "top1_median": 1376.0
+    },
+    {
+      "seg": "1",
+      "edited": [
+        35.5,
+        36.5
+      ],
+      "gt_original": [
+        6349.8,
+        6350.8
+      ],
+      "n_query": 8,
+      "hit_rate": 0.0,
+      "top1_span": [
+        1403.0,
+        1403.0
+      ],
+      "mean_top1_sim": 0.744,
+      "top1_median": 1403.0
+    },
+    {
+      "seg": "1",
+      "edited": [
+        46.5,
+        47.5
+      ],
+      "gt_original": [
+        6598.1,
+        6599.1
+      ],
+      "n_query": 8,
+      "hit_rate": 0.0,
+      "top1_span": [
+        1582.0,
+        1584.0
+      ],
+      "mean_top1_sim": 0.776,
+      "top1_median": 1584.0
+    }
+  ],
+  "segments_ge_0p5": 0,
+  "segments_total": 7
+}

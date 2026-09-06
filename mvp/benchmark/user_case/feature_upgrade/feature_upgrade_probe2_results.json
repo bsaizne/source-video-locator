@@ -1,0 +1,249 @@
+{
+  "started": "2026-08-30 17:02:59",
+  "method": "patch-max top100 (research_phase21 V3)",
+  "probes": [
+    {
+      "id": "p26_hard",
+      "pair": "2mkv",
+      "query_t": 76.8,
+      "true_win": [
+        2808,
+        2811
+      ],
+      "note": "夜读书+手(CLS 硬混淆)",
+      "distract_wins": [
+        [
+          1237.0,
+          1264.0
+        ],
+        [
+          1682.0,
+          1703.0
+        ]
+      ],
+      "patch_vits": {
+        "true_max": 0.8355,
+        "wrong_max": 0.8467,
+        "margin": -0.0113,
+        "argmax_t": 1250.0
+      },
+      "patch_vitb": {
+        "true_max": 0.8061,
+        "wrong_max": 0.8447,
+        "margin": -0.0385,
+        "argmax_t": 1250.0
+      },
+      "frames_embedded": 32
+    },
+    {
+      "id": "p08_brother",
+      "pair": "2mkv",
+      "query_t": 13.5,
+      "true_win": [
+        1108,
+        1110
+      ],
+      "note": "瞭望塔机位:兄弟 1048-1050",
+      "distract_wins": [
+        [
+          1048,
+          1050
+        ],
+        [
+          1017.0,
+          1048.0
+        ],
+        [
+          1156.0,
+          1181.0
+        ]
+      ],
+      "patch_vits": {
+        "true_max": 0.912,
+        "wrong_max": 0.916,
+        "margin": -0.004,
+        "argmax_t": 1038.0
+      },
+      "patch_vitb": {
+        "true_max": 0.9209,
+        "wrong_max": 0.9253,
+        "margin": -0.0044,
+        "argmax_t": 1038.0
+      },
+      "frames_embedded": 30
+    },
+    {
+      "id": "p08b_brother",
+      "pair": "2mkv",
+      "query_t": 13.9,
+      "true_win": [
+        1048,
+        1050
+      ],
+      "note": "士兵特写:兄弟 1108-1110",
+      "distract_wins": [
+        [
+          1108,
+          1110
+        ],
+        [
+          1017.0,
+          1047.0
+        ],
+        [
+          1051.0,
+          1072.0
+        ]
+      ],
+      "patch_vits": {
+        "true_max": 0.9218,
+        "wrong_max": 0.9161,
+        "margin": 0.0057,
+        "argmax_t": 1049.0
+      },
+      "patch_vitb": {
+        "true_max": 0.9198,
+        "wrong_max": 0.9224,
+        "margin": -0.0027,
+        "argmax_t": 1037.0
+      },
+      "frames_embedded": 30
+    },
+    {
+      "id": "p27_sign",
+      "pair": "2mkv",
+      "query_t": 85.5,
+      "true_win": [
+        1808,
+        1815
+      ],
+      "note": "WHAT字牌(回归观察)",
+      "distract_wins": [
+        [
+          1823.0,
+          1845.0
+        ],
+        [
+          1838.0,
+          1858.0
+        ]
+      ],
+      "patch_vits": {
+        "true_max": 0.961,
+        "wrong_max": 0.8982,
+        "margin": 0.0628,
+        "argmax_t": 1812.0
+      },
+      "patch_vitb": {
+        "true_max": 0.9583,
+        "wrong_max": 0.896,
+        "margin": 0.0624,
+        "argmax_t": 1812.0
+      },
+      "frames_embedded": 40
+    },
+    {
+      "id": "p01_easy",
+      "pair": "2mkv",
+      "query_t": 0.8,
+      "true_win": [
+        2417,
+        2428
+      ],
+      "note": "金属球(sanity 易例)",
+      "distract_wins": [
+        [
+          2429.0,
+          2460.0
+        ],
+        [
+          2448.0,
+          2468.0
+        ]
+      ],
+      "patch_vits": {
+        "true_max": 0.9606,
+        "wrong_max": 0.9449,
+        "margin": 0.0157,
+        "argmax_t": 2418.0
+      },
+      "patch_vitb": {
+        "true_max": 0.9589,
+        "wrong_max": 0.9397,
+        "margin": 0.0192,
+        "argmax_t": 2418.0
+      },
+      "frames_embedded": 48
+    },
+    {
+      "id": "t3r10_adj",
+      "pair": "test3",
+      "query_t": 56.25,
+      "true_win": [
+        441.5,
+        446.9
+      ],
+      "note": "逃亡奔跑:真值≈444.5(内缩避开447边界)",
+      "distract_wins": [
+        [
+          447.0,
+          450.0
+        ],
+        [
+          302.0,
+          322.0
+        ],
+        [
+          309.0,
+          329.0
+        ]
+      ],
+      "patch_vits": {
+        "true_max": 0.8583,
+        "wrong_max": 0.868,
+        "margin": -0.0098,
+        "argmax_t": 447.0
+      },
+      "patch_vitb": {
+        "true_max": 0.8509,
+        "wrong_max": 0.8759,
+        "margin": -0.025,
+        "argmax_t": 447.0
+      },
+      "frames_embedded": 34
+    },
+    {
+      "id": "t4r01_obs",
+      "pair": "test4",
+      "query_t": 1.25,
+      "true_win": [
+        3335,
+        3350
+      ],
+      "note": "同质滑梯(仅观察)",
+      "distract_wins": [
+        [
+          255.0,
+          275.0
+        ],
+        [
+          475.0,
+          495.0
+        ]
+      ],
+      "patch_vits": {
+        "true_max": 0.8213,
+        "wrong_max": 0.7967,
+        "margin": 0.0246,
+        "argmax_t": 3342.0
+      },
+      "patch_vitb": {
+        "true_max": 0.816,
+        "wrong_max": 0.772,
+        "margin": 0.044,
+        "argmax_t": 3340.0
+      },
+      "frames_embedded": 48
+    }
+  ]
+}

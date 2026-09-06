@@ -6,8 +6,8 @@
 """
 from .enums import ConfidenceLevel, IndexValidationStatus, ResultSource
 from .index import ExtractorConfig, IndexMeta, IndexValidation
-from .models import (Alternative, Candidate, Confidence, IndexProgress, Result,
-                     ResultBatch, TimeSpan)
+from .models import (Alternative, Candidate, Confidence, IndexProgress, OriginalSegment,
+                     Result, ResultBatch, TimeSpan)
 
 __all__ = [
     "ConfidenceLevel",
@@ -19,6 +19,7 @@ __all__ = [
     "Alternative",
     "Candidate",
     "Confidence",
+    "OriginalSegment",
     "Result",
     "ResultBatch",
     "TimeSpan",

@@ -1,117 +1,379 @@
-# DECISIONS
+## 2026-09-05 — 蒙太奇子镜头查询方向结案: runtime 不接入（漂移触发判据修复后三指标零变化 + 探针 oracle 口径证伪）
 
-## Phase 11 最终技术选型（2026-08-24）
+- **Decision**: 按 HANDOFF_SUBSHOT_QUERY §4 执行——漂移触发判据（主定位 vs 最佳候选 span
+  gap>15s & psim<0.62, 采纳改合并不替换）实现 + 四片 GPU 重跑。结果 = 严格 113→113/139、
+  场景 136→136、负例 4→4 **零变化零回退（也零改善）** → 按 §4.4 预授权分支接收为研究结论,
+  **runtime 不接入**, 代码回退定向回退版（246 全绿）。
+- **关键证据（三层阻断, 全部实证）**: ① 漂移型段（p10/p32/t1r18）正确区已在 pool sub span,
+  严格指标早已 HIT——主定位归位只是产品展示, 三指标可动段全项目仅 ~2 条; ② **规模化探针
+  「16/16 逐子救回」= oracle 口径**（research_subshot_scale.py 按 GT 中点挑子镜头）, runtime
+  max-sim 采纳结构性选错——t2r02b 正确子镜头（Jacob 0.625）sim 全场最低（其他 0.77-0.85）,
+  叙事蒙太奇语义重心与视觉特征突出度解耦; ③ t2r05a 触发仍被 all_spans 未门控近重复簇掩盖。
+- **结论**: 蒙太奇语义稀释研究结论维持有效（单均值稀释实证、帧级突变可分离子镜头）, 但
+  runtime 无 GT 时**没有可靠的正确子镜头选择信号**。oracle 完美归位上限 ≈ +2/139, 远低于
+  门槛（先例: patch 召回 +1/41 关闭; 两级切分 +8、事件扩池 +14 才接入）。未来重开需无 GT 的
+  「正确子镜头选择信号」（编辑侧非外观信号方向）。证据: FINDINGS_SUBSHOT_QUERY.md
+  「runtime 接入验证」章 + HANDOFF §7 + work/rerun_*_subshotdrift.results.json。
 
-- **Decision**：加权评分（Accuracy 35/Robustness 20/Speed 15/Long-video 10/Integration 10/Cross-platform 5/License 5）：VCSL 思路 6.00 > VDF 5.46 > TransVCL 2.63。结论 A 无合格纯算法引擎（real 全败）；结论 B VDF 工程最省但 AGPL 风险 / VCSL 自研底座 license 安全；结论 C 推荐自研视觉核心 + VDF 音频指纹辅助。
-- **Reason**：real 素材三引擎全 recall=0；VCSL 思路 synthetic recall 76% 方向对但 precision 25%（46 FP）需去 FP。
-- **Alternatives**：直接用 VDF / 直接用 TransVCL。
-- **Rejected**：VDF 在真实解说素材直接 error、画面型变换 recall 0；TransVCL 本机 ORB-BOW 无有效输出（特征不匹配，非模型问题）。
-- **文档**：`TECHNOLOGY_SELECTION.md`
+## 2026-09-05 — 无差别子镜头拆分回退: 逐子查询不能全片应用（修正 B 方案）
 
-## Phase 12 双基线实验路线（用户任务书，2026-08-24）
+- **Decision**: 用户选 B 做四片批量重跑验证子镜头查询。2.mkv 结果 = 子查询 严格 31/39
+  场景 38/39，基线 34/39 场景 39/39 —— **严格 -3、场景 -1, 意外回退**。
+- **原因**: 个体诊断(gap 缩小)假设"整段失败才拆", 但实际很多段**整段均值是成功的**;
+  无差别拆分所有段, 把原本能命中的整段拆成多个子镜头, 每个都不如整段准 → 回退。
+  且全片拆分让段数暴增(2mkv 69->85), 性能不可接受(test1 跑 27 分钟未完)。
+- **修正**: "逐子镜头查询"只应作为**定向回退**——仅对"整段检索失败/low置信"的蒙太奇段,
+  做子镜头回退查询; 已正确整段定位的段**保持原样**。无差别应用不可行。
+- **下一步**: 改定向方案(整段失败 -> 子镜头回退), 重验。研究侧零 runtime 改动。
 
-- **Decision**：不做 VCSL 简单特征升级，改为两个干净基线——Experiment A（DINOv2 + 自研单调 DP 时间对齐，0.5fps）+ Experiment B（官方 ISC21 特征 + TransVCL，1fps）。
-- **Reason**：32x32 灰度在真实解说素材系统性失效；TransVCL 需官方特征才能真实评估，不能用 ORB-BOW 判定其能力。
-- **Alternatives**：ORB-BOW 直接喂 TransVCL（已证明 recall=0，特征不匹配）。
-- **Rejected**：把自训 ISC 变体标为"官方 TransVCL"；两实验融合；改 GT。
-- **约束**：不开发 GUI、不删 benchmark/GT、不研究音频指纹、不淘汰 TransVCL、不改 GT、实验完成前不宣布结论。
+## 2026-09-05 — 深挖 t2r02b 揭示蒙太奇段单均值查询缺陷（方向修正）
 
-## DINOv2 权重来源（2026-08-24）
+- **Decision**: 用户选 B 深挖典型段。多模态密集采样 t2r02b（ed17.2-23.5）看清它是
+  BOUGHT/THEN/CROP/WAS/WATERED 等 5-6 子镜头的快速蒙太奇。GT og2931（Jacob）= 段首 BOUGHT,
+  标注正确。但整段均值查询把 Jacob 稀释, 检索漂移到洒水器（3303, sim 0.578）。
+- **结论**: 真正的"搜不到"机制 = **多镜头蒙太奇段用单均值查询导致语义稀释**, 检索漂移到
+  特征突出的子镜头。不是切分过碎 / 不是 GT 错 / 不是内容完全混叠。
+- **方向修正**: 立项方向 = **蒙太奇段内"内容子镜头"识别与独立查询**（帧级聚类/相似度突变
+  识别子镜头, 逐子查询替代整段均值）。与用户 2026-09-04"按镜头切分逐镜头对比"拍板一致。
+- **落地约束**: 研究侧探针先行; 不碰 runtime; 待用户拍板立项。
 
-- **Decision**：从 `dl.fbaipublicfiles.com/dinov2/dinov2_vits14/dinov2_vits14_pretrain.pth`（**带 `dinov2_vits14/` 子路径**）下载；落盘校验大小 88,283,115B + torch.load 结构。
-- **Reason**：无子路径的 URL 实测 403；该子路径 URL Range GET 实测返回真实 torch pickle。HuggingFace / Google Drive 本机不可达。
-- **Alternatives**：HuggingFace / GitHub 镜像。
-- **Rejected**：官方无子路径 URL（403）；HuggingFace（连接失败）。
+## 2026-09-05 — 检索召回层诊断: FAR 段根因 = 候选池缺正确区, "防过碎"证伪
 
-## Experiment A 特征口径（2026-08-24）
+- **Decision**: 用户拍板先超集验证（判别检索失败是"缺正确区"还是"进池被压制"）。真实检索
+  test2 FAR 段 -> 原片索引: t2r05a GT区 rank 78 / t2r03b 1630 / t2r02b 4993 / t2r07c 3181
+  （retrieval_top_k=20 截断），GT区 sim 0.001-0.409 —— **正确区根本没进候选池**。
+- **结论**: FAR 段根因 = 检索召回缺口 + 特征判别力不足（内容混叠），**非切分污染**。
+  "防过碎"证伪（合并段不能让 GT区 sim 从 0.001 变可分）。
+- **方向修正**: 重心转向 P2 内容混叠/检索判别（需更强检索/特征判别），非防过碎。
+  P3 运动向量判别改善切分误切, 但不解决检索召回缺口（FAR 已证检索层问题）。
+- **落地约束**: 零 runtime 改动（诊断探针）; 方向 A/B/防过碎均已证伪或收尾; 当前唯一未决 =
+  内容混叠（检索判别）。
 
-- **Decision**：DINOv2 vits14 手写 ViT-S/14 前向（torchvision 无 DINOv2 类），取 CLS token 384 维 + L2 归一化；0.5fps 采样。
-- **Reason**：官方权重为裸 state_dict（无 `model` 键），load_state_dict 需精确结构匹配（已修正 ls1/ls2 gamma、mlp fc1/fc2、mask_token 1 维、patch_embed 无 norm）。
-- **Alternatives**：torch.hub.load（默认 URL 指向被拦的 fbaipublicfiles）。
-- **Rejected**：依赖 torch.hub 的默认权重加载路径。
+## 2026-09-05 — test2 跳切多模态复核: 确认真实跳切叙事, 方向 B 证伪可靠
 
-## 当前未决：real GT 准确性存疑（2026-08-24）
+- **用户提示**: test2 也有跳切段, 需结合多模态复核（否则 test2 tau=0.011 可能被误读为
+  GT 噪声/方向 B 该救）。
+- **复核**（本模型多模态, 逐对抽帧）: test2 的 5 个编辑序相邻但原片序倒退对全部为**真实
+  蒙太奇跳切**——t2r05b(ed48红衣男子)↔og1619.5(橙衣戴耳机)=同片同角色Jacob匹配;
+  t2r02a(ed14麦田蹲)↔og3043.7(麦田行走)=同场景; t2r02b 段内是 FROM/BUT/COUNTRY/SODA 跳切
+  蒙太奇, GT 对应其中的 Jacob "BUT" 镜头(匹配)。GT 标注正确。
+- **结论**: test2 tau=0.011 反映**真实跳切剪辑**（快速蒙太奇), 非 GT 噪声或方向 B 该救段。
+  单调性约束对跳切蒙太奇结构性无效 → 方向 B 证伪在处理 test2 上**依然可靠**。
+- **方法教训**: 单帧抽 ed20 见"洒水器"曾误判编辑不匹配, 实为该段跳切蒙太奇的插入镜头;
+  多帧采样 + 同段内核对避免抽错帧误判。
 
-- **Issue**：DINOv2 对每个编辑帧的 top 匹配集中在原片 1130~1580s（随编辑时间单调递增），而 GT 声称在原片 6350/6598s 附近，该处相似度仅 0.04~0.24；决定性测试 edited 20s vs orig 6599s 余弦≈-0.002、ORB 仅 1 匹配（两帧非同一画面）。
-- **Status**：**待确认**。需 ORB 独立交叉验证（edited 20s → 1296s vs 6599s）判断 GT 是否准确。在证据充分前**不修改 GT**（任务书铁律），需用户决策。
+## 2026-09-05 — 方向 B 剪辑时序单调性探针 = 证伪（有据）
 
-## Phase 14C 查询密度实验结论（2026-08-24）
+- **Decision**: 方向 A 时序锚点错位重核后, 用户拍板 A 立项方向 B 探针（编辑时序约束能否解决）。
+  探针（静态度量, 零 runtime）三段结论全部负面:
+  ① GT 编辑序->原片序 tau: test1 0.987/test3 0.816/2.mkv 0.586/test2 0.011 → 单调性仅部分成立;
+  ② 失败段 tau 不低于命中段（2.mkv 非严格 1.0 > 命中 0.46, test1 均 1.0）→ 无判别力;
+  ③ 结果批倒序定位段 HIGH 占比(78-100%)不低 → 不能靠倒序标记失败。
+- **结论**: 方向 B = 证伪（"编辑片单调于源片序 + 单调性可救失败段"两前提均不成立）。与
+  FAILURE_TAXONOMY/M8/单调弱先验证伪一致。timeline align 护栏未触碰（本研究仅读时序数据,
+  未跑序列 DP、未改 runtime）。
+- **落地约束**: 零 runtime 改动; 方向 A 时序锚点错位问题无法用单调性约束解决;
+  失败族维持已知局限; 方向 B 关闭, 不再重复。
 
-- **Decision**：**不采纳"提高查询采样率(fps)能救 s3/s4/s6"**。固定查询窗口下，edited 查询 2→4→8fps 对候选召回零增益（n_recall_B 恒 6/7、coverage 逐段逐 bit 相同），且更高 fps 对 fine localization 略有害（s2 iou .368→.226、s6 .75→.5、s5 .455→.353）。**真正把 recall 3/7→6/7 的杠杆是查询窗口 span（pad 0→±4s，编辑上下文变宽）**，靠查询帧把 orig 区命中填满成连续块、基础时间聚类即可融合（s4 两碎片→[1374,1404]、s6 →[1550,1610]），无需 12s 连续性桥。
-- **Reason**：14A.1 假说"查询密度不足"指的是**编辑上下文 span / 不同编辑帧数**，不是**帧采样率**。pad 增加不同编辑帧数（20 vs 4 个 rep），使连续性 rep 轨迹变密；再增大 fps 只是重复采样相同内容，无新增判别信息，反而引入噪音命中。
-- **s3 判定**：唯一 miss（cov 恒 0.375）。s3 的 2s 剪辑与 s2 同内容，映射到共享区 [1296,1346]，候选只擦到 GT[1340,1356] 的 6s。**是内容歧义/判别极限，非采样密度可解**——任何 gap/fps/pad 都 ≤0.375。
-- **Alternatives**：换判别特征（局部 patch/区域特征）；更高层边界建模区分 s2/s3；候选阶段加场景一致性排序惩罚 s2 的错误高分场景 [1212,1234]（mean 0.726，压过 correct rank2）。
-- **Rejected**：靠加 fps 增加"查询密度"；放宽聚类 gap。
-- **约束**：本阶段未改 GT/特征/检索/聚类参数，只改查询采样率与窗口 pad。完成后停止，未进 14B/15。
+## 2026-09-05 — 剪辑倒序重核: 修正三.9"误配"结论 = 事件身份路由正确 + 时序锚点错位
 
-## Phase 15 视觉诊断结论（2026-08-25）
+- **用户提示**: test3 剪辑错乱/倒序（前面片段在后面, 后面内容在前面, 有倒述感）。GT 确认
+  "r13(4:06) 与 r12(7:46) 相邻段大跳 = 倒叙"（编辑时间轴与原片时间轴非单调）。
+- **重核**（本模型多模态, 每对抽 GT 编辑帧 + 事件 span 命中原片区, 修正三.9 用错"系统归属段帧"）:
+  - t3r09: GT ed53.0s 孤山崩塌矮人逃离大厅 ↔ og441.5/444.5 完全相同 → 事件身份命中正确事件;
+  - t3r19: GT ed90.5s 战场冲锋 ↔ og2729.5 相同;
+  - t3r25: GT ed124.7s 索林举剑 ↔ og2879.5 完全一致。
+- **修正**: test3 那 11 个"独立救回" **不是事件扩池误配** —— 事件身份路由正确（命中正确事件/
+  原片区）。错位的是**编辑时序锚点**（倒序剪辑把相似镜头拆散到不同编辑段, 正确事件 span 被挂到
+  错误时间戳编辑段）。
+- **根因**: 编辑片时间轴非单调（倒序）+ 相似镜头切分拆散 → 身份对了、时序锚点错位。**支持方向 A**:
+  未来可用编辑时序约束解决时序锚点错位, 而非当作误配拒绝。
+- **修正后判定**: 方向 A 价值 = 事件身份正确性（已证实）; 待解决 = 编辑时序锚点错位（倒序剪辑下）。
+  精修版严格净收益 = test2 +1（真）+ test3 身份命中但时序锚点错位（非误配）; 2.mkv/test1 零净收益。
 
-- **Decision**：**先复核 s3 的 GT 边界，而非直接换特征**。Agent 视觉诊断显示 s3 的 GT[1340,1356] 是区间估计、与 s2 重叠、尾段混入异构镜头（老年女性肖像），且 edited 是蒙太奇（直升机→s2 共享区、士兵走开→s4 区）。这是 **GT 边界/不确定（E）**，非"特征无法判别"。收缩 GT 让 s3 cover≥0.5 是 recall→7/7 的最省力路径，无需换特征。
-- **真正需要换特征的是 s2/s4（C）**：整帧 CLS 把"暗色+军人/人物+纹理"的高外观相似场景混同——s2 暗室内男子 sim0.726 反超正确区[1296,1346] 0.558；s4 暗色军事画面（森林营地/掩体/控制面板）不可分，fine loc 仅 iou0.273。方向=局部 patch/区域特征或候选阶段场景一致性排序。
-- **s0/s1 = 相似场景混淆（B）**：正确区深 rank6/5，top3 全是暗色迷彩/室内军人（sim0.62~0.756 但 cover0）。**s6 = 编辑证据不足（F, 已解决）**：pad=0 稀疏，14C 加 span 后 cover1.0/iou0.75。**s5 = 干净命中**（correct rank1 cover1.0；distracter sim 低于正确区）。
-- **贯穿主因**：**"相似外观（暗色+军人/人物+纹理）掩盖语义身份"**——整帧 CLS 对这类军旅素材全局判别力有限。这也是 s2/s4/s0/s1 的共同根源；s3 例外（GT 边界）。
-- **Agent 多模态定位**：只是开发期诊断工具（解释"为何失败"），**不接入最终 runtime**；DINOv2/Localization 才是最终引擎。Agent 不自动改算法，只写 diagnosis.json 供人工决策。
-- **约束**：本阶段未改 DINOv2/模型/GT/指标/产品架构，未把 Agent/VLM 接入 runtime。Phase 15 结束即停，未进 Phase 16。
+## 2026-09-05 — t2r02a 视觉确认: 事件扩池真实净严格 +1（修正综合判定）
 
-## Phase 16B 排序/特征决策（2026-08-25）
+- **用户拍板 C**（单点诊断 t2r02a 是否事件扩池独立功劳）。数据核对: t2r02a 命中为
+  union(joint 3044-3047) = 12.13-13.07 段 (3044-3048, ev) 事件 span + 14.0-15.47 段
+  (3044-3047, ev) 事件 span 的编辑侧并集; 无事件基线这些段无 ev span → 基线 t2r02a = [part]。
+- **视觉确认（本模型多模态）**: 编辑帧 @12.0s 男女麦田并肩走（FIELD 字幕/灌溉架俯拍）vs
+  原片 @3043.5-3044.5s 完全相同麦田行走镜头——高度一致匹配。
+- **结论（修正）**: t2r02a = 事件扩池**真实净严格 +1**（视觉确认真实）。事件扩池综合判定:
+  严格净收益 = **test2 +1（t2r02a, 真）**; test3 的 11 个"独立救回"为误配（视觉不匹配,
+  同质视觉域）; 2.mkv/test1 严格口径零净收益。
 
-- **Decision**：**采纳 ExpA（`n_reps` 查询时序覆盖度 rerank），不采纳 ExpB（patch pooling）/ ExpC（multi-scale）**。
-- **ExpA**：把候选得分改为 `mean*sqrt(hit)*(0.5+0.5*cons) * n_reps^0.5`，其中 `n_reps` = 候选窗代表的 distinct edited 帧数（查询时序覆盖度）。α=0.5（∈[0.4,0.8] 宽稳定平台）使 **s2 best_rank 2→1**（正确区[1296,1346] n_reps=10 反超错窗暗室内男[1212,1234] n_reps=5），其余段不变，recall_B 恒 7/7，finloc 不变（`best_cover` 与 rank 无关）。4fps 下 s0 6→4、s1 5→4（更优）。
-- **为什么是它**：错窗是**均质暗场景**，`qcov`(=1.0)/`sim_std`(0.016, 反比正确区的 0.064)/`scene_diversity` 三项经数据证明**方向全反、无法区分**；只有"候选覆盖编辑剪辑的时序广度"这一**结构**信号能分开——错窗只命中 query 的暗色子集(5 帧)，正确区覆盖更宽时序(10 帧)。一条原则性规则（真匹配应覆盖整个编辑剪辑内容），非过拟合；一致性幂需 k>1.83 才翻转但会摧毁 s0/s1（12/7），sim_std 惩罚需 c<0（奖励方差，不合理）。
-- **ExpB/C 为何失败**：错窗暗室内男在 **CLS 与 pooled-patch 空间都编码得比正确区更近**（patch 后差距 0.168→0.10 仍未翻盘；错窗 sim 0.726→0.758 反升）——pooled-patch 是 1369 patch 的全局均值，仍属"全局外观"描述子，无法判别语义身份。s4 的 shot-boundary 问题（暗色掩体/森林/控制台/蓝屏），patch/multi-scale 只把 IoU 从 0.333 抬到 0.429/0.529 但 traj 过度延伸（end_err +24/+16），精度更差；且连环伤 s3(0.75→0.0)、s0(cover 1.0→0.667)、s6(0.75→0.5)、s5(0.455→0.353)、s2(0.5→0.226)。
-- **Alternatives**：若坚持修 s4 shot-boundary，方向应为局部 patch↔patch **correspondence**（shot 边界匹配）或场景身份模型，均超出"只测 A/B/C"范围；或接受 s4 finloc 0.333 为已知极限。
-- **Rejected**：采用 pooled-patch / multi-scale 信号进入排序或 finloc；提高 `n_reps` 幂到一致性-k 类过拟合。
-- **约束**：未改 backbone / GT / benchmark 口径 / 检索-finloc 主流程，只在排序层加一项；`2@0.5fps_patch.npy` 为新增只读缓存。Phase 16B 结束即停，未进 Phase 17。
+## 2026-09-05 — 多模态确认: test3 事件扩池"独立救回" = 误配坐实（修正三.8 定性）
 
-## Phase 17A / 18 / 19 finloc 决策（2026-08-25）
+- **用户指出**: 三.8 判"编辑时序错位"未做多模态确认。用本模型（deepseek-v4-flash-vision）
+  直接目检抽帧 5 个代表性案例（编辑段 3 帧 + 命中区 3 帧）。
+- **结果**: t3r09_a / t3r26_a / t3r19 三对全部**视觉不匹配**——编辑帧是"索林集结/矮人逃离/
+  索林特写", 命中区是"矮人大厅行军/战场肉搏/战乱混战", 同片同视觉域但不同镜头。
+- **修正**: test3 那 11 个"事件 span 独立救回"**全为误配**（非"编辑时序标注问题"）。
+  根因 = 方向 A 事件指纹（场景级聚合）在**同质视觉域**（霍比特人2 全片矮人/半兽人/战争戏）
+  下无法区分相邻相似事件 → 误配风险而非收益。
+- **对方向 A 的判定**: 在 test3 同质域下方向 A 的"身份路由"兑现为误配; 严格净收益仅
+  test2 +1（t2r02a, 5s 精确 span, 编辑器非错配）; 其余片事件扩池在严格口径下零净收益。
 
-- **Decision**：**finloc 三方向（只改 Fine Localization 层，其余全部复用 query_density_14c）均不采纳**。每方向都在"修好 s4（多-shot montage）"与"退化干净段"之间不可调和，净收益为负。
-- **17A multi-segment（per-query argmax）**：s4 0.333→1.0 验证"longest_run 单连续 run 对 montage 过严"假设**成立**；但 s0/s2→None、s1/s3/s6 过窄、s5 反向跨段；gap 2/4/6 逐段全同（无 gap 可调）。**根因：per-query 单帧 argmax 太脆**（跨 shot 抖动 + monotonic/teleport 校验整条拒绝）。
-- **18 temporal neighborhood voting（per-query 邻域投票）**：s4 0.333→0.889、s2 0.5→0.667、0 None；但 s0/s3/s6 静态塌缩成点、s1 过窄、s5 w3 仍反向跨段。**根因：per-query consensus 单 bin 众数丢弃区间；单调路径永不断段使并集+cut 门成死路径；cut 过度检测**。
-- **19 cut-aware coverage（per-orig coverage 主信号 + run 级 source-cut 切分）**：s0/s1 稳定、0 None、s5 不再反向跨段；但 s4 仍 0.333（[1383,1389] 的 8s coverage 洞 > gap_merge 4s）、s2/s3/s6 明显退化（cut 段内误检 + 无-cut-merge 门控截断）。**根因：0.5fps 下相邻内容距离几乎处处高（d 0.6~0.94），无法区分"段内 montage 洞"vs"跨段真 cut"**；s5 cross=F 是 coverage 信号+分数巧合非 cut 功。
-- **三轮共识**：**per-orig max-over-query coverage 是对的主定位信号（保留区间/稳定性来源）**；run 级 cut 切分反例成立；per-query 位置信号做不了主定位。**"保留区间"只能靠 per-orig 覆盖信号。**
-- **约束**：未改 DINOv2/检索/ExpA/GT/cosine/指标；研究代码保留。各 Phase 完成即停，未自动进下一 Phase。
+## 2026-09-05 — 事件扩池真实价值归因: 身份路由与编辑时序错位的张力
 
-## Phase 20 架构决策（2026-08-25）
+- **Decision**: 对精修版事件扩池做逐段归因, 量化其是否提供「帧级/场景之外命中 GT 的独立位置」。
+- **数据**: 事件span命中GT正例 2.mkv 3 / test1 6 / test2 0 / test3 14; 独立救回(主/场景未覆盖
+  GT中点) 2.mkv 3 / test1 5 / test2 0 / test3 11。
+- **test3 的 11 个独立救回 = 全为编辑侧错配（ed_ov=0.00）**: 事件 span 命中的是某 GT 的原片
+  位置, 但对应编辑段与 GT 编辑区间对不上（跳切/倒叙致同一事件挂多个编辑段）——非真实救回,
+  反而暴露事件扩池的误配风险。
+- **核心结论**: 方向 A 的独特价值（身份路由）在严格/场景/负例口径下未兑现为净严格收益
+  （精修版 34/34/13(+1)/32, 仅 test2 +1 真实）。身份路由(命中哪个事件) vs 帧级精确(命中
+  哪个编辑段的位置) 存在张力; 跨段错配是误配风险。
+- **待用户拍板**: 继续方向 A（身份路由+编辑时序约束 小阶段） / 关闭事件扩池(回落无事件
+  基线 34/34/12/32, 零增益) / 保留为「身份级附加候选」(事件维度上下文, 不计严格)。
 
-- **Decision**：**不启动新的算法研究阶段**。把已验证栈（DINOv2→检索→聚类→ExpA n_reps→longest_run finloc→Confidence→FFmpeg）直接产品化（P0）；仅当产品目标域蒙太奇/多-shot 素材占比高时才做 **s4 单类定向验证**（P1：DINOv2 稠密 + VCSL/VTA 序列对齐），成功才接入二级定位器，失败则确认 s4 为固有难例。
-- **s4 定性**：**可接受的困难边界案例**，非必须攻克核心（主问题已被 recall_B 7/7 回答；2–2.5s 编辑跨 3–4 来源 shot 本质欠定；三轮框架内优化均伤及 3–5 段）。
-- **sequence-level model 引入条件**（不默认换模型）：①frame-level 优化到顶（已满足）②产品域蒙太奇占比高（需产品决策）③s4 单类 sequence-level 定向验证正面（未满足，可低成本做）。VCSL/VTA（MIT）是贴合"multi-shot montage source localization"的现成候选，但 real 未证 + dinov2_ta blocked → 只能"二级定位器+定向验证"接入，不得整体替换。
-- **约束**：不写代码/不改 GT/不重跑 benchmark/不调参/不加模型；数据冲突（s4 根因诊断、序列级方向 vs 可行性、s5 改好稳健性、召回 vs 深 rank）如实记录，不强行单一结论。
+## 2026-09-05 — 事件 span 精修（span_mode=run）: 精度大幅提升 + 剥离粗跨度虚高
 
-## MVP 产品化决策（2026-08-25）
+- **Decision**: 用户要求「继续提高定位精度」。实现事件 span 精修: EvidenceLocalizer 对
+  事件扩池单元用 span_mode="run"(仅 finloc 精确 run, 不 ∪ 事件窗全范围), 无 run 则 span=None。
+  粗跨度版(span ∪ 全事件窗)的事件 span 中位数 67-222s, 精修后 5-37s (↓83-96%)。
+- **四片回归**: 精修版 严格 = 2.mkv 34 / test1 34 / test2 13(+1) / test3 32
+  (粗跨度版 35/40/16/35; 无事件基线 34/34/12/32)。
+- **关键发现（诚实边界）**: 粗跨度版 +14 几乎全是「身份命中当位置命中」的假命中
+  (事件身份归位正确, 但 span 数百秒仅因 GT 中点落在其中而算命中)。精修剥离后,
+  只有 **test2 的 +1（t2r02a, 5s 精确 span）为真实严格增益**; 其余片回落到无事件基线。
+- **结论**: 精修版是正确形态——精度提升(事件 span 帧级化)、不虚报命中(剥离粗跨度假
+  命中)、场景级/负例零回退(39/39·42/43·18/20·37/37·负例 3/4·0/1·0/1·1/3)。
+  test2 +1 是事件扩池的真实严格收益(兄弟机位身份路由 → 帧级精确 run)。
+- **保留**: 事件扩池默认开(event_recall_enabled=True, span_mode="run"); 事件 span 与帧级/
+  场景 span IoU 去重; 无 run 诚实淘汰(span=None)。feature_version +scn1+evt1 保持不变。
 
-- **Decision**：进入 MVP 产品化（Source Video Locator）。**产品第一原则 = Confidence Engineering**（不把 cosine 当置信度/概率；综合 rank/n_reps/score/margin/consistency/coverage/finloc_stability/竞争性/montage/窗口异常 → HIGH/MEDIUM/LOW + reasons）。montage/多岛 = 低置信 + 候选范围 + 人工修正；**宁可提示人工确认，不输出虚假精确高置信**。
-- **技术栈**：**Python + PySide6（LGPL）**。理由：引擎已是 Python/PyTorch，单进程免 IPC；DINOv2 的 AMD/MPS/CUDA backend 进程内切换；FFmpeg 子进程；用户已有 PySide6 经验；LGPL 商用友好。**不选 Avalonia/Electron**（UI 极轻、瓶颈在引擎，跨进程无收益）。
-- **硬件路线**：严格 **H1 Windows CPU → H2 Windows AMD → H3 macOS Apple Silicon**，不并行。6750 GRE 的 ROCm/Windows 可用性**需实机验证**，不稳标 `AMD_GPU_BACKEND_BLOCKED` 继续 CPU；macOS 需实机验证、不支持 Intel。
-- **研究代码处理**：REUSE=手写 ViT-S/14 模型+预处理+前向、longest_run、cosine_similarity、检索/聚类算法、v2_score 公式；REFACTOR=feature extraction 入 DeviceBackend、narrow 定位流程去 GT/TransVCL 依赖、检索/聚类 I/O 去 benchmark 全局；REWRITE=frame 采样→FFmpeg、FFmpeg 工具集中化、FeatureStore、ConfidenceEngine、engine/segment；RESEARCH_ONLY=ta._dp_path、query_density_14c 整脚本、17A/18/19 变体、patch/multi-scale、ORB-BOW/TransVCL/VDF。
-- **无 GT 落差点**：研究用 GT 窗口定义查询段，产品无 GT → 新增 `engine/segment` 做 edited shot 切分。**约束**：不改冻结算法；products 代码与研究代码物理隔离。
+## 2026-09-05 — 方向 A runtime 四片回归完成: 严格 +14, 场景/负例零回退
 
-## MVP Stage 1 第 1~4 项决策（2026-08-25，产品化编码）
+- **Decision**: 方向 A（事件身份建模）runtime 化实施完成并跑完四片回归验收。
+  严格 112→126/139 (+14: 2.mkv +1 / test1 +6 / test2 +4 / test3 +3)、场景级 136/139 (+0)、
+  负例 4/9 (+0) —— 严格净正收益、场景/负例零回退，按立项验收标准通过。
+- **诚实边界（必须标注）**: +14 中相当部分为粗事件跨度经严格判据 mid_in 命中（p30 事件
+  span 1740-2317 跨度 577s; test1 事件 span 80-222s）——事件身份正确归位但 span 粒度粗，
+  非帧级精确位置。严格口径下「事件身份命中」被计为命中，属口径性收益 + 真实归位收益并存。
+- **落地状态**: feature_version +scn1+evt1（四片原片索引已重建）; 事件扩池默认开
+  （event_recall_enabled=True, event_top_k=3, event_max_expand_frames=240）;
+  回退开关 pipeline.event_recall_enabled=false 恢复旧行为; 事件表缺失自动降级不崩。
+- **后续**: 若需帧级精确度提升，方向是事件命中后事件窗内再做帧级精修（当前事件 span 为
+  单元粗跨度）——独立小阶段，本次未实施（诚实边界明确）。
 
-- **FFmpegIO 替代 cv2**：所有时间定位走 ffmpeg/ffprobe subprocess，**禁 cv2.CAP_PROP_POS_MSEC**（MKV 可致从头解码）。mkv 流 duration=N/A → metadata 只信 `format.duration`、fps 只信 `avg_frame_rate`。
-- **clip 提取用精确重编码**：`-ss <start> -i ... -t <len> -c:v libx264`（`-ss before -i` 快 seek + 重编码 = 帧精确首帧）。**stream copy 是 keyframe 对齐、不精确**，产品价值点拒绝。libx264 是 GPL 编码器，打包时评估 LGPL 构建（见 TECH_STACK §6）。
-- **采样约定改时间基**：产品 `iter_frames(fps=f)` 用 ffmpeg `fps` 过滤器，`t=i/fps`（时间驱动），**不复刻研究 cv2 `idx%step` 帧索引基**。理由：产品是全新 runtime（不重跑研究 benchmark），时间基对齐 FeatureStore `t=row/fps`、跨源 fps 稳定。因此 MVP 索引不会与 `work/dinov2_feats` 逐字节一致（预期，无害）。
-- **FeatureStore 落盘/失效**：`<index_root>/<stem>__<hash8>.idx/{index.json,features.npy,times.npy}`（times 与 features 行对齐，绝对秒）。失效判定 size→duration→model/dim/fps/version→hash 硬检；旧索引进 `.stale` 隔离命名空间（不静默覆盖，可恢复）。`validate_index` 每次对原片做内容哈希（快检优先，但 hash 是 INDEX_SPEC §4 最硬判据，1GB≈0.9s 可接受）。
-- **检索/排序冻结参数**：`retrieval_top_k`=20（Phase 14A 冻结，config 占位 100→20）、`v2_score` alpha=0.5（Phase 16B ExpA 冻结）。**仅当**聚类/排序的 base_gap=10 / bridge=15 / max_window=60 / sim_floor=0.45 等为模块级冻结默认（不 sweep）。
-- **定位信号分层**：`best_cover`（per-orig max-over-query coverage）是 finloc 计算量，**由第 5 项 longest_run 回填**；第 4 项 Candidate 的 `best_cover` 暂时留 0.0 占位。`domain.Candidate` 增 `scene_div`（内部 orig 桥接段数+1，montage 指示供 Confidence）。
-- **研究代码 RESEARC_H_ONLY 边界**：`ta._dp_path`/`temporal_align`（TA/DTW）、`query_density_14c.localize`/`edited_window_feats`/`best_cover(GT)`、`_recall`(GT overlap)、14A `ffmpeg_frames`/`dinov2_batch`、17A/18/19 变体、patch/multi-scale、ORB-BOW/TransVCL/VDF——全部不进入 MVP runtime，保留溯源。
-- **已知数据属性（交接必读）**：合成图案场景（source.mp4 的多色 drawbox）DINOv2 CLS 语义易混淆，`v2_score` 会把覆盖更宽的非 GT 窗口排在真 GT 区之前（第 4 项冒烟实测）。这是 **冻结公式 + 合成图案**的属性；研究在真实影片数据上 v2_score 正确分离（Phase 16B：s2 正确区[1296,1346] n_reps=10 反超错窗[1212,1234] n_reps=5）。若真实数据同样混淆 → 属 Confidence 应显式降险情形（第 5 项），**非 retrieval 改动，也不回退冻结公式**.
+## 2026-09-05 — 方向 A 立项完整阶段（用户拍板）
 
-## MVP Stage 1 第 5~6 项决策（2026-08-25，产品化编码）
+- **Decision**: 用户选 A = 方向 A（场景实例身份建模）**立项完整阶段**（探针 POSITIVE 后拍板）。
+  探针证据: FINDINGS_EVENT_IDENTITY_P1_P2.md（P1 事件聚类可分 + P2 事件身份端到端 top-1）。
+- **范围**: ① 索引侧事件表（scenes → events 归并, bump feature_version, 四片原片索引重建）;
+  ② 查询侧「事件单元检索 + 细化」; ③ 结果/UI 事件标识; ④ 全套单测 + 四片三指标验收不回退。
+- **落地约束（沿用 SECOND_SIGNAL §5 + 2026-09-05 拍板）**: 不改相似度/检索/排序/置信语义、
+  不改 GT、失败族边界不扩大（p08/t3r12）; GPU DirectML 优先（BACKEND_SELECTED 打印）;
+  编辑侧特征不落索引; 验收 = measure_baseline.py 三指标 vs v4 基线零回退 + 全套测试全绿。
+- **风险**: 事件归并参数需固化（探针网格最优区 60-120s / 0.55-0.60）; 单元代表均值向量口径的
+  最近跨单元偏高（0.7562）→ 查询侧不能只靠单元代表一刀切（配合排序细节）。
 
-- **第 5 项 localization+confidence 要点**：finloc = per-orig max-over-query coverage + 3 帧平滑 + mask(0.4 冻结) + longest_run → 精确 span；montage 只用 `multi_island` **检测与标记**（不自动解）；`pipeline.localize_segment` = 候选→finloc 最佳→回填 `best_cover`→confidence→`RefinedSegment`，montage/无 span/run 过短时 original **退化为候选窗范围**（不输出虚假精确边界）。Confidence 是对低置信（weights/threshold 全部占位，入 `ConfidenceConfig` 供 H1 标定）；`engine/localization/__init__` 不 import 编排避免 `confidence<->localization` 循环（pipeline 作为显式子模块）。禁 per-query argmax/voting/cut-aware/TA/改 similarity·ranking。
-- **第 6 项 `engine/segment` 关键决策**：`ShotSegment` 放 **engine 层**（domain 禁 numpy；先例 `Hits`/`LocalizationResult`）；切分**判别用局部 z-score**（`z=(s-局部均值)/max(局部σ,floor)`，边界需 `z>=2` 且 `s>=cut_abs=0.30`）——**非裸绝对阈值**（研究证绝对 d 不可靠），且**弃了"相对基线 `max(cut_abs, cut_rel*local_baseline)`"**——那是死代码（cut_rel*base ≤ 0.5 < cut_abs，永远选 cut_abs，退化为纯绝对阈值=被证伪做法）；`cut_abs` 仅作下限安全垫（挡近零 σ 静态段微尖峰）。**默认平滑窗=1**（不平滑保留单帧 cut——分析：平滑窗 3 会把单帧边界拉平，块边界 z≈1.15<2 漏检；且相邻双尖峰会互相抬高局部统计）。**整体偏向下切分**（产品约束：过长可接受、过短/碎片化更危险），NMS(min_gap=max(1,round(min_shot_s*fps))) + merge(过短段并入更弱边界一侧) 保底；无边界/单帧/空 → 回退整段 1 查询单元（=现状行为）。切分参数是**产品化占位**（非冻结 finloc 阈值），入 `PipelineConfig.seg_*`（3 接线点 + JSON 覆盖）供 H1 真实数据标定，**不做 sweep**。segment 属产品胶水，**不触碰任何冻结算法**；避免把 Phase19 原片侧 cut-aware 逻辑重新引入。
+## 2026-09-05 — 方向 A 探针（场景实例身份建模 P1/P2）= POSITIVE（研究侧, 零 runtime）
 
-## MVP Stage 1 第 7 项决策（2026-08-25，产品化编码，application service）
+- **Decision**: 按 SECOND_SIGNAL §6 执行方向 A 探针并完成; P1（事件级聚类可分）+ P2（事件身份
+  端到端 top-1）双判据通过 → **direction_A_probe = POSITIVE**。
+- **P1**: p08(场景134)/p38(场景128) 兄弟机位 12/12 参数网格同事件单元（时序近邻+指纹联合归并）;
+  同口径场景对 sep=+0.2613 事件单元与邻近可分。
+- **P2**: p08 帧级 2582/7668 → 事件级 top-1（162 单元）; t3r12 帧级 1/10177 保持、事件级 1/190。
+  p08（唯一合法兄弟机位失败族）被事件聚合救回 top-1。
+- **落地约束**: 零 runtime 改动; 身份嵌入=均值聚合（未训练学习型）; 三指标基线未触碰、未复测;
+  runtime 化（事件表 bump feature_version）须用户拍板 + 先探针验收三指标不回退。
+- **证据**: FINDINGS_EVENT_IDENTITY_P1_P2.md + work/event_identity_P1_P2_results.json +
+  mvp/scripts/research_event_identity.py。与旧 P1/P2（2026-09-01）结论一致并新口径复核通过。
 
-- **层次归属**：shot 切分 + per-segment 管线循环放 **app service 层**（按 STATE.md Next Actions，直接复用 `detect_shots`/`produce_candidates`/`localize_segment` 现有函数，**不新建** engine 层 `LocalizationEngine` 类）。App Service = UI 唯一入口，三职责：编排 / Result 持久化 / 会话状态；不写视觉算法、不触碰冻结语义。
-- **编排**：`build_original_index`(validate→MISSING/INVALID→create→load) → `analyze_edited_video`(iter_frames@edited_segment_fps→embed_frames→detect_shots, 空帧→ApplicationError) → 逐 segment `produce_candidates` + `localize_segment` → 拼 `domain.Result`(edited=shot.span)。`_locate_features(shots,bundle,cfg)` 拆出**纯管线（无 IO）**供 deterministic 测试直注构造特征。
-- **失败隔离**：单 segment 失败（produce/localize 异常）→ unresolved `Result`(LOW + `failure_reason` + 日志完整 exception) + **继续后续 segment**，不让整个 edited task 失败。**cancellation 的 `ApplicationError` 不落入段级隔离**（`except ApplicationError: raise` 穿透）。
-- **ffmpeg/backend/FeatureStore 惰性构建**：仅做纯编排（如 `_locate_features`）或未配置二进制时**不强制解析**（避免构造即因缺 ffprobe 失败）。
-- **Progress**：显式 7 阶段 `ProgressStage` + `ProgressEvent{stage,current,total,message}` 逐事件回调；GUI 用状态机/进度条，不做细粒度逐帧。
-- **Cancellation**：`CancellationToken`(threading.Event 封装)，在 index build / edited feature extraction / segment loop / export 检查；取消抛 `ApplicationError`。
-- **错误模型**：`infrastructure/errors.py` 补 `IndexError`/`FeatureExtractionError`/`LocalizationError`/`ApplicationError`（均 `LocatorError` 子类）；service 把底层异常翻译为可处理类型，GUI `except LocatorError` 即可，不解析原始 exception string。
-- **Result 持久化（用户拍板）**：JSON 单文件批信封 `schema_version/original_video/edited_video/results[]`（`*.results.json`，`<edited_stem>__<hash8>.results.json`，落 `paths.export_root()`）；复用 `Result.to_dict()/from_dict()`，保留 auto/manual 双轨（`manual_override` 时 `auto_result`/`manual_timestamp` 不丢）；`domain.Result` 增可选 `failure_reason`；当前不引入 SQLite。
-- **修复的 app 级 bug**：`_result_from_refined` 曾传 `shot` 而非 `shot.span` → `Result.edited` 被塞进整个 ShotSegment；已改为 `_result_from_refined(shot.span, refined)`。
-- **真素材结果仅观察**：冒烟报告 segment/result/HIGH·MEDIUM·LOW/unresolved/candidate/各阶段耗时/内存，只记录不调算法（除非确定性 app bug）。
+## 2026-09-05 — 非外观第二信号 研究重启立项（用户拍板）
+
+- **Decision**: 用户选择「重启非外观第二信号研究立项」（选项 2）。此前研究侧 M1-M8
+  全维度闭环、失败族定性「特征上限/已知局限」；本会话新增证据（语义可分性验证
+  scene 4/4 同级 + 低信息降权零收益）确认外观/多模态层已无空间，剩余唯一方向 =
+  非外观第二信号（事件实例身份 / 剪辑叙事结构）。
+- **范围**: 研究侧探针先行, 零 runtime; 候选方向 A 场景实例身份建模(P1 事件聚类+
+  P2 排序名次, 推荐) / B 剪辑叙事结构(谨慎) / C 多模态语义(已关闭)。
+- **已证伪登记**: 16 项（含 2026-09-05 三项: 语义可分性/低信息降权/I帧锚定/多特征抑制）,
+  重启不得重复, 见 RESEARCH_PROPOSAL_SECOND_SIGNAL.md §2。
+- **落地约束**: 探针验收(三指标不回退)后才谈 runtime 接入; 不改 GT/相似度/检索语义;
+  失败族边界不扩大(p08/p08b/t3r12); GPU DirectML 约定延续。
+- **执行**: 下个对话从 RESEARCH_PROPOSAL_SECOND_SIGNAL.md §6 开始（research_event_identity.py）。
+
+## 2026-09-05 — 两级切分 + 白闪守卫 进 runtime（用户拍板）
+
+- **Decision**: C 项验证方案（两级分层切分 + 白闪守卫）正式替换 analyze_edited_video
+  切分, 进 runtime。验证: 四片严格 112/139 (+8 vs 2fps doc)、场景级 136/139 (+18)、
+  负例 4/9 持平——唯一严格净正收益方案（8fps 全局采样/像素切分/I帧锚定均证伪, 见
+  FINDINGS_IFRAME_CUT.md）。
+- **实现要点**: flash_guard 提取入库(engine/segment/)参数化; seg_twopass_enabled 默认
+  True(可关回退旧路径); 粗采样 6 帧步长 + 白闪/亮度尖峰邻域切点删除 + ±20 帧密帧
+  精修(白闪邻域回退粗切点) + 最短镜头保护 0.5s(白闪邻域动态 1.0-1.2s) + 业务兜底合并。
+- **验证**: 后端 240 单测(新增 18) + 前端 vitest 67 + test:mock 全绿; 四片三指标与
+  基线零偏差(112/139/136/139/4/9); 段数 test3 68→67 为 card_run_ratio 补齐所致,
+  零指标影响。
+- **落地约束**: 编辑侧特征不落索引, 无需 bump feature_version; 段数增多(2mkv 12→69)
+  影响 UI 结果数/导出, 前端契约已 PASS, 打包 exe 验收需用户授权; 白闪守卫参数
+  flash_* 默认=校准值, 不 sweep。
+
+## 2026-09-05 — 运行约定: 算法/推理类任务一律优先 GPU(DirectML)加速
+
+- **Decision**: 用户指示「以后像这种跑算法的任务，都优先 GPU 加速，写入算法」。
+- **约定（持久，后续所有算法/推理/特征提取/重跑任务必须遵守）**:
+  1. **默认 GPU**: 凡涉及 DINOv2 embed / onnxruntime 推理 / 特征提取 / 批量重跑的任务，
+     一律用 pick_best_available / resolve_backend("auto")（本机 → DirectMLBackend，RX 6750 GRE）；
+     禁止默认走 CPU。环境要求: onnxruntime-directml 在位（当前 1.24.4）、DML 资产
+     （%LOCALAPPDATA%\SourceVideoLocator\models\dinov2_cls_384\dinov2_cls_384.onnx 或
+     SVL_DML_MODEL）在位。
+  2. **可验证**: 任务启动时打印/记录 BACKEND_SELECTED type=DirectMLBackend device=directml dtype=amd
+     （研究/重跑脚本统一加此行）；GPU 引擎占用 >50% 为生效佐证。
+  3. **失败处理**: DML 不可用（资产缺失/驱动/内存）→ 明确 fallback_reason 记录后降级 CPU，
+     并在结果/日志如实标注，不静默。
+  4. **不适用场景**: 纯 numpy / 秒级研究探针（如 M8 邻接、相似度计算）无需 GPU，保持原样。
+- **落地**: 本轮两级切分重跑（rerun_twopass.py）已按此执行并验证（BACKEND_SELECTED=directml/amd，
+  GPU 3D 引擎 88-92%）。后续新增/复用的算法脚本默认带 BACKEND_SELECTED 打印。
+
+## 2026-09-04 — test 域细切分扫描完成: 方案 A 不实施, B 顺带关闭, C 下个对话做
+
+- **Decision**: 用户拍板先做 test 域扫描(纯数据)摸清 A 收益上限, 再决定是否实施 A。已完成:
+  - 数据扫描(work/fineseg_scan_test.json): 24 段严格未命中中 6 段「单帧可命中」候选, 但 4 段基线已 HIT(无增量);
+  - **真新增 2 段(t2r02b/t2r03a)经 VLM 语义复审 + 用户人工复审(与 VLM 一致)全部不成立**:
+    t2r02b 单帧窗与 ED 内容不匹配(假阳性候选); t2r03a 现状整段定位比单帧窗更匹配(细切分会回退);
+  - **最终: test 域真实新增严格命中 = 0**。
+- **方案 A(单帧强证据保留) = 不实施(有据)**: 收益上限仅 +1(p36), 且单帧簇高置信≠内容匹配(t2r02b 实证),
+  假阳性风险 > 收益。ROI 不成立。
+- **B(scene 回退扩容) = 顺带关闭**: A 表现已出(无增量), 按用户拍板逻辑不单独立项。
+- **C(编辑侧 2fps→8fps + 细切分) = 记录入 TODO, 下个对话做**(治本路径, 本轮不实施)。
+- **落地约束**: 零 runtime 改动; ⑦ 冻结; p36 单条(+1)留待 C 项处理, 不单独动 runtime。
+
+## 2026-09-04 — p36 细切分取证通过（用户人工复审确认）+ 下一步执行顺序拍板
+
+- **Decision**: 用户假设「按镜头切分好、逐镜头对比更容易定位」→ 对 p36(ed 110-111.5→GT 2042-2043.4) 做取证:
+  数据实验(整段查询未命中, 单帧 110.75→[2040-2044] 命中) + VLM 多模态复审(BEST_WINDOW=W0 2040-2044 YES,
+  W1 2060-2065 仅 PARTIAL) + **用户人工复审(ED↔W0 匹配, ED↔W1 不匹配)三方闭合** → 细切分救回 p36 成立。
+- **执行顺序(用户拍板)**: ①先做 test 域同类段扫描(纯数据, 摸清方案 A 收益上限) → ②再决定是否实施 A(单帧强证据保留);
+  B(scene 回退扩容)看 A 表现再定; **C(编辑侧采样 2fps→8fps + 细切分)记录入文档, 下个对话做**。
+- **方案 A 定义**: EvidenceLocalizer 中 argmax 高置信单例簇(best_sim 显著高)不再被 min_frames=2 直接门掉,
+  降级为弱候选走 finloc(与 _gate_subspans 弱候选同路径)。预期救 p36(32/39→33/39), 回归门槛=四片三指标零回退。
+- **落地约束**: 零 runtime 改动(扫描阶段); ⑦ 保守化标定仍冻结; C 项勿在本对话实施。
+
+## 2026-09-04 — 研究侧收尾归档 + 三指标基线固化（measure_baseline.py）
+
+- **Decision**: 完成研究侧收尾归档(M6 v4 重算 0/39 + M4 v4 重跑 p26 反转 + M8 v4 重跑 + ⑩ p08b 复核作废)
+  与三指标基线固化为可复跑脚本(measure_shot_recall.py 抽 evaluate() + measure_baseline.py doc/rerun 双模式)。
+- **M4 v4 反转**: p26 在 v4 真值(1768.2-1770.05)下 1fps 稀疏索引即 best_rank=1、margin=+0.2802——
+  旧「12→43 恶化」是错误 GT 假象(p26 非特征上限, 与 M6 v4 CLS best=1 双向闭合); 8fps 密帧零增量(rank 持平 1)。
+- **M8 v4**: p26 真值/干扰互换后仍 AMBIGUOUS(0.027); p08 维持 AMBIGUOUS(真值邻接 0.7744 更不唯一); t3r12 维持。
+- **⑩ p08b 复核 = 作废(污染残留)**: M5「patch 救回 32→2」真值窗(1048-1050)=p38 旧错误 GT 区, v4 正确=1108.15-1109.1,
+  M6 v4 证 CLS rank=6(池内)/patch 6 零增量 → E21/M5 正面结论作废, patch 召回方向维持关闭(0/39)。
+- **失败族最终**: p08(2.mkv 唯一兄弟机位) + t3r12(test 域); p26 移除(GT 错实证)、test4 逻辑剔除;
+  A 类(召回失败)在 2.mkv 为空(CLS 39/39 进池) → 研究侧全维度闭环, 不再立项新探针(有据)。
+- **基线固化**: measure_baseline.py 默认=文档基线批(2.mkv→user_results.json、test1-3→cases/*_results.json,
+  与 GT_BASELINE 文档数字完全一致: 32/39、32/43、9/20、31/37), --use-rerun 切换 2026-09-02 重跑批
+  (严格/场景/负例一致, 仅 test1 子 span 枚举 97/152 vs 103/158)。输出 work/baseline_v4.json。
+- **落地约束**: 零 runtime 改动; ⑦ 保守化标定仍冻结; 三指标 v4 基线为回归基准, 后续任何改动须 measure_baseline.py 复跑对比。
+
+## 2026-09-02 — ④ M1-M8 低成本重跑(M4/M8 v4) + ⑩ p08b 复核 = 完成; ⑦ 保守化标定 = 冻结跳过
+
+- **Decision**: 按拍板执行顺序推进 ④(M6 已重算 + M8/M4 v4 重跑)与 ⑩(p08b 复核), 完成并留痕;
+  **⑦ Confidence 保守化标定 = 冻结跳过**(护栏「Confidence 公式冻结+不标定占位+不用 GT 字段」为 2026-09-01 保留项,
+  用户确认不实施; DECISIONS 2026-09-02 晚间「保守化标定可用 test1-3 GT」仅指数据就绪, 不解除冻结)。
+- **M8 v4 重跑**(纯 numpy 秒级): p26 真值(1768.2-1770.05)/干扰(2809-2810)互换后仍 **AMBIGUOUS**
+  (uniq 差 0.027 < 0.05); p08(1108.15-1109.1 vs 士兵特写)维持 AMBIGUOUS(真值邻接更不唯一); t3r12 维持;
+  p38(已删)/t4r01(数据错误)剔除。原片邻接唯一性方向维持关闭(有据)。
+- **M4 v4 重跑**(仅 p26, DML 664s): v4 真值下 **1fps 稀疏索引 best_rank=1、margin=+0.2802**
+  (correct_max_sim 0.8757 vs dist 0.5955)——旧 M4「p26 12→43 恶化、margin −0.28」是错误 GT 假象,
+  p26 从来不是特征上限(与 M6 v4 CLS best=1 双向闭合); 8fps 密帧 rank 持平 1、margin 略降(0.2467)
+  →「密帧零增益」结论在 p26 上更强, 索引密度方向维持关闭。
+- **⑩ p08b 复核 = 作废(污染残留)**: M5 的 p08b 真值窗(1048-1050)=p38 旧错误 GT 区; v4 正确位置=1108.15-1109.1,
+  M6 v4 证 p08 CLS rank=6(在池内)/patch 6 零增量 →「patch 救回兄弟机位 32→2」是把正确画面匹配到错误但相似的
+  士兵特写窗, 非救回正确来源; E21/M5 该正面结论作废, patch 召回方向维持关闭(0/39)。
+- **落地约束**: 全部零 runtime 改动; 三指标 v4 基线(test1 32/43 场景 38/43; test2 9/20 场景 10/20;
+  test3 31/37 场景 34/37)不受影响; ⑦ 冻结维持, 不标定 ConfidenceConfig。
+
+## 2026-09-02(深夜) — ②③ 单调弱先验进候选生成: 已编码, 真实数据实测零触发
+
+- **Decision**: 实现弱先验(带外 primary + 带内竞争候选 cover 落差<=0.10 才切, 逃生门全路径),
+  重跑四片新旧三指标完全一致 → **零触发零影响**, 方向有据收窄。
+- **机制**: p08 型兄弟机位 primary 1048 离前段 33s 在带内、真值 1108 带外——时间轴先验结构性
+  无法纠兄弟机位(呼应 M8 邻接证伪); 真实跳切全带外, 逃生门不误伤。
+- **落地约束**: 实现保留为护栏(默认开零回归); 候选生成级先验不调参不投入;
+  时间轴先验价值 = 事后 temporal_repair(+1 p16) + 时间轴→Ambiguity 降档(②⑥)。
+
+## 2026-09-02(晚间) — ⑤' test1-3 GT 人工复核闭环 + 正式化，test3 HIGH 精度重估
+
+- **Decision**: 用户逐段人工复核 test1-3 全部段，GT 正式化到 `datasets/real/ground_truth_test1/2/3.json`
+  （100 正例 + 5 负例，tier=verified）；absorb ⑨ B 段（test2/3 LOW/MEDIUM）。
+- **关键修正**: test3 r14/r15 = 加长版内容（原片正常版没有）→ 负例（r15 原标 HIGH 算对，实为负例）;
+  test3 r10 = 7:22-7:24 与 conflict_rerank 一致（原"差 1.5s 待修"已修好）。
+- **test3 HIGH 精度重估**: 24→23 段（r15 剔除），r10 已修 → **23/23 = 100%**（原 23/24 双向修正）。
+- **三指标基线**: test1 严格 32/43 场景 38/43; test2 严格 9/20 场景 10/20; test3 严格 31/37 场景 34/37。
+- **落地约束**: 保守化标定现可用 test1-3 全量 GT（不再缺数据）；单调弱先验进候选生成待 ⑦ 拍板后实施。
+
+## 2026-09-01(深夜) — M6 v4 重算:patch 召回 RESCUE 0/39, v3 的「CLS 池外」全是 GT 标错假象, 方向彻底关闭
+
+- **Decision**: 用户拍板重算 M6(v4 GT)后, **RESCUE 1/41→0/39, CLS 池外 10→0, CLS 池内 31→39/39**。
+- **关键证据**: v3 的 10 条「CLS 池外未救回」(p05/p10/p20/p23/p24/p26/p32/p41)修正后全部 best_rank 1-8 直命中;
+  **p13「patch 唯一救回」= GT 标错假象**(v4 下 CLS best=1, patch 零增量)。
+- **Reason**: v3 GT 大量标错位置, 使「正确窗内帧」在错误位置找不到 → 误判为「CLS 召回失败」; 修正后 CLS 对全部 39 条直命中, patch 第二通道零价值。
+- **结论**: patch 召回 runtime 化 = 0/39 增量, **方向彻底关闭(有据)**; M6 原「RESCUE 1/41」作废; 失败族重新定性为「定位精度/兄弟混淆」(p08/p36 + part 5 条), 非「召回层进不了池」。
+- **落地约束**: 三指标 v4(32/39); patch 相关研究关闭, 不再立项。
+
+## 2026-09-01(深夜) — test4 数据错误确认:ed/om 是两部不同电影, 逻辑剔除 test4
+
+- **Decision**:ffprobe 确认 test4-ed.mp4(81s 竖屏 576×832) 与 test4-om.mkv(71min 横屏 1920×804) 为两部不同电影(时长差 50 倍/横竖屏/帧率/音频全不同)。**test4 全部 GT 与探针结论作废**, 逻辑剔除(不物理删文件, 保留证据)。
+- **影响**: M2/M3/M4/M5/M7/M8/P1/P2 以 test4/t4r01 为「同质场景」失败族的结论全部失效; FAILURE_TAXONOMY test4 案例失效; 数据层 B 段改 test2+test3; 三指标 v4 基于 2.mkv 不受影响。
+## 2026-09-06(II) — patch 召回 v2 立项并转正: 近场 patch 重排（零训练）, 严格 +2 零回退
+
+- **Decision**: 用户质疑「patch/子镜头是否走无可走（twopass+最新 GT 条件下）」→ 重测发现
+  **M6 关闭前提失效**: 四片 26 条未严格命中中 7 条检索 top-20 池外（旧结论基于 2.mkv 39/39
+  全池内）; patch 混合池判决 2/7 rank=1 精确救回; 门控探针（+12 对照）设计采纳门
+  {offset≤30s 且 patch_margin>0.08}; 多模态复审确认 p14 主定位画面本来就对（窄窗假象,
+  「p14 vs t3r26 不可分」困境消解）。runtime 实现 `_patch_nearfield_rescue`（默认开,
+  旧主定位保留为子 span）。
+- **结果**: 四片严格 113→115（test3 t3r04b/t3r25 part→HIT）、场景/负例持平、耗时 +2.5%、
+  259 单测全绿。**M6 结论正式修正**: 旧管线条件下 patch 召回无对象; 新条件下 +2/139 零回退落地。
+- **方法论**: ①「方向已关闭」的结论绑定其评估条件——条件变化（切分/GT/管线）时值钱的前提
+  可能复活, 值得低成本重测; ②门控设计必须包含对照组（12 正确段）, 否则会把 t3r26 型
+  「对照段被错误改写」漏掉; ③探针预测与真实命中面可以有偏差（预测 p14/p26, 实际
+  t3r04b/t3r25）, 以四片全量验收为准。
+
+## 2026-09-06(III) — patch 召回 v2 立项并转正: 近场 patch 重排（零训练）, 严格 +3 零回退（含门槛 0.08→0.075）
+
+- **Decision**: 用户质疑「patch/子镜头是否走无可走（twopass+最新 GT 条件下）」→ 重测发现
+  **M6 关闭前提失效**: 四片 26 条未严格命中中 7 条检索 top-20 池外; patch 混合池判决 2/7 rank=1;
+  门控探针（+12 对照）设计采纳门 {offset≤30s 且 patch_margin>0.08}; 多模态复审确认 p14 主定位
+  画面本来就对（窄窗假象,「p14 vs t3r26 不可分」困境消解）。runtime 实现 `_patch_nearfield_rescue`
+  （默认开, 旧主定位保留为子 span）; 首轮验收发现 p26 margin=0.080 恰压 0.08 线被拒（GPU 浮点差）,
+  门槛下调至 0.075 后 p26 采纳落地。
+- **结果**: 四片严格 **114→117（+3: p26/t3r04b/t3r25）**、场景 137=137、负例 4=4、支撑 +25、
+  259 单测全绿、零回退; 另 t2r07c GT 标错修正（78↔68 分钟档误读）独立 +1（算法本就正确）。
+  今晚自 113 起净 +4。
+- **方法论**: ①「方向已关闭」绑定评估条件, 条件变化值得低成本重测; ②门控必须含对照组;
+  ③骑线案例（margin≈门槛）需要留容差——浮点差 0.004 足以翻转; ④config 指纹含全量管线参数 →
+  任何参数调整都会触发 A4 编辑缓存重算（预期行为, 非回退）。
+
+## 2026-09-06 — 性能第二批: 编辑侧持久缓存 + 抓帧并行落地; batch=1 生产证伪回退; DirectML 并发 Run 段错误教训
+
+- **Decision**: ① 编辑侧分析持久缓存进 runtime（`edited_cache_enabled=True`, 键=sha1(文件身份+
+  feature_version+管线配置+设备数值口径), 原子写, 损坏=未命中, 缺文件走原错误路径）——纯缓存
+  零语义, test1 实测首跑 398.5s→命中 192.1s(-52%); ② grab_frame 线程池并行（patch 候选窗/text
+  anchor）, **DML forward 保持主线程串行**——DirectML EP 多线程并发 Run 同一 session 会原生
+  段错误(实测); ③ **dml_batch_size 维持 8**: 生产路径实测 batch=1 建索引 10.1fps < batch8
+  10.4-11.2fps（M4 探针 20.5fps 不适用于生产 embed 分块路径）, 无收益不做数值口径漂移。
+- **结果**: 250 测试全绿; test1/test2 抽查零偏差; test2 索引全量重建后逐 span 全等 = embed
+  重建确定性验证。test1 速度画像: 首跑 ~400s → 热缓存+并行 167s（-58%, 4.1s/段）。
+- **纪律**: 改动 embed 数值口径的任何参数必须 bump feature_version 并全程（索引+查询）统一;
+  资产/路径解析类改动必须跑真实定位探针核对分阶段耗时分布（246 测试不覆盖, 本批 parents[3]
+  深度错误即被探针的 patch=0.0s 异常抓住）。
+
+## 2026-09-05 — 性能第一批: patch rerank 上 GPU(DML ONNX) + 抓帧缓存; subshot_enabled 默认关闭(暴露 weak-hit 替换丢簇缺陷); dml_batch_size 维持 8
+
+- **Decision**: ① PatchReranker 特征提取改 DML 双输出 ONNX 优先/CPU torch 回退（数值 cos 0.999997、
+  patch 决策逐字节一致、9.7×）; ② grab_frame 进程内缓存 + patch 歧义门提前（零语义）;
+  ③ **subshot_enabled 默认 False**——weak-hit 子镜头回退 `evidence = sub_ev` 整体替换会丢 montage
+  已命中簇（test2 t2r02b 实证 HIT→MISS, 定向版入 runtime 时仅验 2.mkv 未全量回归）, 且该方向已
+  结案零收益; ④ dml_batch_size 回退保持 8（batch=1 与既有缓存索引数值口径不一致, 同现 t2r02b 异常;
+  -7% 收益不值一致性风险, batch=1 留给未来全量重建时全程统一使用）。
+- **结果**: 四片三指标/支撑 span 全等零偏差（113=113/136=136/4=4/565=565）, 246 测试全绿;
+  四片总耗时 3885→2725s(-30%), 每段墙钟中位 11.4→5.0s。
+- **教训**: ① 一次改多变量（batch+patch+缓存）导致归因困难, 靠逐项隔离复测定位; ② 「零语义」
+  改动也要全量四片回归——t2r02b 恰是被埋没缺陷的唯一暴露面; ③ 数值口径一致性(查询/索引同 batch
+  构建)是 GPU 管线的隐性契约, 换 batch 参数 = 换数值口径, 必须连索引一起重建。

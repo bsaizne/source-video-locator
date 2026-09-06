@@ -1,0 +1,88 @@
+/* design tokens — Microsoft Fluent-inspired, self-implemented (no winitonweb source).
+   Dark theme. All values are consumed by components via CSS custom properties. */
+
+:root {
+  /* Surfaces */
+  --bg: #111111;
+  --bg-elevated: #1a1a1a;
+  --panel: #1e1e1e;
+  --panel-2: #232323;
+  --card: #252525;
+  --card-hover: #2c2c2c;
+  --overlay: #161616;
+
+  /* Borders / dividers */
+  --border: #2f2f2f;
+  --border-strong: #3a3a3a;
+  --divider: #262626;
+
+  /* Accent — Fluent blue */
+  --accent: #0078d4;
+  --accent-hover: #2b88d8;
+  --accent-active: #005a9e;
+  --accent-soft: rgba(0, 120, 212, 0.16);
+  --accent-glow: #4cc2ff;
+  --focus-ring: rgba(0, 120, 212, 0.55);
+
+  /* Text */
+  --fg: #f3f3f3;
+  --fg-muted: #9e9e9e;
+  --fg-faint: #6e6e6e;
+  --fg-on-accent: #ffffff;
+
+  /* Confidence — engineering score, NOT probability */
+  --conf-high: #6ccb5f;
+  --conf-high-bg: rgba(108, 203, 95, 0.14);
+  --conf-medium: #f2c94c;
+  --conf-medium-bg: rgba(242, 201, 76, 0.14);
+  --conf-low: #f5493d;
+  --conf-low-bg: rgba(245, 73, 61, 0.14);
+
+  /* Semantic */
+  --ok: #6ccb5f;
+  --warn: #f2c94c;
+  --err: #f5493d;
+  --info: #4cc2ff;
+
+  /* Radius — 6/8/12px */
+  --radius-s: 6px;
+  --radius-m: 8px;
+  --radius-l: 12px;
+  --radius-pill: 999px;
+
+  /* Typography */
+  --font-ui: 'Segoe UI Variable Text', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-mono: 'Cascadia Code', 'Consolas', 'SFMono-Regular', monospace;
+  --fs-2xs: 11px;
+  --fs-xs: 12px;
+  --fs-sm: 13px;
+  --fs-md: 14px;
+  --fs-lg: 16px;
+  --fs-xl: 20px;
+  --fs-2xl: 26px;
+
+  /* Spacing */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+
+  /* Layout */
+  --sidebar-w: 240px;
+  --inspector-w: 320px;
+  --header-h: 48px;
+
+  /* Motion — Windows Fluent (restrained, professional) */
+  --motion-1: 80ms cubic-bezier(0.4, 0, 0.2, 1);
+  --motion-2: 120ms cubic-bezier(0.4, 0, 0.2, 1);
+  --motion-3: 180ms cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+
+  /* Elevation */
+  --shadow-s: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-m: 0 4px 14px rgba(0, 0, 0, 0.45);
+  --shadow-l: 0 12px 32px rgba(0, 0, 0, 0.55);
+}

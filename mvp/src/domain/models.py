@@ -105,6 +105,42 @@ class Alternative:
 
 
 @dataclass(frozen=True)
+class OriginalSegment:
+    """蒙太奇段的一个子镜头原片区（query-axis 多段定位产物）。
+
+    蒙太奇段可对应多个子镜头原片区；``cover``/``score`` 是质量信号（finloc 覆盖 / run 内
+    平滑覆盖率均值），供 UI 展示与人工核验。非蒙太奇段该字段为空（用单个 ``original``）。
+    ``moments``（可选）：该 scene 子 span 内的帧级 moment 列表（seq_align 精修，向后兼容）。
+    ``from_scene_pool``（可选）：Phase 21 场景指纹扩池产物——仅作展示性附加候选，
+    **不参与主定位改写**（text anchor 等重排器跳过；帧级为主,场景级只扩池）。
+    """
+
+    start: float
+    end: float
+    cover: float
+    score: float | None = None
+    moments: list = field(default_factory=list)   # 帧级 moment dict 列表（向后兼容）
+    from_scene_pool: bool = False                 # 场景指纹扩池产物（Phase 21）
+    from_event_pool: bool = False                 # 事件单元扩池产物（方向 A, 2026-09-05）
+
+    def to_dict(self) -> dict:
+        return {"candidate_start": self.start, "candidate_end": self.end,
+                "cover": self.cover, "score": self.score, "moments": list(self.moments),
+                "from_scene_pool": self.from_scene_pool,
+                "from_event_pool": self.from_event_pool}
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "OriginalSegment":
+        return cls(float(d.get("candidate_start", 0.0)),
+                   float(d.get("candidate_end", 0.0)),
+                   float(d.get("cover", 0.0)),
+                   d.get("score"),
+                   list(d.get("moments", ())),
+                   bool(d.get("from_scene_pool", False)),
+                   bool(d.get("from_event_pool", False)))
+
+
+@dataclass(frozen=True)
 class IndexProgress:
     """建索引进度（engine 向 UI 汇报）。``total`` 为 0 表示未知。
 
@@ -138,6 +174,7 @@ class Result:
     confidence: Confidence = field(default_factory=lambda: Confidence(ConfidenceLevel.LOW, 0.0))
     candidate_rank: int = 1
     alternatives: list[Alternative] = field(default_factory=list)
+    original_segments: list[OriginalSegment] = field(default_factory=list)  # 蒙太奇多段定位子镜头
     source: ResultSource = ResultSource.AUTO
     manual_override: bool = False
     montage_flag: bool = False
@@ -145,6 +182,9 @@ class Result:
     failure_reason: str | None = None   # 段级失败隔离时记录（无候选/段异常），正常为 None
     auto_result: "Result | None" = field(default=None, repr=False, compare=False)
     manual_timestamp: str | None = None
+    frame_precision: bool = False   # 帧级 moment 精修产出单答案时 True（seq_align）
+    not_in_source: bool = False     # 编辑段判定为非源片内容(文字卡/logo/转场),不做定位
+    excluded: bool = False          # 用户手动排除:不进 NLE 导出(结果页可切换,反馈四轮 r16)
 
     def to_dict(self) -> dict:
         """产品契约 JSON（MVP_PRODUCT_SPEC §5 / §27）。"""
@@ -160,11 +200,15 @@ class Result:
             "reasons": list(self.confidence.reasons),
             "candidate_rank": self.candidate_rank,
             "alternatives": [a.to_dict() for a in self.alternatives],
+            "original_segments": [s.to_dict() for s in self.original_segments],
             "source": self.source.value,
             "manual_override": self.manual_override,
             "montage_flag": self.montage_flag,
             "extracted_path": self.extracted_path,
             "failure_reason": self.failure_reason,
+            "frame_precision": self.frame_precision,
+            "not_in_source": self.not_in_source,
+            "excluded": self.excluded,
         }
         if self.manual_override:
             d["manual_timestamp"] = self.manual_timestamp
@@ -185,12 +229,16 @@ class Result:
             confidence=Confidence.from_dict(d),
             candidate_rank=int(d.get("candidate_rank", 1)),
             alternatives=[Alternative.from_dict(a) for a in d.get("alternatives", ())],
+            original_segments=[OriginalSegment.from_dict(s) for s in d.get("original_segments", ())],
             source=ResultSource(d.get("source", "auto")),
             manual_override=manual,
             montage_flag=bool(d.get("montage_flag", False)),
             extracted_path=d.get("extracted_path"),
             failure_reason=d.get("failure_reason"),
             manual_timestamp=d.get("manual_timestamp"),
+            frame_precision=bool(d.get("frame_precision", False)),
+            not_in_source=bool(d.get("not_in_source", False)),
+            excluded=bool(d.get("excluded", False)),
             auto_result=cls.from_dict(d["auto_result"]) if manual and d.get("auto_result") else None,
         )
 

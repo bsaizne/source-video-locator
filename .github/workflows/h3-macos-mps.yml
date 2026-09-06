@@ -14,7 +14,7 @@
 #   reported honestly if the network blocks it — no faked pass.
 # - Uploads results.json + results.md as a workflow artifact.
 
-name: H3 macOS MPS POC
+name: H3 macOS MPS POC + MVP tests
 
 on:
   workflow_dispatch:
@@ -23,6 +23,79 @@ env:
   PYTHONUNBUFFERED: "1"
 
 jobs:
+  # ---- H3 适配主验证: mvp 全套单测在 macOS (MPS 可用) 上跑 ----
+  # - 与 POC job 并行; 权重复用同一缓存目录。
+  # - DML/onnxruntime 用例在 macOS 自动 skip（test_directml_backend B 类守护）。
+  # - B 类 MPS 实机用例（test_mps_backend BClassTests）在此真正执行。
+  mvp-tests-macos:
+    runs-on: macos-15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          architecture: "arm64"
+
+      - name: Cache pip + DINOv2 weights
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/pip
+            ${{ github.workspace }}/.cache/dinov2_weights
+          key: h3-mps-cache-v1
+
+      - name: Install deps (PyTorch w/ MPS, numpy)
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch numpy
+          python -c "import torch; print('torch', torch.__version__, 'mps_avail', torch.backends.mps.is_available())"
+
+      - name: Download DINOv2 weights (same cache as POC)
+        run: |
+          mkdir -p .cache/dinov2_weights
+          W=.cache/dinov2_weights/dinov2_vits14_pretrain.pth
+          if [ ! -f "$W" ]; then
+            curl -fL --retry 3 -o "$W" "https://dl.fbaipublicfiles.com/dinov2/dinov2_vits14/dinov2_vits14_pretrain.pth"
+          fi
+          ls -la "$W"
+
+      - name: Run mvp unit tests (259+; DML 类自动 skip, MPS 类真跑)
+        env:
+          SVL_DINOV2_WEIGHTS: ${{ github.workspace }}/.cache/dinov2_weights/dinov2_vits14_pretrain.pth
+          PYTHONUNBUFFERED: "1"
+        run: |
+          python -m unittest discover -s mvp/tests -t . -v 2>&1 | tee mvp_test_macos.log
+          exit ${PIPESTATUS[0]}
+
+      - name: MPS backend smoke (shape/L2/batch cap)
+        env:
+          SVL_DINOV2_WEIGHTS: ${{ github.workspace }}/.cache/dinov2_weights/dinov2_vits14_pretrain.pth
+        run: |
+          python - <<'PY'
+          import sys
+          sys.path.insert(0, "mvp/src")
+          import numpy as np
+          from device import MPSBackend, mps_available
+          assert mps_available()[0], "MPS must be available on this runner"
+          be = MPSBackend(batch_size=4)
+          frames = [np.random.RandomState(i).randint(0, 255, (32, 32, 3), dtype=np.uint8) for i in range(9)]
+          feats = be.embed_frames(frames)
+          assert feats.shape == (9, 384) and feats.dtype == np.float32
+          assert abs(float(np.linalg.norm(feats, axis=1).mean()) - 1.0) < 1e-4
+          print("MPS smoke OK:", feats.shape, feats.dtype)
+          PY
+
+      - name: Upload test log artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mvp-macos-test-log
+          path: mvp_test_macos.log
+          if-no-files-found: error
+
+  # ---- 以下为原 POC job ----
   mps-poc:
     runs-on: macos-15
     steps:

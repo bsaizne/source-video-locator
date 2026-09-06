@@ -1,0 +1,9 @@
+# mvp/api — FastAPI bridge runtime dependencies.
+#
+# Installed into the shared venv (D:/claudework/video-dedup-tool/.venv).
+# pydantic + starlette come in as fastapi dependencies; httpx (TestClient) already present.
+fastapi>=0.141
+uvicorn[standard]>=0.52
+websockets>=17
+rapidocr-onnxruntime>=1.3
+pyJianYingDraft>=0.3  # 剪映草稿生成（Apache-2.0；pymediainfo/comtypes 随装）

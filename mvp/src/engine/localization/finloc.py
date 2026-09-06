@@ -34,6 +34,7 @@ FINLOC_THRESH = 0.4        # coverage "high sim" 阈值（research FINLOC_THRESH
 MIN_RUN_FRAMES = 2         # 一个"显著"run 至少 2 个原片帧（1 帧=退化点）
 MONTAGE_GAP_S = 5.0        # 两个显著 run 间隔超过此值 -> 多岛（占位，待 H1 标定）
 FINLOC_STABLE_S = 4.0      # span 稳定性归一化锚点（秒，占位，待标定）
+FINLOC_MAX_SPAN_S = 15.0   # tight_span 最大宽度（秒，峰值锚定核心的绝对上限）
 
 
 @dataclass
@@ -59,6 +60,7 @@ class LocalizationResult:
     mean_sim: float | None     # 最长 run 内平滑 coverage 均值
     peak_sim: float | None     # 最长 run 内 raw cover 峰值
     n_query: int               # 参与的 edited 查询帧数
+    tight_span: tuple[float, float] | None = None  # 峰值覆盖锚定 + 宽度受限的高置信核心（原始 span 用这个）
 
     @property
     def has_span(self) -> bool:
@@ -96,13 +98,32 @@ def _window_indices(orig_times: np.ndarray, w0: float, w1: float) -> tuple[int, 
     return r_lo, r_hi
 
 
+def _peak_tight_span(cs, run_s, run_e, orig_times, r_lo, tr0, tr1, max_span_s):
+    """最长 run 内以 cs 覆盖峰值为中心、宽度 ≤max_span_s 的高置信核心区间。
+
+    峰 = 查询帧匹配最强的时刻（该镜头真正的「时刻」）；以峰为中心取一个受限宽度窗口，
+    clamp 到 run 边界。避免「短镜头被定位成整段视觉均匀场景/宽 run」的过宽原始区间。
+    """
+    if run_e <= run_s:
+        return None
+    peak = run_s + int(np.argmax(cs[run_s:run_e]))
+    peak_t = float(orig_times[r_lo + peak])
+    half = max_span_s / 2.0
+    t0 = max(tr0, peak_t - half)
+    t1 = min(tr1, peak_t + half)
+    if t1 <= t0:
+        return (round(peak_t, 2), round(peak_t, 2))
+    return (round(t0, 2), round(t1, 2))
+
+
 def finloc_window(candidate: Candidate, ed_feats: np.ndarray,
                   orig_feats: np.ndarray, orig_times: np.ndarray,
                   *,
                   thresh: float = FINLOC_THRESH,
                   min_run_frames: int = MIN_RUN_FRAMES,
                   montage_gap_s: float = MONTAGE_GAP_S,
-                  stable_s: float = FINLOC_STABLE_S) -> LocalizationResult:
+                  stable_s: float = FINLOC_STABLE_S,
+                  max_span_s: float = FINLOC_MAX_SPAN_S) -> LocalizationResult:
     """在一个候选窗上做 per-orig max-over-query coverage + longest_run。
 
     ``ed_feats`` [nq,384]（Edited 查询特征，L2 归一化），``orig_feats`` [T,384]，
@@ -116,7 +137,7 @@ def finloc_window(candidate: Candidate, ed_feats: np.ndarray,
     r_lo, r_hi = _window_indices(orig_times, w0, w1)
     if r_hi < r_lo or n_query == 0:
         return LocalizationResult(
-            span=None, best_cover=0.0, run_len_s=0.0, run_len_frames=0,
+            span=None, tight_span=None, best_cover=0.0, run_len_s=0.0, run_len_frames=0,
             num_runs=0, significant_runs=0, largest_gap_s=0.0, span_coverage=0.0,
             coverage_quality=0.0, span_stability=0.0, multi_island=False,
             window_width=round(width, 2), mean_sim=None, peak_sim=None, n_query=n_query)
@@ -149,7 +170,7 @@ def finloc_window(candidate: Candidate, ed_feats: np.ndarray,
 
     if run_len == 0:
         return LocalizationResult(
-            span=None, best_cover=best_cover, run_len_s=0.0, run_len_frames=0,
+            span=None, tight_span=None, best_cover=best_cover, run_len_s=0.0, run_len_frames=0,
             num_runs=num_runs, significant_runs=significant, largest_gap_s=round(largest_gap, 2),
             span_coverage=0.0, coverage_quality=coverage_quality, span_stability=0.0,
             multi_island=multi, window_width=round(width, 2),
@@ -168,7 +189,9 @@ def finloc_window(candidate: Candidate, ed_feats: np.ndarray,
     span_stability = float(np.clip(stability, 0.0, 1.0))
 
     return LocalizationResult(
-        span=(round(tr0, 2), round(tr1, 2)), best_cover=best_cover,
+        span=(round(tr0, 2), round(tr1, 2)),
+        tight_span=_peak_tight_span(cs, run_s, run_e, orig_times, r_lo, tr0, tr1, max_span_s),
+        best_cover=best_cover,
         run_len_s=round(run_len_s, 2), run_len_frames=int(run_len),
         num_runs=num_runs, significant_runs=significant,
         largest_gap_s=round(largest_gap, 2), span_coverage=round(span_coverage, 4),

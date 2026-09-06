@@ -117,6 +117,21 @@ class DinoV2Small(nn.Module):
         x = self.norm(x)
         return x[:, 0]  # CLS token
 
+    def forward_features(self, x):
+        """返回 (CLS[N,384], patch_tokens[N,P,384])(2026-08-28 模型解冻,增量出口)。
+
+        冻结的 ``forward``/CLS 路径保持不变(embedding 语义零变化,FeatureStore 不受影响);
+        patch token 供 Phase 21 稠密重排等新信号使用。P = (518/14)^2 = 1369。
+        """
+        B = x.shape[0]
+        x = self.patch_embed(x)
+        x = torch.cat((self.cls_token.expand(B, -1, -1), x), dim=1)
+        x = x + self.pos_embed
+        for blk in self.blocks:
+            x = blk(x)
+        x = self.norm(x)
+        return x[:, 0], x[:, 1:]
+
 
 def _imagenet_preprocess(frame_bgr):
     """BGR (H,W,3) np.uint8 frame -> RGB tensor, resize to 518x518, normalize

@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  body { font-family: "Segoe UI", sans-serif; background: #2a2a2a; color: #ddd; padding: 12px; }
+  label { display: block; font-size: 12px; margin: 10px 0 4px; color: #bbb; }
+  input[type=text] { width: 100%; box-sizing: border-box; padding: 6px 8px; font-size: 12px;
+           background: #1e1e1e; color: #eee; border: 1px solid #444; border-radius: 4px; }
+  button { width: 100%; padding: 12px; font-size: 14px; background: #0a6cff; color: #fff;
+           border: none; border-radius: 6px; cursor: pointer; margin-top: 12px; }
+  button:hover { background: #0857c9; }
+  #status { margin-top: 12px; font-size: 12px; white-space: pre-wrap; word-break: break-all; }
+  .hint { font-size: 11px; color: #888; margin-top: 2px; }
+</style>
+</head>
+<body>
+  <h3 style="margin:4px 0 12px">SVL 时间轴导出</h3>
+  <label for="xml">FCP7 XML 路径(留空=默认 test1-ed.loc.xml)</label>
+  <input type="text" id="xml" placeholder="D:\path\to\export.xml">
+  <label for="out">输出 JSON 路径(留空=默认 work\svl_pr_timeline.json)</label>
+  <input type="text" id="out" placeholder="D:\path\to\timeline.json">
+  <button onclick="run()">① 导入 XML 并导出时间轴 JSON</button>
+  <div id="status">点击按钮:自动导入 SVL 的 FCP7 XML,打开其序列,并把轨道/片段时间码导出成 JSON 供外部自动比对。</div>
+  <script>
+    // ExtendScript 字符串参数转义:路径必须双写反斜杠,否则 \b/\t 等会被当作转义序列
+    function q(p) {
+      return '"' + String(p || "").replace(/\\/g, "\\\\").replace(/"/g, '\\"') + '"';
+    }
+    function run() {
+      var st = document.getElementById("status");
+      var xml = document.getElementById("xml").value.trim();
+      var out = document.getElementById("out").value.trim();
+      st.textContent = "运行中……";
+      // CEP 原生 evalScript(不依赖 CSInterface.js)
+      var call = "svlRunAll(" + q(xml) + "," + q(out) + ")";
+      window.__adobe_cep__.evalScript(call, function (result) {
+        st.textContent = result || "(无返回)";
+      });
+    }
+  </script>
+</body>
+</html>

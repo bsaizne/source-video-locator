@@ -26,9 +26,9 @@ from engine.retrieval import Hits
 BASE_GAP_S = 10.0      # gap<=这 按时间近邻直接合并
 BRIDGE_S = 15.0        # (base_gap, bridge] 须过连续性检查
 MAX_WINDOW_S = 60.0    # 硬上限；超限强制切分（无巨窗）
-SIM_FLOOR = 0.45       # 合并候选的编辑帧代表相似度下限
+SIM_FLOOR = 0.38       # 合并候选的编辑帧代表相似度下限（向召回侧降：保留弱命中候选）
 SPEED_LO, SPEED_HI = 0.0, 90.0   # 局部速度带（orig-s / edited-s）
-MIN_HITS = 2           # 一个候选窗至少需要这么多命中
+MIN_HITS = 1           # 一个候选窗至少需要这么多命中（向召回侧降：孤立 1 命中候选不丢）
 
 
 # --------------------------------------------------------------------------- #

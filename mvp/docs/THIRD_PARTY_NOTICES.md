@@ -15,6 +15,12 @@
 | FFmpeg / ffprobe | metadata/seek/抽帧/提取 | **GPL 或 LGPL（构建二选一，需确认）** | n/a | ⚠️ 见下 | ⚠️ 见下 | ⚠️ | **关键决策**：商业再分发需 LGPL 构建；提取编码器若用 GPL(libx264) 有合规考量 |
 | PyInstaller | 打包 | GPL-2.0（含 bootloader 例外） | n/a | ✅（bootloader 例外允许分发） | ✅ | ✅ | 打包分发一般不传染 |
 | Python 标准库 | 运行 | PSF | n/a | ✅ | ✅ | ✅ | |
+| FastAPI (mvp/api) | HTTP 桥 | MIT | n/a | ✅ | ✅ | ✅ | Adapter Layer，只转发到 SourceLocatorService |
+| uvicorn | HTTP 服务器 | BSD-3-Clause | n/a | ✅ | ✅ | ✅ | 含 uvloop/httptools 可选 |
+| pydantic / pydantic-core | schema 校验 | MIT | n/a | ✅ | ✅ | ✅ | FastAPI 依赖，随之安装 |
+| starlette | ASGI 框架 | BSD-3-Clause | n/a | ✅ | ✅ | ✅ | FastAPI 依赖，随之安装 |
+| websockets | WS（下阶段） | BSD-3-Clause | n/a | ✅ | ✅ | ✅ | 下阶段 /ws/progress 用 |
+| httpx | TestClient / 测试 | BSD-3-Clause | n/a | ✅ | ✅ | ✅ | 已有，测试用 |
 
 ## 2. 逐项 License 明细
 

@@ -150,7 +150,7 @@ Result ──(App Service)──> domain.Result ──(infrastructure 持久化 
           └─(media.ffmpeg.clip_extract)──> 原片片段
 ```
 
-## 8. 冻结基线（不可在产品中随意改动）
+## 8. 基线 → 2026-09-01 用户逐条拍板后：以下 1-8 项冻结已解除（可改），9-10 项保留；改动须 bump feature_version 重建索引 + 三指标回归
 
 1. DINOv2 ViT-S/14 CLS 384D（手写模型 + 预处理 + L2 归一）
 2. Original 0.5fps 特征索引
@@ -163,7 +163,7 @@ Result ──(App Service)──> domain.Result ──(infrastructure 持久化 
 9. Confidence Engineering（见 CONFIDENCE_DESIGN.md）
 10. FFmpeg Clip Extraction
 
-**明确不进入默认 runtime**：ORB-BOW、TransVCL+ORB-BOW、pooled patch、CLS+patch multi-scale、per-query argmax multi-segment、per-query neighborhood voting 作为主定位信号、cut-aware coverage localization、继续调 finloc threshold/gap/cut threshold、大规模参数 sweep、新增视觉 backbone、新增 VLM/LLM runtime inference。
+**2026-09-01 护栏确认后**：上述 1-8 项（DINOv2/索引/检索/聚类/rerank/coverage/finloc）**冻结解除可改**；9 Confidence、10 FFmpeg **保留**。原「不进入默认 runtime」清单（ORB-BOW、TransVCL+ORB-BOW、pooled patch、CLS+patch multi-scale、per-query argmax/voting、cut-aware、调 finloc 阈值、大规模 sweep、新增 backbone/VLM）——**解除**：已证伪变体可重评估、patch/multi-scale 可进 runtime。决策依据 `.agent/DECISIONS.md` 2026-09-01；进入 runtime 一律须 bump `feature_version` 重建索引 + `measure_shot_recall.py` 三指标 + 全套测试回归。
 
 ## 9. 研究代码处理原则
 

@@ -1,0 +1,28 @@
+{
+  "appId": "com.videolocator.desktop",
+  "productName": "Video Locator",
+  "directories": {
+    "output": "release"
+  },
+  "files": [
+    "dist/**/*",
+    "out/electron/**/*"
+  ],
+  "asar": false,
+  "extraResources": [
+    {
+      "from": "resources/backend",
+      "to": "backend"
+    },
+    {
+      "from": "resources/models",
+      "to": "models"
+    }
+  ],
+  "win": {
+    "target": [
+      { "target": "dir" }
+    ],
+    "signAndEditExecutable": false
+  }
+}

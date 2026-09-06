@@ -18,7 +18,7 @@ import numpy as np
 
 from domain import TimeSpan
 from engine.common import cosine_similarity
-from engine.segment import adjacent_distances, detect_shots
+from engine.segment import ShotSegment, adjacent_distances, detect_shots
 from engine.segment.segment import SEG_MIN_SHOT_S, _merge_short
 
 
@@ -160,3 +160,60 @@ class AdjacentDistanceTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+# --------------------------------------------------------------------------- #
+# 二级细分(GT v3 迭代):长块内部弱边界由放宽参数补切
+# --------------------------------------------------------------------------- #
+class DetectShotsTwoLevelTest(unittest.TestCase):
+    def _features_weak_second_boundary(self):
+        """3 块:|b1|b2| 强边界(粗参数可见),|b2|b3| 弱边界(cos d≈0.4,粗参数不可见)。"""
+        rng = np.random.default_rng(3)
+        base = rng.normal(size=(3, 384))
+        base = base / np.linalg.norm(base, axis=1, keepdims=True)
+        mixed = 0.6 * base[1] + 0.8 * base[2]
+        mixed = mixed / np.linalg.norm(mixed)
+
+        def block(direction, n, noise=0.01):
+            # noise=0.01:384 维下块内 cos d≈0.04,边界 cos d≈0.4 —— 信噪比足够 z 判别
+            return direction[None, :] + rng.normal(0, noise, (n, 384))
+
+        feats = np.vstack([block(base[0], 20), block(base[1], 20), block(mixed, 12)])
+        feats = feats / np.linalg.norm(feats, axis=1, keepdims=True)
+        times = np.arange(len(feats), dtype=np.float32) / 2.0
+        return feats, times
+
+    def test_two_level_recovers_weak_internal_boundary(self):
+        from engine.segment import detect_shots_two_level
+        feats, times = self._features_weak_second_boundary()
+        coarse = detect_shots(feats, times, cut_abs=0.5, z_thresh=2.0,
+                              min_shot_s=0.5, fps=2.0)
+        self.assertLess(len(coarse), 3)  # 前置:弱边界对粗参数不可见
+        fine = detect_shots_two_level(feats, times, cut_abs=0.5, z_thresh=2.0,
+                                      min_shot_s=0.5, fps=2.0, max_shot_s=8.0,
+                                      fine_cut_factor=0.75, fine_z_factor=0.85,
+                                      fine_min_shot_s=0.5)
+        self.assertGreater(len(fine), len(coarse))       # 长块内部补切
+        self.assertAlmostEqual(fine[0].span.start, times[0], places=5)
+        self.assertAlmostEqual(fine[-1].span.end, times[-1], places=5)  # 覆盖完整
+
+    def test_short_blocks_untouched(self):
+        from engine.segment import detect_shots_two_level
+        rng = np.random.default_rng(5)
+        base = rng.normal(size=(3, 384))
+        base = base / np.linalg.norm(base, axis=1, keepdims=True)
+        feats = np.vstack([base[i] + rng.normal(0, 0.05, (6, 384)) for i in range(3)])
+        feats = feats / np.linalg.norm(feats, axis=1, keepdims=True)
+        times = np.arange(len(feats), dtype=np.float32) / 2.0
+        coarse = detect_shots(feats, times, cut_abs=0.3, z_thresh=1.5,
+                              min_shot_s=0.5, fps=2.0)
+        fine = detect_shots_two_level(feats, times, cut_abs=0.3, z_thresh=1.5,
+                                      min_shot_s=0.5, fps=2.0, max_shot_s=8.0)
+        self.assertEqual(len(coarse), len(fine))  # 短块(3s<8s)不触发二级
+
+    def test_card_ratio_default_zero(self):
+        rng = np.random.default_rng(6)
+        feats = rng.normal(size=(5, 384)).astype(np.float32)
+        shot = ShotSegment(span=TimeSpan(0.0, 2.0), feats=feats,
+                           times=np.arange(5, dtype=np.float32))
+        self.assertEqual(shot.card_ratio, 0.0)

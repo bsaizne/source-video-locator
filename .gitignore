@@ -86,3 +86,42 @@ credentials*
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# ------------------------------ UI (Vue/Electron) ---------------------------- #
+mvp/ui/node_modules/
+mvp/ui/dist/
+mvp/ui/out/
+mvp/ui/release/
+mvp/ui/.vite/
+mvp/ui/*.log
+# allow the mvp/logs/.gitignore guard to be committed (logs/ above ignores the dir)
+!mvp/logs/
+!mvp/logs/.gitignore
+
+# --------------------------- benchmark 研究数据 ------------------------------ #
+# 只收 md/py/json 等小文件; 对照图/抽帧/视频等大文件不入库。
+mvp/benchmark/**/*.jpg
+mvp/benchmark/**/*.jpeg
+mvp/benchmark/**/*.png
+mvp/benchmark/**/*.webm
+mvp/benchmark/**/*.mp4
+mvp/benchmark/**/_frames*/
+mvp/benchmark/user_case/cases/
+mvp/benchmark/user_case/gt_v3/
+mvp/benchmark/user_case/gt_review/
+mvp/benchmark/user_case/gt_rebuild/
+mvp/benchmark/user_case/gt_A/
+mvp/benchmark/user_case/contact/
+mvp/benchmark/user_case/contact2/
+mvp/benchmark/user_case/export_smoke/
+mvp/benchmark/release/
+mvp/benchmark/user_case/semantic_signal/work/
+
+# ------------------------------ 杂项本地文件 --------------------------------- #
+.claude/
+cur
+bundle_report.md
+bundle_optimization_report.md
+mvp/scripts/build_backend_work/
+mvp/scripts/dist_backend/
+mvp/scripts/build_backend.log

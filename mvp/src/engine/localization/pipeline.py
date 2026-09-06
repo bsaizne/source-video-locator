@@ -23,7 +23,7 @@ from engine.confidence import ConfidenceEngine
 from engine.feature_store import IndexBundle
 from infrastructure.config import PipelineConfig
 
-from .finloc import LocalizationResult, finloc_window
+from .finloc import FINLOC_MAX_SPAN_S, LocalizationResult, finloc_window
 
 
 @dataclass
@@ -50,20 +50,23 @@ def localize_segment(candidates: list[Candidate], ed_feats: np.ndarray,
         return None
 
     best = candidates[0]
-    loc = finloc_window(best, ed_feats, bundle.features, bundle.times)
+    max_span = (cfg.max_orig_span_s if cfg is not None else FINLOC_MAX_SPAN_S)
+    loc = finloc_window(best, ed_feats, bundle.features, bundle.times, max_span_s=max_span)
     best.best_cover = loc.best_cover                      # 回填 per-orig coverage
 
     conf_cfg = cfg.confidence if cfg else None
     assess = ConfidenceEngine(conf_cfg).assess(candidates, loc, best=best)
 
-    # 不输出虚假精确边界：montage（多岛）或精定位不稳定（无数值 span / run 过短）时，
-    # original 退化为候选窗范围，交由用户确认；否则用精确 span。
+    # 原始 span 优先用峰值锚定的 tight_span（高置信核心，短镜头不定位成整段场景/宽候选窗）；
+    # 无峰值核心时才退化候选窗。
     degrade = (assess.montage_flag or loc.span is None
                or "finloc_unstable" in assess.hard_flags)
-    if degrade:
-        original = TimeSpan(float(best.start), float(best.end))   # 候选窗范围
-    else:
+    if loc.tight_span is not None:
+        original = TimeSpan(float(loc.tight_span[0]), float(loc.tight_span[1]))
+    elif loc.span is not None and not degrade:
         original = TimeSpan(float(loc.span[0]), float(loc.span[1]))
+    else:
+        original = TimeSpan(float(best.start), float(best.end))   # 候选窗范围（无峰值核心）
 
     return RefinedSegment(
         candidate=best,

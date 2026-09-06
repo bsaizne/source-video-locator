@@ -1,0 +1,38 @@
+{
+  "name": "video-locator-ai",
+  "productName": "Video Locator AI",
+  "version": "0.1.0",
+  "description": "Local AI video source-locator workbench (Vue3 + TS + Electron).",
+  "author": "Video Locator",
+  "private": true,
+  "type": "commonjs",
+  "main": "out/electron/main.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit -p tsconfig.app.json && vite build",
+    "typecheck": "vue-tsc --noEmit -p tsconfig.app.json",
+    "typecheck:desktop": "tsc --noEmit -p tsconfig.desktop.json",
+    "compile:electron": "tsc -p tsconfig.desktop.build.json && node scripts/build-preload.cjs",
+    "electron:dev": "npm run compile:electron && electron out/electron/main.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:mock": "esbuild scripts/mock-contract-test.ts --bundle --platform=node --format=cjs --outfile=scripts/.tmp-test.cjs && node scripts/.tmp-test.cjs && rm scripts/.tmp-test.cjs",
+    "build:electron": "npm run build && npm run compile:electron && electron-builder",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "pinia": "^2.3.0",
+    "vue": "^3.5.13",
+    "vue-router": "^4.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.7",
+    "@vitejs/plugin-vue": "^5.2.1",
+    "electron": "^34.0.0",
+    "electron-builder": "^25.1.8",
+    "typescript": "^5.7.3",
+    "vite": "^6.0.11",
+    "vitest": "^4.1.11",
+    "vue-tsc": "^2.2.0"
+  }
+}

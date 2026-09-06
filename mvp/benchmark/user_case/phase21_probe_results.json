@@ -1,0 +1,98 @@
+[
+ {
+  "id": "p26",
+  "note": "夜读(书+手)",
+  "true_region": [
+   2808,
+   2811
+  ],
+  "n_cand": 50,
+  "ranks": {
+   "V0_CLS": 18,
+   "V1_CTX": 37,
+   "V2_PMEAN": 12,
+   "V3_PMAX": 19,
+   "V4_HIST": 18
+  }
+ },
+ {
+  "id": "p27",
+  "note": "WHAT IS YOUR NAME? 问句字牌",
+  "true_region": [
+   1808,
+   1815
+  ],
+  "n_cand": 50,
+  "ranks": {
+   "V0_CLS": 1,
+   "V1_CTX": 4,
+   "V2_PMEAN": 1,
+   "V3_PMAX": 1,
+   "V4_HIST": 1
+  }
+ },
+ {
+  "id": "p08",
+  "note": "瞭望塔+同桌机位(兄弟 1048-1050 亦真)",
+  "true_region": [
+   1108,
+   1110
+  ],
+  "n_cand": 50,
+  "ranks": {
+   "V0_CLS": 6,
+   "V1_CTX": 14,
+   "V2_PMEAN": 8,
+   "V3_PMAX": 5,
+   "V4_HIST": 5
+  }
+ },
+ {
+  "id": "p08b",
+  "note": "对话场景士兵特写(兄弟 1108-1110 亦真)",
+  "true_region": [
+   1048,
+   1050
+  ],
+  "n_cand": 50,
+  "ranks": {
+   "V0_CLS": 32,
+   "V1_CTX": 49,
+   "V2_PMEAN": 43,
+   "V3_PMAX": 2,
+   "V4_HIST": 31
+  }
+ },
+ {
+  "id": "p01",
+  "note": "金属球准备(sanity 易例)",
+  "true_region": [
+   2412,
+   2446
+  ],
+  "n_cand": 50,
+  "ranks": {
+   "V0_CLS": 1,
+   "V1_CTX": 1,
+   "V2_PMEAN": 1,
+   "V3_PMAX": 1,
+   "V4_HIST": 1
+  }
+ },
+ {
+  "id": "p17",
+  "note": "铁丝网山脊",
+  "true_region": [
+   1397,
+   1419
+  ],
+  "n_cand": 50,
+  "ranks": {
+   "V0_CLS": 1,
+   "V1_CTX": 1,
+   "V2_PMEAN": 1,
+   "V3_PMAX": 1,
+   "V4_HIST": 1
+  }
+ }
+]

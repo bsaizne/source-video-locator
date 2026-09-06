@@ -90,7 +90,12 @@ class DomainModelTest(unittest.TestCase):
 class InfrastructureTest(unittest.TestCase):
     def test_default_config(self):
         cfg = load_config()
-        self.assertEqual(cfg.pipeline.index_sampling_fps, 0.5)
+        self.assertEqual(cfg.pipeline.index_sampling_fps, 1.0)   # 索引密度升级（召回/精度）
+        self.assertEqual(cfg.pipeline.retrieval_top_k, 28)        # 向召回侧
+        self.assertEqual(cfg.pipeline.seg_z_thresh, 1.7)          # 更细切分（平衡点）
+        self.assertEqual(cfg.pipeline.seg_cut_abs, 0.26)
+        self.assertEqual(cfg.pipeline.montage_min_frames, 2)      # 蒙太奇向召回侧（平衡点）
+        self.assertEqual(cfg.pipeline.montage_cluster_gap_s, 15.0)
         self.assertEqual(cfg.pipeline.ranking_alpha, 0.5)
         self.assertEqual(cfg.media.timeout_s, 600.0)
 

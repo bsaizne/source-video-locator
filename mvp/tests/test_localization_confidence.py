@@ -20,7 +20,8 @@ from domain import Candidate, ConfidenceLevel, IndexMeta
 from engine.candidates import produce_candidates
 from engine.confidence import ConfidenceEngine
 from engine.feature_store import IndexBundle
-from engine.localization import (LocalizationResult, finloc_window, longest_run)
+from engine.localization import (EvidenceLocalizer, EvidenceResult, LocalizationResult,
+                                 finloc_window, longest_run)
 from engine.localization.pipeline import localize_segment
 
 from infrastructure.config import ConfidenceConfig
@@ -76,6 +77,24 @@ class FinlocTest(unittest.TestCase):
         self.assertGreaterEqual(tr0, 38.0)
         self.assertLessEqual(tr1, 60.0)
         self.assertGreaterEqual(loc.span_stability, 0.8)
+
+    def test_tight_span_width_clamped(self):
+        """tight_span：峰值覆盖锚定 + 宽度受限（≤max_span_s），且在 run 内。"""
+        q, _, bundle = _continuous_bundle()
+        cand = Candidate(40, 58, 18, 0.99, 0.9, 0.9, 40, 10, 1.0, 0.05, 1.5)
+        loc = finloc_window(cand, q, bundle.features, bundle.times, max_span_s=15.0)
+        self.assertIsNotNone(loc.tight_span)
+        t0, t1 = loc.tight_span
+        self.assertLessEqual(t1 - t0, 15.0 + 1e-6)          # 宽度受限到 max_span_s
+        self.assertGreaterEqual(t0, loc.span[0] - 1e-6)      # 在 run（span）内
+        self.assertLessEqual(t1, loc.span[1] + 1e-6)
+        # 更大 max_span_s 时不把窄 run 过度收紧（tight ≤ run 宽度）
+        loc2 = finloc_window(cand, q, bundle.features, bundle.times, max_span_s=50.0)
+        self.assertLessEqual(loc2.tight_span[1] - loc2.tight_span[0],
+                             loc2.span[1] - loc2.span[0] + 1e-6)
+        # 默认 max_span_s（FINLOC_MAX_SPAN_S=15）
+        loc3 = finloc_window(cand, q, bundle.features, bundle.times)
+        self.assertLessEqual(loc3.tight_span[1] - loc3.tight_span[0], 15.0 + 1e-6)
 
     def test_montage_multi_island(self):
         q, _, bundle = _montage_bundle()
@@ -165,6 +184,89 @@ class LocalizeSegmentTest(unittest.TestCase):
         self.assertIsNone(localize_segment([], q, bundle))
 
 
+class EvidenceLocalizerTest(unittest.TestCase):
+    def test_clean_single_span(self):
+        q, q_times, bundle = _continuous_bundle()
+        ev = EvidenceLocalizer().localize(q, q_times, bundle)
+        self.assertEqual(ev.mode, "clean")
+        self.assertEqual(len(ev.spans), 1)
+        self.assertIsNotNone(ev.primary)
+        s = ev.primary
+        self.assertIsNotNone(s.original_span)
+        ov = max(0.0, min(s.original_span[1], 58.0) - max(s.original_span[0], 40.0))
+        self.assertGreaterEqual(ov / 18.0, 0.5, "clean span not in copy region")
+        self.assertGreater(s.cover, 0.2)
+        self.assertIsNone(ev.secondary)
+
+    def test_montage_two_spans(self):
+        q, _, bundle = _montage_bundle()
+        ev = EvidenceLocalizer().localize(q, np.arange(8) * 0.5, bundle)
+        self.assertEqual(ev.mode, "montage")
+        self.assertGreaterEqual(len(ev.spans), 2)
+        spans = sorted(s.original_span for s in ev.spans if s.original_span)
+        self.assertLess(spans[0][1], spans[-1][0], "two sub-spans should be disjoint far regions")
+        self.assertIsNotNone(ev.primary)
+        self.assertIsNotNone(ev.secondary)
+        self.assertGreater(ev.n_strong_clusters, 1)
+
+    def test_empty_single_frame(self):
+        q = _l2(np.random.RandomState(1).randn(1, 384).astype(np.float32))
+        _, _, bundle = _continuous_bundle()
+        ev = EvidenceLocalizer().localize(q, np.array([0.0], np.float32), bundle)
+        self.assertEqual(ev.mode, "empty")   # 1 帧 < min_frames -> 无显著簇
+
+    def test_strong_clusters_kept_weak_dropped(self):
+        q, _, bundle = _montage_bundle()
+        ev = EvidenceLocalizer(min_frames=2, weak_cover=0.99, weak_sim=0.99).localize(
+            q, np.arange(8) * 0.5, bundle)
+        # 弱阈值极高 -> 两簇都双低被 drop -> 保留为空
+        self.assertTrue(ev.n_strong_clusters >= 2 or ev.n_dropped_weak >= 1)
+
+    def test_moments_when_seq_align(self):
+        from engine.localization.seq_align import align_moments
+        q, q_times, bundle = _continuous_bundle()
+        ev = EvidenceLocalizer(seq_align=align_moments).localize(q, q_times, bundle)
+        self.assertEqual(ev.mode, "clean")
+        s = ev.primary
+        self.assertEqual(len(ev.spans), 1)
+        self.assertGreaterEqual(len(s.moments), 1)
+        for m in s.moments:
+            mc = (m.original_span[0] + m.original_span[1]) / 2
+            self.assertGreaterEqual(mc, s.original_span[0])   # moment 中心在 scene 内
+            self.assertLessEqual(mc, s.original_span[1])
+            self.assertLessEqual(m.original_span[1] - m.original_span[0], 2.0 + 1e-6)  # ±1s 收窄
+        self.assertGreaterEqual(ev.n_moments, 1)
+
+    def test_moments_off_when_seq_align_none(self):
+        q, q_times, bundle = _continuous_bundle()
+        ev = EvidenceLocalizer().localize(q, q_times, bundle)
+        self.assertEqual(len(ev.primary.moments), 0)      # seq_align=None 零回归
+        self.assertEqual(ev.n_moments, 0)
+
+
+class AssessEvidenceTest(unittest.TestCase):
+    def test_clean_high(self):
+        q, q_times, bundle = _continuous_bundle()
+        ev = EvidenceLocalizer().localize(q, q_times, bundle)
+        assess = ConfidenceEngine(ConfidenceConfig()).assess_evidence(ev)
+        self.assertFalse(assess.montage_flag)
+        self.assertIn(assess.confidence.level, (ConfidenceLevel.HIGH, ConfidenceLevel.MEDIUM))
+        self.assertNotIn("montage", assess.hard_flags)
+
+    def test_montage_low(self):
+        q, _, bundle = _montage_bundle()
+        ev = EvidenceLocalizer().localize(q, np.arange(8) * 0.5, bundle)
+        assess = ConfidenceEngine(ConfidenceConfig()).assess_evidence(ev)
+        self.assertTrue(assess.montage_flag)
+        self.assertEqual(assess.confidence.level, ConfidenceLevel.LOW)
+        self.assertIn("possible_montage", assess.confidence.reasons)
+
+    def test_empty_no_evidence(self):
+        assess = ConfidenceEngine(ConfidenceConfig()).assess_evidence(EvidenceResult(mode="empty"))
+        self.assertEqual(assess.confidence.level, ConfidenceLevel.LOW)
+        self.assertIn("no_evidence", assess.hard_flags)
+
+
 def _fake_loc(best_cover, span, run_len_s, run_len_frames, span_stability, multi_island):
     """构造一个 LocalizationResult 用于隔离 ConfidenceEngine 的确定性用例。"""
     return LocalizationResult(
@@ -176,3 +278,60 @@ def _fake_loc(best_cover, span, run_len_s, run_len_frames, span_stability, multi
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+# --------------------------------------------------------------------------- #
+# 子 span 严格门 + IoU 去重(GT v3 迭代:暗色外观巧合假阳性子 span)
+# --------------------------------------------------------------------------- #
+class GateSubspansTest(unittest.TestCase):
+    """白盒直测 EvidenceLocalizer._gate_subspans(不跑检索,确定性好)。"""
+
+    def _loc(self, **kw):
+        return EvidenceLocalizer(**kw)
+
+    def _span(self, o0, o1, cover, sim, e0=0.0, e1=1.0):
+        from engine.localization.evidence_localize import EvidenceSpan
+        return EvidenceSpan((e0, e1), [e0, e1], (o0, o1), cover, sim, 2)
+
+    def test_strict_gate_drops_both_low(self):
+        loc = self._loc(subspan_min_cover=0.45, subspan_min_sim=0.50)
+        strong = self._span(100, 110, 0.80, 0.90)
+        weak = self._span(200, 210, 0.30, 0.40)  # 双低:暗色外观巧合假阳性形态
+        kept, n_gated = loc._gate_subspans([strong, weak])
+        self.assertEqual(len(kept), 1)
+        self.assertIs(kept[0], strong)
+        self.assertEqual(n_gated, 1)
+
+    def test_gate_keeps_when_either_signal_passes(self):
+        """cover 略低但 sim 达标(或反之)→ 保留(不牺牲召回)。"""
+        loc = self._loc(subspan_min_cover=0.45, subspan_min_sim=0.50)
+        low_cover_ok_sim = self._span(100, 110, 0.40, 0.60)
+        ok_cover_low_sim = self._span(300, 310, 0.60, 0.45)
+        kept, _ = loc._gate_subspans([low_cover_ok_sim, ok_cover_low_sim])
+        self.assertEqual(len(kept), 2)
+
+    def test_iou_merge_drops_overlapping_loser(self):
+        loc = self._loc(subspan_iou_merge=0.60)
+        winner = self._span(100, 120, 0.90, 0.90)
+        loser = self._span(103, 125, 0.50, 0.60)  # 与 winner IoU≈0.75
+        kept, n_gated = loc._gate_subspans([winner, loser])
+        self.assertEqual(len(kept), 1)
+        self.assertIs(kept[0], winner)
+        self.assertEqual(n_gated, 1)
+
+    def test_max_keep_cap(self):
+        loc = self._loc(subspan_max_keep=3)
+        spans = [self._span(100 * i, 100 * i + 5, 0.9 - 0.1 * i, 0.9 - 0.05 * i)
+                 for i in range(5)]
+        kept, n_gated = loc._gate_subspans(spans)
+        self.assertEqual(len(kept), 3)
+        self.assertEqual(n_gated, 2)
+
+    def test_all_gated_keeps_best_fallback(self):
+        """全部双低时保底留最优一条(空结果语义由上层 mode/empty 处理)。"""
+        loc = self._loc(subspan_min_cover=0.45, subspan_min_sim=0.50)
+        a = self._span(100, 110, 0.30, 0.40)
+        b = self._span(200, 210, 0.20, 0.30)
+        kept, _ = loc._gate_subspans([a, b])
+        self.assertEqual(len(kept), 1)
+        self.assertIs(kept[0], a)

@@ -1,0 +1,47 @@
+[
+ {
+  "id": "p26",
+  "note": "夜读(书+手)",
+  "true_scene": 295,
+  "frame_rank": 12,
+  "scene_rank": 3,
+  "vote_rank": 13,
+  "two_stage": 40
+ },
+ {
+  "id": "p27",
+  "note": "问句字牌",
+  "true_scene": 210,
+  "frame_rank": 1,
+  "scene_rank": 17,
+  "vote_rank": 5,
+  "two_stage": 9999
+ },
+ {
+  "id": "p08",
+  "note": "瞭望塔机位",
+  "true_scene": 134,
+  "frame_rank": 6,
+  "scene_rank": 6,
+  "vote_rank": 10,
+  "two_stage": 9999
+ },
+ {
+  "id": "p17",
+  "note": "铁丝网山脊",
+  "true_scene": 167,
+  "frame_rank": 1,
+  "scene_rank": 1,
+  "vote_rank": 1,
+  "two_stage": 1
+ },
+ {
+  "id": "p01",
+  "note": "金属球(sanity)",
+  "true_scene": 265,
+  "frame_rank": 1,
+  "scene_rank": 1,
+  "vote_rank": 1,
+  "two_stage": 1
+ }
+]

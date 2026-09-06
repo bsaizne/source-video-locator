@@ -438,14 +438,61 @@ benchmark/
 
 - **产品**：Source Video Locator（本地 Edited→Original 来源定位与提取）。定位与边界见 `mvp/docs/MVP_PRODUCT_SPEC.md`。
 - **Stage 0 设计文档已完成（`mvp/docs/` 8 份）**：MVP_PRODUCT_SPEC / MVP_ARCHITECTURE / CONFIDENCE_DESIGN / INDEX_SPEC / DEVICE_BACKEND_SPEC / TECH_STACK_DECISION / THIRD_PARTY_NOTICES / MVP_ROADMAP。
-- **技术栈**：Python + PySide6（LGPL），Engine 单进程 torch/numpy，FFmpeg 子进程，PyInstaller。
-- **硬件路线**：H1 Windows CPU（第一优先级）→ H2 Windows AMD → H3 macOS Apple Silicon。6750 GRE 的 ROCm/Windows 可用性**需实机验证**，不稳标 `AMD_GPU_BACKEND_BLOCKED` 继续 CPU。
+- **技术栈**：Python (torch/numpy/FFmpeg 子进程) 后端 + **Vue3 + TypeScript + Electron 桌面工作台**（自研 Fluent 组件，Codex 三栏，无 winitonweb/GPL，商业闭源安全）；本地 FastAPI 桥（`mvp/api`）作为前端与后端的 Adapter Layer；PyInstaller 打包待做。
+- **硬件路线**：H1 Windows CPU ✅ → H2 Windows AMD DirectML ✅ → H3 macOS Apple Silicon (MPS) ✅ POC；H4 CUDA = 被阻塞（`H4_GPU_RUNNER_UNAVAILABLE`，需 NVIDIA 环境）。**不支持 macOS Intel**。
 - **关键落差点（无 GT 运行时）**：研究用 GT 窗口定义查询段，产品**无 GT** → 新增 `engine/segment` 做 edited shot 切分（产品胶水，不改冻结算法）。
 - **研究代码处理**：REUSE（手写 ViT-S/14 模型+预处理+前向、longest_run、cosine_similarity、检索/聚类算法、v2_score）/ REFACTOR（feature extraction 入 DeviceBackend、narrow 去 GT/TransVCL 依赖、检索/聚类 I/O 去 benchmark 全局）/ REWRITE（frame 采样→FFmpeg、FFmpeg 工具集中化、FeatureStore、ConfidenceEngine、engine/segment）/ RESEARCH_ONLY（ta._dp_path、query_density_14c 整脚本、17A/18/19、patch/multi-scale、ORB-BOW/TransVCL/VDF）。
 
 ## D. 下一会话从哪继续
 
-1. 读 `.agent/STATE.md`（研究冻结回顾 + MVP 当前状态）+ `ARCHITECTURE_DECISION_PHASE20.md`（研究结论）。
-2. 读 `mvp/docs/`（8 份设计，为 Stage 1 编码的规格）。
-3. **MVP Stage 1 起点**：`media/ffmpeg`（FFmpegIO：metadata/seek/抽帧/clip extract）→ `domain` + `infrastructure`；随后 CPUBackend+FeatureStore → ranking/retrieval/clustering（从研究提取）→ localization+confidence → engine/segment → app service → PySide6 UI → 打包验收 → 性能基准 + Confidence 标定（详见 `mvp/docs/MVP_ROADMAP.md §2`）。
-4. **研究护栏**：不改冻结算法/GT、不新增 backbone/VLM、不重跑研究 benchmark、不把已证伪变体与 patch/multi-scale 引入 runtime、不做大规模 sweep。
+1. 读 `.agent/STATE.md`（MVP 当前状态/已完成/下一步）+ `.agent/DECISIONS.md`（各阶段决策）+ `ARCHITECTURE_DECISION_PHASE20.md`（研究结论）。
+2. 读 `mvp/docs/`（8 份设计）+ `mvp/api/README.md`（已实现的桥端点契约）。
+3. **当前进度**：MVP Stage 1 编码已完成——`media/ffmpeg` → `domain`+`infrastructure` → `device`(CPU/DirectML)+`engine`(feature_store/retrieval/clustering/ranking/localization/confidence/segment) → `app/SourceLocatorService` → `infrastructure/logging`（统一日志）→ **`mvp/api/` FastAPI 桥（已实现）** → **`mvp/ui/` Vue3+TS+Electron（Mock/Http 双模式，HttpServiceAdapter 已切真实后端）**。
+4. **待办（严格顺序）**：① 真实后端连通（进度 WS `/ws/progress` + 取消 + 预览 `extracted_path`）→ ② Electron 打包/真机验收（`ui/docs/DESKTOP.md`）→ ③ 性能基准（10/60/120min）+ Confidence 标定。H4 CUDA 待用户提供 NVIDIA 环境。
+5. **研究护栏**：不改冻结算法/GT、不新增 backbone/VLM、不重跑研究 benchmark、不把已证伪变体与 patch/multi-scale 引入 runtime、不做大规模 sweep。
+
+---
+
+## 附录 A：MVP 开发状态（2026-08-25 ~ 08-26，最新）
+
+> 上一节是**研究阶段**（Phase 1~12）交接。此后研究已冻结（Phase 1~19 收尾，结论见
+> `ARCHITECTURE_DECISION_PHASE20.md`），进入 **MVP 产品化（Source Video Locator）**。
+> 当前续接主要看 `.agent/STATE.md`（`agent-context resume` 指引；本机无 `agent-context` 命令，
+> 下一会话直接读 `.agent/STATE.md` + `TODO.md` + `AGENTS.md`）。
+
+**已交付**（全部在 `D:\claudework\benchmark\mvp/`）：
+- 后端核心（冻结算法，未动）：`media/ffmpeg`、`domain`、`infrastructure`、`device`(CPU/DirectML)、
+  `engine`(feature_store/retrieval/clustering/ranking/localization/confidence/segment)、`app/SourceLocatorService`。
+- **硬件**：H1 CPU ✅ `H1_CPU`；H2 AMD DirectML ✅ `H2_AMD_DIRECTML`（10× 加速）；H3 macOS MPS
+  ✅ `H3_MPS_GO`（POC，batch≤4）；H4 CUDA = `H4_GPU_RUNNER_UNAVAILABLE`（被阻塞，需 NVIDIA 环境）。
+- **UI（第 8 项已转向）**：`mvp/ui/` Vue3+TS+**Electron** 桌面工作台（自研 Fluent 组件，Codex 三栏，
+  无 winitonweb/GPL），`ServiceAPI` 抽象（`MockServiceAdapter` / `HttpServiceAdapter` 双适配器，
+  `VITE_BACKEND_MODE` 切换），`services/types.ts` 镜像后端 JSON，6 页面 + 设计文档。
+- **日志基础设施**：`infrastructure/logging.py`（stderr + `RotatingFileHandler` 10MB×5 写 `mvp/logs/`，
+  结构化 `时间 级别 module session 消息`，`contextvars` session_id）；device/service 生命周期 + 异常已接入。
+- **FastAPI 桥 `mvp/api/`（2026-08-26 已实现）**：Adapter Layer，只转发到 `SourceLocatorService`，不改 mvp/src。
+  端点 `/api/health`·`/api/index`·`/api/analyze`·`/api/results`·`/api/export`；`WS /ws/progress` 本阶段仅文档。
+  DI `get_context()`（AppContext：service+current_original+current_batch，lru_cache 惰性不加载模型/不建索引）；
+  session 日志复用 infrastructure.logging；`LocatorError`→500 `{error,detail}`；confidence 拍平冻结 `to_dict()`。
+- **前端切真实后端（2026-08-26）**：`HttpServiceAdapter` 从 Mock 驱动真实 FastAPI（buildIndex/analyze/locate/export/health）；
+  Mock/HTTP 双模式；Backend Connection 三态检测（`GET /api/health` → Connected/Connecting/Offline）；
+  统一错误（网络→`BackendUnavailableError`，500→surface detail）；vitest 14 项；浏览器实测 Home Connection=Connected。
+  **契约落差口径**：真实后端无 index-status/meta/load/WS 端点 → `getIndexStatus/getIndexMeta` 用上次 build 否则 MISSING 占位、
+  `loadResults` 抛不支持、`onProgress` 发粗阶段提示（无 WS）、`cancel` 占位 noop、`/api/export` 只收 `output_dir`
+  （后端用会话 current_batch，忽略前端 batch/filename）。
+
+**关键决策**：见 `.agent/DECISIONS.md`（Phase 20、MVP Stage 1 各决策、**UI 转向 Vue3+TS+Electron**）。
+**数据契约红线**：`confidence_score` 为工程分**非概率**（UI 用 HIGH/MEDIUM/LOW+reasons，禁百分比）；
+`device_name` 仅展示不作分支；UI 不直接触 torch/numpy/FFmpeg；持久化 = JSON 单文件批 `*.results.json`
++ `schema_version`（不用 SQLite）。
+
+**下一步（优先级）**：① 真实后端连通（进度 WS `/ws/progress` + 取消 + 预览 `extracted_path`；`HttpServiceAdapter`
+已就绪，改 `.env` `VITE_BACKEND_MODE=http` + `VITE_API_BASE` 即切）→ ② Electron 打包/真机验收（`ui/docs/DESKTOP.md`）
+→ ③ 性能基准（10/60/120min）+ Confidence 标定。H4 CUDA 待用户提供 NVIDIA 环境。
+
+**测试**：后端 `mvp/tests/`（9 模块）+ `mvp/scripts/smoke_*.py` + **`mvp/api/tests/test_api.py`（12 项：health/index/
+analyze/results 拍平/export/500/CORS/session 日志）**；前端 `npm run test`（vitest 14 项：HttpServiceAdapter health/index
+POST/results 拍平/500 detail/network→BackendUnavailableError/resolveService 切换）+ `npm run typecheck` + `npm run build`。
+**.env 默认 mock**（未设 `VITE_BACKEND_MODE`），UI 独立跑通；连真实后端需取消注释 `.env` 两行。
+**未提交提醒**：`mvp/`（含 src 后端、`mvp/ui/`、`mvp/api/`、日志基础设施）在本仓库仍未 git commit（本仓库无远程交互），
+`.agent/archive/checkpoint-*.md` 为既有 checkpoint。
