@@ -102,6 +102,8 @@ jobs:
   macos-package:
     needs: mvp-tests-macos
     runs-on: macos-15
+    permissions:
+      contents: write   # gh release 上传安装包
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -163,6 +165,28 @@ jobs:
             mvp/ui/release/*.zip
             mvp/ui/release/*arm64*
           if-no-files-found: error
+
+      - name: Publish to GitHub Releases (rolling tag mac-alpha)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          Z=$(ls mvp/ui/release/*.zip | head -1)
+          echo "publishing $Z"
+          NOTES=$(cat <<'MD'
+          Video Locator — macOS (Apple Silicon) 未签名 alpha 包。
+
+          **安装**:
+          1. 下载 zip 解压，得到 Video Locator.app
+          2. 终端执行: xattr -cr "Video Locator.app"（未签名, 需绕过 Gatekeeper）
+          3. 拖入 Applications 打开
+
+          首次构建原片索引需要几分钟（MPS 加速）; 需要 ffmpeg 由系统提供或随包。
+
+          ⚠️ 测试基线: macOS CI 264 项单测通过（MPS 实机）; 真实影片四片基准在 Windows 验证,
+          mac 端首次实跑请从小片段开始。
+          MD
+          )
+          gh release create mac-alpha "$Z" --title "Video Locator — macOS (Apple Silicon) alpha"             --notes "$NOTES" --prerelease --clobber 2>/dev/null             || gh release upload mac-alpha "$Z" --clobber
 
   # ---- 以下为原 POC job ----
   mps-poc:
