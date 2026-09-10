@@ -16,16 +16,25 @@ const devicePref = ref<DevicePreference>(session.deviceSettings?.preferred ?? 'a
 
 const DEVICE_LABEL: Record<string, string> = {
   cpu: 'CPU',
-  amd: 'AMD GPU (DirectML)',
-  mps: 'Apple GPU (MPS)',
-  cuda: 'NVIDIA GPU (CUDA)',
+  amd: 'GPU (DirectML)',
+  mps: 'GPU (MPS)',
+  cuda: 'GPU (CUDA)',
 }
 const PREF_LABEL: Record<string, string> = {
   auto: '智能（自动选 GPU/CPU）',
-  directml: 'AMD GPU (DirectML)',
-  mps: 'Apple GPU (MPS)',
+  directml: 'GPU (DirectML)',
+  mps: 'GPU (MPS)',
   cpu: 'CPU',
 }
+
+// 下拉选项由后端 available_devices 驱动（auto 恒在，GPU 类排 CPU 前），
+// 避免在 Windows 上出现 Apple/MPS 等跨平台选项。
+const prefOptions = computed(() => {
+  const avail = session.deviceSettings?.available_devices ?? []
+  const known = avail.filter((k) => k in PREF_LABEL)
+  const gpuFirst = [...known.filter((k) => k !== 'cpu'), ...known.filter((k) => k === 'cpu')]
+  return ['auto', ...gpuFirst].map((k) => ({ value: k, label: PREF_LABEL[k] ?? k }))
+})
 const actualDevice = computed(
   () => (session.backend ? DEVICE_LABEL[session.backend.deviceType] ?? session.backend.deviceType : '—'),
 )
@@ -125,7 +134,7 @@ onMounted(() => {
         <label class="st__field">
           <span>推理后端偏好</span>
           <BaseSelect v-model="devicePref">
-            <option v-for="(label, val) in PREF_LABEL" :key="val" :value="val">{{ label }}</option>
+            <option v-for="opt in prefOptions" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
           </BaseSelect>
         </label>
         <label class="st__field">

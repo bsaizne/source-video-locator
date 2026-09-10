@@ -12,13 +12,14 @@
 """
 from __future__ import annotations
 
+import sys
 import time
 from pathlib import Path
 from typing import Callable
 
 import numpy as np
 
-from device import DeviceBackend, directml_available, pick_best_available
+from device import DeviceBackend, directml_available, mps_available, pick_best_available
 from domain import (Confidence, ConfidenceLevel, IndexValidation,
                     IndexValidationStatus, OriginalSegment, Result, ResultBatch,
                     ResultSource, TimeSpan)
@@ -198,6 +199,8 @@ class SourceLocatorService:
         available = ["cpu"]
         if dml_ok:
             available.append("directml")
+        if sys.platform == "darwin" and mps_available()[0]:
+            available.append("mps")
         return {
             "preferred": self.device_preference,
             "actual_device_name": b.device_name(),   # cpu / directml

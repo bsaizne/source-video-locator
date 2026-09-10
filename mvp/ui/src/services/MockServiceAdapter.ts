@@ -76,7 +76,7 @@ export class MockServiceAdapter implements ServiceAPI {
   }
 
   private toDeviceSettings(): DeviceSettingsJson {
-    // Mock 恒报告"支持 AMD GPU"（对应本机 POC 通过的环境）：auto/directml -> amd，cpu -> cpu，无 fallback。
+    // Mock 恒报告"支持 GPU (DirectML)"（对应本机 POC 通过的环境）：auto/directml -> amd，cpu -> cpu，无 fallback。
     const wantGpu = this.devicePref === 'directml' || this.devicePref === 'auto'
     return {
       preferred: this.devicePref,

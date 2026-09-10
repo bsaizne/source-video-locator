@@ -21,9 +21,9 @@ const connMeta = computed(() =>
 
 const DEVICE_LABEL: Record<string, string> = {
   cpu: 'CPU',
-  amd: 'AMD GPU',
-  mps: 'Apple GPU',
-  cuda: 'NVIDIA GPU',
+  amd: 'GPU (DirectML)',
+  mps: 'GPU (MPS)',
+  cuda: 'GPU (CUDA)',
 }
 
 const backendLabel = computed(() => {
