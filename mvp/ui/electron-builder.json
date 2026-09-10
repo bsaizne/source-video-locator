@@ -30,12 +30,6 @@
   "mac": {
     "target": [
       {
-        "target": "zip",
-        "arch": [
-          "arm64"
-        ]
-      },
-      {
         "target": "dir",
         "arch": [
           "arm64"

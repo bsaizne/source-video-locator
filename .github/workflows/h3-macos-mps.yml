@@ -149,28 +149,42 @@ jobs:
       - name: Build backend bundle (PyInstaller onedir + ffmpeg + weights)
         run: python mvp/scripts/build_backend_mac.py
 
-      - name: Build UI + electron app (mac arm64 zip)
+      - name: Build UI + electron app (mac arm64 dir, unsigned)
         working-directory: mvp/ui
         run: |
           npm ci
           npm run build
           npm run compile:electron
-          npx electron-builder --mac --arm64
+          npx electron-builder --mac --arm64 --dir
+
+      - name: Ad-hoc codesign + ditto rezip (preserve symlinks)
+        working-directory: mvp/ui
+        run: |
+          APP="release/mac-arm64/Video Locator.app"
+          [ -d "$APP" ] || APP="$(find release -maxdepth 2 -name '*.app' -type d | head -1)"
+          echo "signing app: $APP"
+          [ -n "$APP" ] && [ -d "$APP" ] || { echo "no .app found under release/"; exit 1; }
+          # 1) ad-hoc 签名整个 app（含 PyInstaller backend 与 Electron 二进制）
+          codesign --force --deep --sign - "$APP"
+          codesign --verify --deep --strict "$APP" && echo "ad-hoc codesign verify OK"
+          # 2) ditto 打包 zip —— 保留符号链接/权限/xattr（7za/zip 会丢 Framework symlink → 解压即损坏）
+          APPDIR="$(cd "$(dirname "$APP")" && pwd)"
+          APPNAME="$(basename "$APP")"
+          (cd "$APPDIR" && ditto -c -k --keepParent --sequesterRsrc "$APPNAME" "../Video-Locator-mac-arm64.zip")
+          ls -la release/*.zip
 
       - name: Upload mac package artifact
         uses: actions/upload-artifact@v4
         with:
           name: video-locator-mac-arm64
-          path: |
-            mvp/ui/release/*.zip
-            mvp/ui/release/*arm64*
+          path: mvp/ui/release/Video-Locator-mac-arm64.zip
           if-no-files-found: error
 
       - name: Publish to GitHub Releases (rolling tag mac-alpha)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          Z=$(ls mvp/ui/release/*.zip | head -1)
+          Z="mvp/ui/release/Video-Locator-mac-arm64.zip"
           echo "publishing $Z"
           if gh release view mac-alpha > /dev/null 2>&1; then
             gh release upload mac-alpha "$Z" --clobber
