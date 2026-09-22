@@ -67,6 +67,9 @@ benchmark_report.html
 # --------------------- Secrets / credentials (never commit) ------------------ #
 .env
 .env.*
+# 例外: Vite 生产构建配置(仅公开的 VITE_* 变量, 无密钥)。必须入库——
+# 被忽略会让 CI checkout 缺该文件, 打包版回落到 MockServiceAdapter(假"已连接"+假日志)。
+!.env.production
 *.pem
 *.key
 *.pfx

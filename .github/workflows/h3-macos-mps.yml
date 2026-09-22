@@ -151,6 +151,11 @@ jobs:
 
       - name: Build UI + electron app (mac arm64 dir, unsigned)
         working-directory: mvp/ui
+        env:
+          # 打包发布必须连真实后端。显式注入, 不依赖 .env.production 是否被 checkout
+          # (它曾被 .gitignore 排除, 导致 mac 包静默跑 Mock: 假"已连接" + 假日志)。
+          VITE_BACKEND_MODE: http
+          VITE_API_BASE: http://127.0.0.1:8765
         run: |
           npm ci
           npm run build
