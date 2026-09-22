@@ -7,7 +7,8 @@
   DINOv2 权重装配到 ui/resources/models/dinov2_vits14/（MPS 后端经
   SVL_DINOV2_WEIGHTS 引用; mac 无 DML, 不装 onnx）。
 
-依赖: pip install torch numpy opencv-python fastapi uvicorn pyinstaller rapidocr-onnxruntime static-ffmpeg
+依赖: pip install torch numpy opencv-python fastapi uvicorn pyinstaller rapidocr-onnxruntime static-ffmpeg pyJianYingDraft
+      + brew install libmediainfo（pymediainfo 在 macOS 需要它；缺则本脚本硬失败）
 """
 import os
 import shutil
@@ -44,6 +45,29 @@ def _static_media_binaries() -> tuple[Path, Path]:
     return Path(ffmpeg_exe), Path(ffprobe_exe)
 
 
+def _libmediainfo() -> Path | None:
+    """macOS 上 pymediainfo **不自带** libmediainfo（Windows 包自带 MediaInfo.dll）。
+
+    pymediainfo 优先在**自身包目录**里找 libmediainfo.0.dylib（见其 MediaInfo._get_library_paths:
+    先看 os.path.dirname(__file__)，命中就只用它），所以把它复制进 bundle 的
+    _internal/pymediainfo/ 即可生效。缺失时剪映草稿导出会在 VideoMaterial 抛
+    ValueError(不支持的视频素材类型)。
+    """
+    try:
+        import pymediainfo
+    except ImportError:  # pragma: no cover
+        return None
+    pkg = Path(pymediainfo.__file__).resolve().parent
+    for name in ("libmediainfo.0.dylib", "libmediainfo.dylib"):
+        if (pkg / name).is_file():
+            return pkg / name                       # 已随包(某些发行版)
+    for cand in ("/opt/homebrew/lib/libmediainfo.0.dylib",    # Apple Silicon
+                 "/usr/local/lib/libmediainfo.0.dylib"):      # Intel
+        if Path(cand).is_file():
+            return Path(cand)
+    return None
+
+
 def main() -> None:
     ffmpeg, ffprobe = _static_media_binaries()
     weights = Path(os.environ.get("SVL_DINOV2_WEIGHTS", "")) \
@@ -78,6 +102,17 @@ def main() -> None:
     for name in PRUNE_DIRS:
         for t in list(internal.glob(name)) + list(internal.glob(f"{name}-*.dist-info")):
             shutil.rmtree(t, ignore_errors=True)
+
+    # 3.5) libmediainfo → bundle 的 pymediainfo/ 目录（mac 上 pymediainfo 不自带）
+    dylib = _libmediainfo()
+    if dylib is None:
+        raise SystemExit(
+            "libmediainfo not found (run: brew install libmediainfo). "
+            "pymediainfo requires it on macOS; without it 剪映草稿导出 fails.")
+    mi_dir = BACKEND_DIR / "_internal" / "pymediainfo"
+    mi_dir.mkdir(parents=True, exist_ok=True)
+    shutil.copy2(dylib, mi_dir / "libmediainfo.0.dylib")
+    print(f">>> bundled libmediainfo: {dylib}", flush=True)
 
     # 4) DINOv2 权重（MPS 后端用）→ resources/models/dinov2_vits14/
     wdir = MODELS_DIR / "dinov2_vits14"

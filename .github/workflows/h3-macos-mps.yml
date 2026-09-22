@@ -128,7 +128,7 @@ jobs:
       - name: Install backend build deps
         run: |
           python -m pip install --upgrade pip
-          pip install torch numpy opencv-python fastapi uvicorn pyinstaller rapidocr-onnxruntime static-ffmpeg
+          pip install torch numpy opencv-python fastapi uvicorn pyinstaller rapidocr-onnxruntime static-ffmpeg pyJianYingDraft
 
       - name: Download DINOv2 weights
         run: |
@@ -140,12 +140,16 @@ jobs:
           export SVL_DINOV2_WEIGHTS="$PWD/$W"
           echo "SVL_DINOV2_WEIGHTS=$PWD/$W" >> "$GITHUB_ENV"
 
-      - name: Fetch static ffmpeg/ffprobe (bundle must not depend on Homebrew dylibs)
+      - name: Fetch media libs (static ffmpeg/ffprobe + libmediainfo)
         run: |
           # 勿用 brew 的 ffmpeg: 它是动态链接的, 只 copy 二进制进 app bundle 会在用户机上
           # dyld 失败 (Library not loaded: /opt/homebrew/Cellar/ffmpeg/*/lib/libavdevice.*.dylib)。
           # static_ffmpeg 提供自带全部依赖的静态构建, build_backend_mac.py 直接采用。
           python -c "import static_ffmpeg.run as r; f,p=r.get_or_fetch_platform_executables_else_raise(); print('ffmpeg :',f); print('ffprobe:',p)"
+          # 剪映草稿导出: pyJianYingDraft -> pymediainfo, 后者在 macOS 不自带 dylib,
+          # 需要系统 libmediainfo (build_backend_mac.py 会把它装配进 bundle)。
+          brew install libmediainfo || brew install mediainfo
+          ls -la /opt/homebrew/lib/libmediainfo*.dylib
 
       - name: Build backend bundle (PyInstaller onedir + static ffmpeg + weights)
         run: python mvp/scripts/build_backend_mac.py
@@ -164,6 +168,10 @@ jobs:
             fi
           done
           echo "OK: bundled ffmpeg/ffprobe have no Homebrew dylib dependencies"
+          # 剪映草稿导出依赖: libmediainfo 必须随包(pymediainfo 从自身包目录加载它)
+          test -f "mvp/ui/resources/backend/_internal/pymediainfo/libmediainfo.0.dylib" \
+            || { echo "::error::bundled libmediainfo.0.dylib missing - 剪映草稿导出会失败"; exit 1; }
+          echo "OK: bundled libmediainfo present for pymediainfo"
 
       - name: Build UI + electron app (mac arm64 dir, unsigned)
         working-directory: mvp/ui

@@ -25,6 +25,11 @@ from PyInstaller.utils.hooks import collect_data_files
 
 hiddenimports = [
     "PIL",  # rapidocr utils 依赖(动态导入路径,PyInstaller 静态分析未捕获,显式声明)
+    # 剪映草稿导出：exporters.create_jianying_draft_dir / write_jianying_draft 里是
+    # **函数内延迟 import**（import pyJianYingDraft as dj），显式声明避免静态分析漏收。
+    # 它依赖 pymediainfo(读素材时长/宽高；mac 另需系统 libmediainfo, 见 build_backend_mac.py)
+    "pyJianYingDraft",
+    "pymediainfo",
     *collect_submodules("rapidocr_onnxruntime")
     + collect_submodules("mvp.api")
     + collect_submodules("app")
