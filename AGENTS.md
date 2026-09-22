@@ -18,6 +18,7 @@ Before starting work:
 - Respect existing architectural decisions.
 - Check `.agent/DECISIONS.md` before reversing an important decision.
 - Update project state after major milestones.
+- **保持 `.agent/STATE.md` 的章节结构（硬约定）**：只能原地更新既有章节的内容，**禁止整体重写该文件、删除或重命名它的 `##` 章节**。2026-09-05 的一次整体重写使必需章节 `Next Actions` / `Last Updated` 丢失，导致 `status` / `resume` / `checkpoint` 全部失效、GUI 误报"项目未初始化"。结构损坏时运行 `agent-context repair` 自动修复，不要手工重建文件。
 
 ## Checkpoint
 
@@ -108,3 +109,6 @@ Only load the minimum information required to continue the project.
 - 大阶段完成后更新 `.agent/STATE.md` + `TODO.md`（+ CHANGELOG.md）
 - 关键决策（如选型、实验路线）记入 `.agent/DECISIONS.md`
 - Phase 12 实验完成前不宣布 TransVCL 失败、不宣布 DINOv2 是最终方案
+- **结构损坏时运行 `agent-context repair`**：补齐缺失章节、合并重复章节（不丢内容），不要手工重建文件
+- 编辑 `STATE.md` 时保持 12 个章节齐全：`Project` / `Current Phase` / `Current Task` / `Completed` / `Current Problem` / `Current Implementation` / `Current Decision` / `Next Actions` / `Important Constraints` / `Known Issues` / `Last Updated`
+- `STATE.md` 表示**当前状态而非历史日志**；`TODO.md` 保持短小。历史条目请迁往 `CHANGELOG.md` 或 `.agent/archive/`

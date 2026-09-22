@@ -1,4 +1,102 @@
+# PROJECT STATE
+
+## Project
+
+视频片段反向定位引擎 Benchmark → **Source Video Locator MVP**（D:\claudework\benchmark）
+
+> **项目状态：ALGORITHM_UNFROZEN / MVP_ITERATION_ACTIVE（2026-08-28 用户解除全部算法与模型限制，含 CLS forward；原 RESEARCH_FROZEN 表述失效，仅存档）**
+> 算法研究已冻结收尾；进入 MVP 产品化（Source Video Locator）。研究结论见 `ARCHITECTURE_DECISION_PHASE20.md`；MVP 设计文档见 `mvp/docs/`。
+>
+> **硬件/开发状态（2026-08-26 统一）**：H1 Windows CPU = **IMPLEMENTED**；H2 Windows AMD / DirectML = **IMPLEMENTED**；H3 macOS Apple Silicon / MPS = **GO / POC completed**；H4 Windows NVIDIA / CUDA = **PENDING**（H4-0 环境检查已完成 = **`H4_GPU_RUNNER_UNAVAILABLE`**，无可用 Windows GPU runner，POC 无法推进）；UI（第 8 项 PySide6）= **PAUSED**。
+
+> **硬件路线（2026-08-25 用户拍板锁定）**：H1 Windows CPU → H2 **Windows AMD GPU(DirectML)** → H3 macOS Apple Silicon(MPS) → H4 Windows NVIDIA(CUDA)。**不支持 macOS Intel**。`DeviceBackend` 必须保持可扩展——未来加 `CUDABackend` 不改上层 FeatureStore/Retrieval/Ranking/Localization/Confidence/UI。CUDA 不进当前实施阶段。
+>
+> **AMD GPU POC（`mvp/poc/amdgpu_onnx/`，独立、未接入 MVP）= `AMD_BACKEND_GO`**：RX 6750 GRE + ONNX Runtime DirectML + 冻结 DINOv2 ViT-S/14 CLS-384。15.15 fps，10.39× 加速，Top-1 邻居一致、embedding 数值稳定、500 帧无 NaN/norm 异常。
+>
+> **H2-Preflight（`h2_preflight.py`，2026-08-25）= `MEMORY_STABLE`**：2.mkv@0.5fps 建索引 3834/3834 帧全跑完，内存 278.5→336.8MB（+58.3MB，全部为首批~250帧一次性 warmup；之后 328–337MB 窄带波动，非线性增长），all_finite / norm=1.0，无 DML allocator 错误，全片 323.9s、11.84 fps。
+>
+> **H2 = `DirectMLBackend` 已正式接入并验证（2026-08-25）→ `H2_AMD_DIRECTML = IMPLEMENTED`**：
+> `mvp/src/device/directml_backend.py`（`DeviceBackend` 实现，复用冻结 `_imagenet_preprocess`，ONNX+DML provider，numpy L2）+ `device/resolve_backend(preferred="auto")` 统一 resolver（能力探测 + 自动 CPU fallback + 明确日志 fallback_reason）+ `device/resolve_dml_model`/`asset_meta`（模型资产 resolver）+ `infrastructure.DeviceConfig`（preferred/onnx_model/dml_device_id/dml_batch_size）+ `mvp/scripts/export_dml_model.py`（从冻结模型重导出产品 ONNX 资产到 `<app_data>/models/dinov2_cls_384/` 含 `asset.json`）。
+> 验证：全套 72 项测试过（含新增 `test_directml_backend.py` 10 项：A 类无 GPU→fallback/probe 结构/B 类 AMD 实机推理+CPU 正确性 cos>0.999+FeatureStore 完整兼容 create/load/validate/invalidate）；真实 2.mkv 生产索引构建 `smoke_directml_backend.py`：381.3s / 3834 帧 / 10.06 fps / `[3834,384] float32` / 内存 +53.4MB 稳定 / `IndexMeta.backend="directml" feature_version=...@0.5_l2`（与 CPU 同 schema，不复制 store）/ reload 0.002s。相比 H1 CPU ~3793.6s ≈ **9.95× 墙钟加速**（vs POC 324s 略高 +18%，因生产路径含文件哈希/持久化/探测开销）。
+
+---
+
+## Current Phase
+
+**MVP 产品化 — Stage 1（编码）进行中**：已完成第 1~7 项 + **H1/H2 已接入并验证（H1_CPU / H2_AMD_DIRECTML = IMPLEMENTED）** + **H3（macOS MPS）POC = GO / 已完成（2026-08-26，不重复运行）**。**UI（第 8 项）已转向 = Vue3+TS+Electron 桌面工作台，Stage 1 初始代码已交付（2026-08-26）**（见 Current Task §2）。算法研究 Phase 1~19 已冻结收尾。
+
+> **2026-08-26 — H3（macOS Apple Silicon / MPS）POC 完成 → `H3_MPS_GO`**（真实 Apple Silicon 验证通过，GitHub Actions 云端跑成功）。**repo**：`bsaizne/source-video-locator`（private→public；push 走 SSH——本机网络 HTTPS 443 被阻断、SSH 22/443 可达；DNS=小米路由 192.168.31.1 解析到 GitHub 20.205.243.x 段但 443 握手超时）。已 `git init` + 完整 `.gitignore`（排视频/权重/特征/第三方引擎/工具二进制/研究代码 `src/`/phase 报告/生成物/凭据/IDE）+ 入仓 `mvp/`、`.github/workflows/h3-macos-mps.yml`、`.agent/`、设计/研究结论文档；**含修复：`.gitignore` 无锚 `src/` 曾误忽略整个 `mvp/src`（致 CI checkout 缺 `device/dinov2_model.py`），已改 `/src/`**。**H3 POC = GO**：macOS 15.7.7 / arm64 / torch 2.13.0，`device_mps_actual=mps`（确认非 CPU fallback）、权重下载+sha256 通过、正确性 cos_mean=1.0 / max_abs_diff=6.3e-7 / mps norm deviation 1.19e-7、7.875× 加速（0.87→6.84 fps；batch=4 最佳 6.67；batch≥8 触发 `Invalid buffer size 5.37GiB` + 暴跌 2.83fps）、500 帧 all_finite 无异常无 fallback、峰值内存 ~1.07GB。**关键约束：MPS batch_size ≤4（推荐 4）**——未来正式 `MPSBackend` 必须遵守。CI workflow 已改 **workflow_dispatch-only**（手动；不 push 自动触发，避免每次 push 烧 macOS runner）。`mvp/src/device` 零改动；无 MPSBackend / UI / H4。POC 见 `mvp/poc/macos_mps/`。
+
+> **2026-08-26 — H4-0（Windows NVIDIA / CUDA 环境与 runner 可用性检查）= `H4_GPU_RUNNER_UNAVAILABLE`**：目标环境为 GitHub Actions → Windows GPU larger runner → NVIDIA → CUDA。核实结论：① `bsaizne/source-video-locator` 为**个人（User）账户的公共仓库**（api 确认 `owner.type="User"`、`private:false`）；② 官方 GPU hosted runners **不对开源/公共仓库开放**，且需 **organization/enterprise 级计费配置**；③ 官方 GPU hosted runner **无 Windows 变体**（H3 所用 `macos-15` 为标准 runner，非 GPU）；④ 该 repo Actions 历史仅 4 次 `H3 macOS MPS POC`（macos-15），从未使用 Windows/GPU 较大 runner；⑤ 本机无 GitHub 认证（无 gh CLI / token / credential.helper，`actions/runners` endpoint 返 401）；⑥ 本机 GPU = **AMD Radeon RX 6750 GRE 10GB**（非 NVIDIA），`torch 2.13.0+cpu`、`torch.cuda.is_available()=False`、`device_count=0` → 本机也无法做 CUDA POC。**未创建 `mvp/poc/nvidia_cuda/` / workflow，未改 `mvp/src`，未实现 NVIDIA 支持，未进 UI。** 结论（不伪造）：当前无可用 Windows GPU runner，H4 POC 无法推进；需用户提供 NVIDIA 环境（自托管 Linux runner / 云或本地 NVIDIA 机器）+ 计费权限。
+
+---
+
+> **2026-09-05 — I帧锚定+动态步长+三特征抑制 切分探针 = 不推荐进 runtime**:
+> 用户方案（I帧锚定粗筛+动态步长+三特征抑制）四片全量验证 = 严格 110/139(-2)、
+> 场景级 102/139(-34)、负例 8/9(+4 翻倍), 段数 8/4/9/14 vs 69/41/54/68 —— 像素切分
+> 严重漏切。根因: 粗采样(2.9fps) 运动噪声淹没切点信号(跨切点对 AUC 0.58-0.80),
+> 1fps 下判别力 90%+ → 降步长则成本优势消失; 固定 GOP(2mkv/test3 10s) 下 I 帧锚定
+> 结构性失效(仅 7-10% 切点重合), 密 GOP(test2 1.15s) 有效(83%)。结论: 维持两级切分
+> + 白闪守卫(C 项待拍板), 像素切分方向关闭(有据)。详见 FINDINGS_IFRAME_CUT.md。
+
+> **2026-09-05 — 多特征抑制并入白闪守卫 定向检查 = 不建议实施**:
+> 四片 232 个切点 1fps 三特征判定: 单特征型 72 个(31%)中 36 个贴近 GT 真实边界
+> = 误伤率 50%; ssd_only 占 67/72。多特征抑制「≥2 特征才保留」会误删真实切点,
+> 不实施(有据); 白闪守卫维持现状; 详见 FINDINGS_IFRAME_CUT.md 第八章。
+
+> **2026-09-05 — 两级切分 + 白闪守卫 进 runtime（用户拍板，实施中）**:
+> flash_guard.py 提取入库（engine/segment/, 参数走 PipelineConfig.flash_*/bright_spike_*）;
+> config 新增 seg_twopass_enabled(默认 True)+粗采样/精修/最短保护参数;
+> analyze_edited_video 改分派（_segment_twopass_flash 新路径 / _segment_legacy 回退）,
+> 与 rerun_twopass_flash.py 验证逻辑一致; 卡守卫/进度/取消/失败隔离保留。
+> 单测新增 18 项（test_flash_guard + test_twopass_flash）, 后端全套 240 全绿零回归。
+> 四片回归（生产路径直跑, work/rerun_*_runtime_twopassflash.results.json）进行中,
+> 对照基线 112/139 · 136/139 · 4/9; 待达标后 UI 结果数/导出验收 + 归档。
+
+> **2026-09-05 — 非外观第二信号 研究重启立项（用户拍板）**:
+> 重启研究侧立项（此前 M1-M8 闭环+失败族=已知局限被用户重启）。本会话完成前置证据:
+> 语义可分性验证（方舟 VLM 24 帧, scene 4/4 同级 → 多模态方向关闭）+ 低信息降权探针
+> （负例零改善+严格−1 → 像素预处理关闭）。候选方向 A 场景实例身份建模（推荐）/
+> B 剪辑叙事结构 / C 多模态（已关闭）。交接文档 =
+> mvp/benchmark/user_case/semantic_signal/RESEARCH_PROPOSAL_SECOND_SIGNAL.md,
+> 下个对话从 §6 执行清单开始（写 research_event_identity.py P1/P2 探针）。
+
 ## Current Task
+
+> **▶ 2026-09-22 — macOS(Apple Silicon) 从「整包 Mock + 打不开」到端到端跑通（5 个 commit, 全部已 push）**:
+> 用户拿到 mac 包后连续暴露 5 个**打包/分发链**缺陷（都不是算法问题），逐个定位修复，最终实测跑通
+> **真实影片全流程**：`index finished frames=6798 backend=mps elapsed=553.8s` →
+> `locate finished segments=36 candidates=59 results=36 high=23 medium=3 low=8 elapsed=1017.5s`。
+>
+> 1. **`83c73e1` 整包跑在 Mock（最隐蔽）**：`.gitignore` 的 `.env.*` 把 `mvp/ui/.env.production` 排除在 git 外 →
+>    CI checkout 无此文件 → `vite build` 时 `VITE_BACKEND_MODE` 未定义 → `resolveService()` 回落 `MockServiceAdapter`：
+>    UI 恒显「已连接」（`checkHealth` 硬编码 CONNECTED）、日志恒为 `[mock] log line 1/2`（`fetchRecentLogs` 硬编码）、
+>    分析永不结束。**修复**：`resolveService` 生产构建默认 `http`（不再依赖 env 文件是否存在）+ workflow 显式注入
+>    `VITE_BACKEND_MODE` + `.gitignore` 放行 `.env.production`（仅公开 VITE_* 变量）。**实证**：移走 env 后构建，
+>    产物编译为 `resolveService(){return resolveFor("http",void 0)}`（Mock 分支被常量折叠消除）。
+> 2. **`bb419c0` ffprobe 动态链接崩（每次建索引必崩）**：CI `brew install ffmpeg` 是动态链接版，
+>    `build_backend_mac.py` 只 `copy2` 可执行文件进 bundle → 用户机 `dyld: Library not loaded:
+>    /opt/homebrew/Cellar/ffmpeg/9.0.1_1/lib/libavdevice.63.dylib`。**修复**：改用 `static_ffmpeg` 的静态构建
+>    （与 Windows build_backend.py 同源）+ CI 加 `otool -L` 防回归检查（引用 Homebrew 路径即构建失败）。
+> 3. **`78bee3d` 剪映草稿导出缺 `pyJianYingDraft`**：该模块在 `exporters.py:560/575` 是**函数内延迟 import**，
+>    mac CI 从未安装（Windows 用共享 venv `video-dedup-tool\.venv` 装了它, 所以 Windows 正常）；且它依赖 `pymediainfo`，
+>    **mac 上 pymediainfo 不自带 dylib**（Windows wheel 自带 MediaInfo.dll），无 fallback（`can_parse()` False 直接 ValueError）。
+>    **修复**：CI 装 `pyJianYingDraft` + `brew install libmediainfo`；spec 加 hiddenimports；`build_backend_mac.py` 把
+>    `libmediainfo.0.dylib` 装配进 bundle 的 `_internal/pymediainfo/`（pymediainfo 优先从**自身包目录**加载库，
+>    与 Windows 包里 `_internal/pymediainfo/MediaInfo.dll` 同机制）+ 缺失时**硬失败**（不静默出厂坏包）。
+> 4. **`cbed284` pyJianYingDraft 的 `assets/*.json` 未收集**：`assets.get_asset_path()` 基于 `Path(__file__).parent`
+>    读包内模板（`draft_meta_info.json`/`draft_content_template.json`），PyInstaller 只收代码不收数据文件 →
+>    `Asset file ... does not exist`。**修复**：`collect_data_files("pyJianYingDraft")`（与 rapidocr 同一手法）。
+>    ⚠️ **该缺陷对 Windows 包同样成立**（现存 win-unpacked 的 `_internal/pyJianYingDraft` 不存在）。
+> 5. **`ff71db6`（09-10）设备标签厂商中立化**：`AMD GPU (DirectML)`→`GPU (DirectML)`、`Apple GPU (MPS)`→`GPU (MPS)`；
+>    下拉框改由**后端 `available_devices` 驱动**（Windows 不再出现 Apple/MPS 字样）；后端 `device_settings()` 补 MPS 探测。
+>    （`e7439e5`（09-10）修的是 mac 包「文件损坏」：`identity: null` 完全跳过签名 + electron-builder 的 7za zip
+>    丢 Framework 符号链接 → ad-hoc codesign + `ditto` rezip。）
+>
+> **验证**：前端 typecheck + vitest 67/67 + 后端 test_settings 4/4 全绿；YAML/Python 语法校验；
+> `collect_data_files` 实收 2 个 JSON；mac CI run 18（`head_sha=83c73e1`）success。
+> **下一步（未完成，见 TODO P0）**：① mac CI 重触发验证 `cbed284`（导出剪映草稿）；② **Windows 包需重打**
+> （现存包早于 `cbed284`/`ff71db6`）；③ 可选优化：`patch reranker device=cpu`（patch 重排仍在 CPU 跑）。
 
 > **▶ 2026-09-06(XIII) — t2r07c GT 标错修正（用户画面确认）= 「混叠无解」冤案平反, 四片严格 116/139**:
 > M1/M2 多模态重跑（本模型直看帧, 14 失败案例全覆盖）发现 t2r07c 查询（星条旗马甲演讲台）与
@@ -70,71 +168,9 @@
 > 若未来重开: 需无 GT 的「正确子镜头选择信号」（正确子镜头 sim 未必最高, 叙事蒙太奇语义重心与
 > 视觉特征突出度解耦）。FINDINGS_SUBSHOT_QUERY.md「runtime 接入验证」章 + HANDOFF §7 有完整记录。
 
-
-
-
-## Project
-
-视频片段反向定位引擎 Benchmark → **Source Video Locator MVP**（D:\claudework\benchmark）
-
-> **项目状态：ALGORITHM_UNFROZEN / MVP_ITERATION_ACTIVE（2026-08-28 用户解除全部算法与模型限制，含 CLS forward；原 RESEARCH_FROZEN 表述失效，仅存档）**
-> 算法研究已冻结收尾；进入 MVP 产品化（Source Video Locator）。研究结论见 `ARCHITECTURE_DECISION_PHASE20.md`；MVP 设计文档见 `mvp/docs/`。
->
-> **硬件/开发状态（2026-08-26 统一）**：H1 Windows CPU = **IMPLEMENTED**；H2 Windows AMD / DirectML = **IMPLEMENTED**；H3 macOS Apple Silicon / MPS = **GO / POC completed**；H4 Windows NVIDIA / CUDA = **PENDING**（H4-0 环境检查已完成 = **`H4_GPU_RUNNER_UNAVAILABLE`**，无可用 Windows GPU runner，POC 无法推进）；UI（第 8 项 PySide6）= **PAUSED**。
-
-> **硬件路线（2026-08-25 用户拍板锁定）**：H1 Windows CPU → H2 **Windows AMD GPU(DirectML)** → H3 macOS Apple Silicon(MPS) → H4 Windows NVIDIA(CUDA)。**不支持 macOS Intel**。`DeviceBackend` 必须保持可扩展——未来加 `CUDABackend` 不改上层 FeatureStore/Retrieval/Ranking/Localization/Confidence/UI。CUDA 不进当前实施阶段。
->
-> **AMD GPU POC（`mvp/poc/amdgpu_onnx/`，独立、未接入 MVP）= `AMD_BACKEND_GO`**：RX 6750 GRE + ONNX Runtime DirectML + 冻结 DINOv2 ViT-S/14 CLS-384。15.15 fps，10.39× 加速，Top-1 邻居一致、embedding 数值稳定、500 帧无 NaN/norm 异常。
->
-> **H2-Preflight（`h2_preflight.py`，2026-08-25）= `MEMORY_STABLE`**：2.mkv@0.5fps 建索引 3834/3834 帧全跑完，内存 278.5→336.8MB（+58.3MB，全部为首批~250帧一次性 warmup；之后 328–337MB 窄带波动，非线性增长），all_finite / norm=1.0，无 DML allocator 错误，全片 323.9s、11.84 fps。
->
-> **H2 = `DirectMLBackend` 已正式接入并验证（2026-08-25）→ `H2_AMD_DIRECTML = IMPLEMENTED`**：
-> `mvp/src/device/directml_backend.py`（`DeviceBackend` 实现，复用冻结 `_imagenet_preprocess`，ONNX+DML provider，numpy L2）+ `device/resolve_backend(preferred="auto")` 统一 resolver（能力探测 + 自动 CPU fallback + 明确日志 fallback_reason）+ `device/resolve_dml_model`/`asset_meta`（模型资产 resolver）+ `infrastructure.DeviceConfig`（preferred/onnx_model/dml_device_id/dml_batch_size）+ `mvp/scripts/export_dml_model.py`（从冻结模型重导出产品 ONNX 资产到 `<app_data>/models/dinov2_cls_384/` 含 `asset.json`）。
-> 验证：全套 72 项测试过（含新增 `test_directml_backend.py` 10 项：A 类无 GPU→fallback/probe 结构/B 类 AMD 实机推理+CPU 正确性 cos>0.999+FeatureStore 完整兼容 create/load/validate/invalidate）；真实 2.mkv 生产索引构建 `smoke_directml_backend.py`：381.3s / 3834 帧 / 10.06 fps / `[3834,384] float32` / 内存 +53.4MB 稳定 / `IndexMeta.backend="directml" feature_version=...@0.5_l2`（与 CPU 同 schema，不复制 store）/ reload 0.002s。相比 H1 CPU ~3793.6s ≈ **9.95× 墙钟加速**（vs POC 324s 略高 +18%，因生产路径含文件哈希/持久化/探测开销）。
-
 ---
 
-## Current Phase
-
-**MVP 产品化 — Stage 1（编码）进行中**：已完成第 1~7 项 + **H1/H2 已接入并验证（H1_CPU / H2_AMD_DIRECTML = IMPLEMENTED）** + **H3（macOS MPS）POC = GO / 已完成（2026-08-26，不重复运行）**。**UI（第 8 项）已转向 = Vue3+TS+Electron 桌面工作台，Stage 1 初始代码已交付（2026-08-26）**（见 Current Task §2）。算法研究 Phase 1~19 已冻结收尾。
-
-> **2026-08-26 — H3（macOS Apple Silicon / MPS）POC 完成 → `H3_MPS_GO`**（真实 Apple Silicon 验证通过，GitHub Actions 云端跑成功）。**repo**：`bsaizne/source-video-locator`（private→public；push 走 SSH——本机网络 HTTPS 443 被阻断、SSH 22/443 可达；DNS=小米路由 192.168.31.1 解析到 GitHub 20.205.243.x 段但 443 握手超时）。已 `git init` + 完整 `.gitignore`（排视频/权重/特征/第三方引擎/工具二进制/研究代码 `src/`/phase 报告/生成物/凭据/IDE）+ 入仓 `mvp/`、`.github/workflows/h3-macos-mps.yml`、`.agent/`、设计/研究结论文档；**含修复：`.gitignore` 无锚 `src/` 曾误忽略整个 `mvp/src`（致 CI checkout 缺 `device/dinov2_model.py`），已改 `/src/`**。**H3 POC = GO**：macOS 15.7.7 / arm64 / torch 2.13.0，`device_mps_actual=mps`（确认非 CPU fallback）、权重下载+sha256 通过、正确性 cos_mean=1.0 / max_abs_diff=6.3e-7 / mps norm deviation 1.19e-7、7.875× 加速（0.87→6.84 fps；batch=4 最佳 6.67；batch≥8 触发 `Invalid buffer size 5.37GiB` + 暴跌 2.83fps）、500 帧 all_finite 无异常无 fallback、峰值内存 ~1.07GB。**关键约束：MPS batch_size ≤4（推荐 4）**——未来正式 `MPSBackend` 必须遵守。CI workflow 已改 **workflow_dispatch-only**（手动；不 push 自动触发，避免每次 push 烧 macOS runner）。`mvp/src/device` 零改动；无 MPSBackend / UI / H4。POC 见 `mvp/poc/macos_mps/`。
-
-> **2026-08-26 — H4-0（Windows NVIDIA / CUDA 环境与 runner 可用性检查）= `H4_GPU_RUNNER_UNAVAILABLE`**：目标环境为 GitHub Actions → Windows GPU larger runner → NVIDIA → CUDA。核实结论：① `bsaizne/source-video-locator` 为**个人（User）账户的公共仓库**（api 确认 `owner.type="User"`、`private:false`）；② 官方 GPU hosted runners **不对开源/公共仓库开放**，且需 **organization/enterprise 级计费配置**；③ 官方 GPU hosted runner **无 Windows 变体**（H3 所用 `macos-15` 为标准 runner，非 GPU）；④ 该 repo Actions 历史仅 4 次 `H3 macOS MPS POC`（macos-15），从未使用 Windows/GPU 较大 runner；⑤ 本机无 GitHub 认证（无 gh CLI / token / credential.helper，`actions/runners` endpoint 返 401）；⑥ 本机 GPU = **AMD Radeon RX 6750 GRE 10GB**（非 NVIDIA），`torch 2.13.0+cpu`、`torch.cuda.is_available()=False`、`device_count=0` → 本机也无法做 CUDA POC。**未创建 `mvp/poc/nvidia_cuda/` / workflow，未改 `mvp/src`，未实现 NVIDIA 支持，未进 UI。** 结论（不伪造）：当前无可用 Windows GPU runner，H4 POC 无法推进；需用户提供 NVIDIA 环境（自托管 Linux runner / 云或本地 NVIDIA 机器）+ 计费权限。
-
----
-
-> **2026-09-05 — I帧锚定+动态步长+三特征抑制 切分探针 = 不推荐进 runtime**:
-> 用户方案（I帧锚定粗筛+动态步长+三特征抑制）四片全量验证 = 严格 110/139(-2)、
-> 场景级 102/139(-34)、负例 8/9(+4 翻倍), 段数 8/4/9/14 vs 69/41/54/68 —— 像素切分
-> 严重漏切。根因: 粗采样(2.9fps) 运动噪声淹没切点信号(跨切点对 AUC 0.58-0.80),
-> 1fps 下判别力 90%+ → 降步长则成本优势消失; 固定 GOP(2mkv/test3 10s) 下 I 帧锚定
-> 结构性失效(仅 7-10% 切点重合), 密 GOP(test2 1.15s) 有效(83%)。结论: 维持两级切分
-> + 白闪守卫(C 项待拍板), 像素切分方向关闭(有据)。详见 FINDINGS_IFRAME_CUT.md。
-
-> **2026-09-05 — 多特征抑制并入白闪守卫 定向检查 = 不建议实施**:
-> 四片 232 个切点 1fps 三特征判定: 单特征型 72 个(31%)中 36 个贴近 GT 真实边界
-> = 误伤率 50%; ssd_only 占 67/72。多特征抑制「≥2 特征才保留」会误删真实切点,
-> 不实施(有据); 白闪守卫维持现状; 详见 FINDINGS_IFRAME_CUT.md 第八章。
-
-> **2026-09-05 — 两级切分 + 白闪守卫 进 runtime（用户拍板，实施中）**:
-> flash_guard.py 提取入库（engine/segment/, 参数走 PipelineConfig.flash_*/bright_spike_*）;
-> config 新增 seg_twopass_enabled(默认 True)+粗采样/精修/最短保护参数;
-> analyze_edited_video 改分派（_segment_twopass_flash 新路径 / _segment_legacy 回退）,
-> 与 rerun_twopass_flash.py 验证逻辑一致; 卡守卫/进度/取消/失败隔离保留。
-> 单测新增 18 项（test_flash_guard + test_twopass_flash）, 后端全套 240 全绿零回归。
-> 四片回归（生产路径直跑, work/rerun_*_runtime_twopassflash.results.json）进行中,
-> 对照基线 112/139 · 136/139 · 4/9; 待达标后 UI 结果数/导出验收 + 归档。
-
-> **2026-09-05 — 非外观第二信号 研究重启立项（用户拍板）**:
-> 重启研究侧立项（此前 M1-M8 闭环+失败族=已知局限被用户重启）。本会话完成前置证据:
-> 语义可分性验证（方舟 VLM 24 帧, scene 4/4 同级 → 多模态方向关闭）+ 低信息降权探针
-> （负例零改善+严格−1 → 像素预处理关闭）。候选方向 A 场景实例身份建模（推荐）/
-> B 剪辑叙事结构 / C 多模态（已关闭）。交接文档 =
-> mvp/benchmark/user_case/semantic_signal/RESEARCH_PROPOSAL_SECOND_SIGNAL.md,
-> 下个对话从 §6 执行清单开始（写 research_event_identity.py P1/P2 探针）。
-
-## Current Task
+<!-- 结构修复：以下为原文 L137 起的更早记录（2026-09-05 及以前），与此前段落合并保留。 -->
 
 > **▶ 2026-09-05 — C 项验证完成：两级分层切分 = 最佳方案（严格 +8 / 场景 +18 / 负例持平）+ 白闪守卫生效 + GPU 优先约定固化**:
 > 按 TODO 顶部 C 项执行：① 先验证 8fps 查询侧细切分收益（p36 单段取证 = 假设成立，8fps 整段即命中 GT）→
@@ -384,3 +420,50 @@
 
 > **▶ 交接执行单(2026-08-31)已完成并闭环 = NLE 自动验证通道定案:PR CEP 建成并验收 PASS(119/119),Resolve 免费版路死**:
 > 起因:剪映(CEF)桌面自动化不可用 → 寻找"能程序化读时间轴"的 NLE 做导出自动验收。两条路实测:
+
+## Completed
+
+- 历史完成项见本文件 `Current Task` 段落（2026-09-01 ~ 2026-09-06）以及 `.agent/archive/` 中的 43 个 checkpoint。
+
+## Current Problem
+
+- 无当前阻塞项记录；已知局限见 `Known Issues`。
+
+## Current Implementation
+
+- 实现细节见项目源码与 `PROJECT_HANDOFF.md`；本文件按协议不复制源码。
+
+## Current Decision
+
+- 重要技术决策见 `.agent/DECISIONS.md`。
+
+## Next Actions
+
+> 本节由结构修复时补写（原文件缺少此必需章节）。条目全部来自本文件既有记录的 open item，未新增判断。
+
+- **（2026-09-22）mac CI 重触发**：验证 `cbed284`（pyJianYingDraft assets）后剪映草稿导出可用。
+- **（2026-09-22）Windows 包需重打**：现存 `mvp/ui/release/win-unpacked` 与 zip 早于 `cbed284`（assets）与 `ff71db6`（设备标签），
+  缺 `pyJianYingDraft/assets/*.json` → Windows 端剪映导出同样会失败。
+- （2026-09-22，可选优化）`patch reranker device=cpu` —— patch 重排在 CPU 上跑（用户曾拍板「算法/推理优先 GPU」）。
+- 待查：p26 runtime margin 口径差（open item，见 2026-09-06(XIII) 记录）。
+- 待用户拍板：T1 训练可行性探针（T1a LDA / T1b 对比微调）未达立项门槛，该方向是否关闭。
+- 待处理：本文件已达 55 KB，与协议「当前状态而非历史日志」不符，历史条目宜迁往 `.agent/archive/` 或 `CHANGELOG.md`。
+
+## Important Constraints
+
+- 硬件路线锁定：H1 Windows CPU → H2 Windows AMD(DirectML) → H3 macOS Apple Silicon(MPS) → H4 NVIDIA(CUDA)；不支持 macOS Intel。
+- MPS batch_size ≤ 4（H3 POC 结论）。
+- DML 批量推理使用 batch=1（RX 6750 GRE + ViT-S @518 实测最佳）。
+
+## Known Issues
+
+- 剩余失败族（兄弟机位 / 同质场景 / 重复镜头）维持「特征上限 = 已知局限」。
+- H4（Windows NVIDIA / CUDA）= `H4_GPU_RUNNER_UNAVAILABLE`，当前无可用 Windows GPU runner。
+- **打包链路三类通病（2026-09-22 集中暴露）**：① **动态链接的系统库不进 bundle**（Homebrew ffmpeg → dyld 崩；
+  同类：pymediainfo 需 libmediainfo）；② **PyInstaller 只收代码不收 data file**（`pyJianYingDraft/assets/*.json`）；
+  ③ **构建期文件未入 git 导致产物静默降级**（`.env.production` → 整包跑 Mock）。
+  对策已固化：用静态/自带依赖的二进制、`collect_data_files` 显式收集、CI 加 `otool`/文件存在性防回归检查。
+
+## Last Updated
+
+2026-09-22 23:10

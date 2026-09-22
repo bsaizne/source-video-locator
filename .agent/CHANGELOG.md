@@ -1,5 +1,27 @@
 # CHANGELOG
 
+## 2026-09-22 — macOS 打包链路集中修复（5 个 commit，全部已 push）
+
+mac 包从「整包 Mock + 打不开」到端到端跑通（实测：索引 6798 帧 / 553.8s @MPS；定位 36 段 / 1017.5s，
+23 高 / 3 中 / 8 低）。暴露的 5 个缺陷**全部属于打包/分发链**，非算法问题：
+
+- `83c73e1` **整包跑 Mock（最隐蔽）**：`.gitignore` 的 `.env.*` 排除了 `mvp/ui/.env.production` → CI checkout 无该文件 →
+  `VITE_BACKEND_MODE` 未定义 → `resolveService()` 回落 `MockServiceAdapter`（恒报「已连接」+ 日志 `[mock] log line 1/2`，
+  分析永不结束）。修：生产构建默认 `http`（不依赖 env 文件）+ workflow 显式注入 + gitignore 放行 `.env.production`。
+- `bb419c0` **ffprobe 动态链接崩（每次建索引必崩）**：CI 用 Homebrew 动态 ffmpeg，只 copy 二进制进 bundle →
+  用户机 `dyld: Library not loaded .../libavdevice.63.dylib`。修：改用 `static_ffmpeg` 静态构建 + CI `otool` 防回归。
+- `78bee3d` **剪映导出缺 `pyJianYingDraft`**：该模块在 `exporters.py` 函数内延迟 import，mac CI 从未安装；
+  且依赖 `pymediainfo`，mac 上它不自带 dylib、需系统 `libmediainfo`（无 fallback）。修：CI 装包 + `brew install libmediainfo`
+  + spec hiddenimports + 把 `libmediainfo.0.dylib` 装进 `_internal/pymediainfo/`（pymediainfo 从自身包目录加载）+ 缺失硬失败。
+- `cbed284` **`pyJianYingDraft/assets/*.json` 未收集**：`get_asset_path()` 基于 `Path(__file__).parent` 读包内模板，
+  而 PyInstaller 只收代码不收 data file → `Asset file ... does not exist`。修：`collect_data_files("pyJianYingDraft")`。
+  ⚠️ **Windows 包同样受影响**（现存 win-unpacked 无 `_internal/pyJianYingDraft`）。
+- `ff71db6` **设备标签厂商中立化**：`AMD GPU (DirectML)`→`GPU (DirectML)`、`Apple GPU (MPS)`→`GPU (MPS)`；
+  下拉框改由后端 `available_devices` 驱动（Windows 不再出现 Apple/MPS 字样）；`device_settings()` 补 MPS 探测。
+
+验证：前端 vitest 67/67 + typecheck、后端 test_settings 4/4、YAML/Python 语法、`collect_data_files` 实收 2 个 JSON，全绿。
+遗留：mac CI 重触发验证导出；**Windows 包需重打**；`patch reranker` 仍跑 CPU（可选优化）。详见 `.agent/STATE.md` 2026-09-22。
+
 ## 2026-09-04 — 研究侧收尾归档(M6 v4 + M4/M8 v4 + ⑩ p08b 复核) + 三指标基线固化(measure_baseline.py)
 
 - **p36 细切分取证(2026-09-04, 用户假设验证)**: 数据实验——整段查询(现状)未命中, 单帧 110.75 独立查询→[2040-2044] 命中 GT,
@@ -52,3 +74,25 @@
 - Created `checkpoint-2026-09-04-1810.md` checkpoint (168 modified/untracked file(s)).
 
 - Created `checkpoint-2026-09-04-0207.md` checkpoint (154 modified/untracked file(s)).
+
+## 2026-09-22
+
+### Added
+
+- None.
+
+### Modified
+
+- Updated `.agent/STATE.md` last-updated timestamp.
+
+### Fixed
+
+- None.
+
+### Removed
+
+- None.
+
+### Notes
+
+- Created `checkpoint-2026-09-22-2035.md` checkpoint (7 modified/untracked file(s)).
