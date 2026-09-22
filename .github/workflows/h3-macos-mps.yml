@@ -128,7 +128,7 @@ jobs:
       - name: Install backend build deps
         run: |
           python -m pip install --upgrade pip
-          pip install torch numpy opencv-python fastapi uvicorn pyinstaller rapidocr-onnxruntime
+          pip install torch numpy opencv-python fastapi uvicorn pyinstaller rapidocr-onnxruntime static-ffmpeg
 
       - name: Download DINOv2 weights
         run: |
@@ -140,14 +140,30 @@ jobs:
           export SVL_DINOV2_WEIGHTS="$PWD/$W"
           echo "SVL_DINOV2_WEIGHTS=$PWD/$W" >> "$GITHUB_ENV"
 
-      - name: Install ffmpeg (macos runner image does not ship it)
+      - name: Fetch static ffmpeg/ffprobe (bundle must not depend on Homebrew dylibs)
         run: |
-          which ffmpeg || brew install ffmpeg
-          which ffmpeg && ffmpeg -version | head -1
-          which ffprobe && ffprobe -version | head -1
+          # 勿用 brew 的 ffmpeg: 它是动态链接的, 只 copy 二进制进 app bundle 会在用户机上
+          # dyld 失败 (Library not loaded: /opt/homebrew/Cellar/ffmpeg/*/lib/libavdevice.*.dylib)。
+          # static_ffmpeg 提供自带全部依赖的静态构建, build_backend_mac.py 直接采用。
+          python -c "import static_ffmpeg.run as r; f,p=r.get_or_fetch_platform_executables_else_raise(); print('ffmpeg :',f); print('ffprobe:',p)"
 
-      - name: Build backend bundle (PyInstaller onedir + ffmpeg + weights)
+      - name: Build backend bundle (PyInstaller onedir + static ffmpeg + weights)
         run: python mvp/scripts/build_backend_mac.py
+
+      - name: Verify bundled media binaries are static (no Homebrew dylib deps)
+        run: |
+          # 防回归: 若 ffmpeg/ffprobe 又变回 Homebrew 动态链接版, 用户机上会
+          # dyld: Library not loaded .../libavdevice.*.dylib 直接崩。
+          for B in ffmpeg ffprobe; do
+            F="mvp/ui/resources/backend/$B"
+            echo "--- $B ---"
+            otool -L "$F" | head -6
+            if otool -L "$F" | grep -qE "/opt/homebrew|/usr/local/Cellar"; then
+              echo "::error::$B still links Homebrew dylibs - must be a static build"
+              exit 1
+            fi
+          done
+          echo "OK: bundled ffmpeg/ffprobe have no Homebrew dylib dependencies"
 
       - name: Build UI + electron app (mac arm64 dir, unsigned)
         working-directory: mvp/ui
