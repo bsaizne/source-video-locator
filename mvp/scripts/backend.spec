@@ -62,6 +62,10 @@ a = Analysis(
     datas=[
         # rapidocr 自带检测/识别模型与配置(OCR 文字锚点第二信号,打包后可用)
         *collect_data_files("rapidocr_onnxruntime"),
+        # pyJianYingDraft 的 assets/*.json 模板(draft_meta_info / draft_content_template):
+        # assets.get_asset_path() 基于 __file__ 读包内数据文件, 不收集会在导出剪映草稿时
+        # 报 "Asset file ... does not exist"(mac 与 Windows 包同样受影响)。
+        *collect_data_files("pyJianYingDraft"),
     ],
     hiddenimports=hiddenimports,
     # 明确排除：产品运行时不需要（用 torch/cv2/onnxruntime/numpy；fastapi/uvicorn/pydantic）。
