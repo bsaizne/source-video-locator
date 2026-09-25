@@ -10,6 +10,11 @@
 
 ## P0 — Current
 
+- [ ] **【最高优先】重跑 `feature_upgrade`（ViT-B 对照）配 v4 GT**：现有「换更大基座无效」结论建立在含
+      **3 个污染案例**（p26 GT 标错 / p08b 污染残留 / t4r01 test4 数据错误）的探针集上，且最强证据 p08b 恰来自污染案例。
+      重跑口径：p08b 用修正位置 1108-1110、t4r01 剔除、p26 用 1766-1770。详见 `FINDINGS_GT_CONTAMINATION_AUDIT.md`。
+- [ ] 重跑 `phase24_1` 三探针（5 探针中 3 个污染）与 M5（patch 级召回，未重验）。
+- [ ] 建机制：研究结论标注「基于哪版 GT」+ GT 修正时列出受影响结论清单（本项目已因缺此机制亏三次）。
 - [ ] **mac CI 重触发**：验证 `cbed284`（pyJianYingDraft assets）后剪映草稿导出可用（背景见 `.agent/STATE.md` 2026-09-22）。
 - [ ] **Windows 包重打**：现存 `mvp/ui/release/win-unpacked` 与 zip 早于 `cbed284`（缺 `pyJianYingDraft/assets/*.json`）
       与 `ff71db6`（设备标签厂商中立化），两处修复均需重新打包才生效 → Windows 端剪映导出当前同样会失败。
