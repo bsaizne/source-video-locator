@@ -34,6 +34,8 @@ from engine.localization.degradation_gate import (apply_degradation_gate,
                                                   duplicate_claim_warnings,
                                                   fragment_warnings)
 from engine.localization.dense_start_check import dense_start_shift
+from engine.localization.patch_refine import apply_patch_refine
+from engine.localization.shot_split import split_results as apply_shot_split
 from engine.localization.offset_vote_prior import offset_vote_seed
 from engine.localization.temporal_repair import (find_overlap_conflicts,
                                                  find_temporal_outliers, relocate_in_window)
@@ -1094,6 +1096,35 @@ class SourceLocatorService:
             self._log.info("degradation gate rejected=%d subs_dropped=%d subs_kept=%d",
                            len(gate.rejected), gate.subs_dropped, gate.subs_kept)
         self._last_gate_stats = gate
+        # 段级拆分（2026-09-30 续32 形态4 runtime 化, engine/localization/shot_split.py;
+        # 默认关）。放在全部定位/门/重排之后 = 看到最终主 span；宽 span 保全 ⇒
+        # 严格口径结构性零回退；导出/渲染契约不变（仍每条结果导主 span）。
+        if getattr(self.config.pipeline, "shot_split_enabled", False):
+            results = apply_shot_split(
+                results, edited_path=edited,
+                grab_frame=self.ffmpeg.grab_frame,
+                embed=lambda fr: self.backend.embed_frames([fr])[0],
+                lib_times=np.asarray(bundle.times, dtype=np.float64),
+                lib_feats=bundle.features, log=self._log)
+        # patch 局部精排（2026-09-30 续32 形态6 runtime 化, engine/localization/patch_refine.py;
+        # 默认关）。歧义段 top-K 候选各自局部窗 patch+global 融合精排再择优；
+        # 老主降子 ⇒ 严格结构性零回退。
+        if getattr(self.config.pipeline, "patch_refine_enabled", False):
+            if self._patch_reranker is None:
+                self._patch_reranker = PatchReranker(
+                    resolve_weights(self.config.pipeline.patch_weights_path or None),
+                    resolve_patch_onnx(
+                        (self.config.pipeline.patch_onnx_model or "").strip() or None),
+                    dml_device_id=self.config.device.dml_device_id)
+            if self._patch_reranker.ensure():
+                results = apply_patch_refine(
+                    results, edited_path=edited, source_path=orig_path,
+                    grab_frame=self.ffmpeg.grab_frame,
+                    embed_dual=self._patch_reranker.frame_dual,
+                    lib_times=np.asarray(bundle.times, dtype=np.float64),
+                    lib_feats=bundle.features, log=self._log)
+            else:
+                self._log.warning("patch refine enabled but no patch backend; skipped")
         batch = ResultBatch(schema_version=1, original_video=str(orig_path),
                             edited_video=str(Path(edited).resolve()), results=results)
         self._current_batch = batch

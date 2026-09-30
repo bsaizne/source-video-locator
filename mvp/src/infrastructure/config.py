@@ -320,6 +320,14 @@ class PipelineConfig:
     degradation_gate_enabled: bool = False
     max_duplicate_scene_ratio: float = 0.8
     min_scene_coverage: float = 0.2
+    # 段级拆分（2026-09-30 续32 形态4 runtime 化，engine/localization/shot_split.py）：
+    # 多镜头结果段按编辑窗内切镜重排为逐镜子结果（宽 span 保全 ⇒ 严格结构性零回退）。
+    # 离线验证：导出实得 107→115（+8）、严格 130→131、FP 持平；默认关，待真实导出冒烟后拍板。
+    shot_split_enabled: bool = False
+    # patch 局部精排（2026-09-30 续32 形态6 runtime 化, engine/localization/patch_refine.py）：
+    # 歧义段 top-K 候选各自 ±5s 局部窗 patch+global 融合精排再择优（老主降子 ⇒ 严格零回退）。
+    # 离线验证：盲区 4/5 峰落 GT 窗、对照 4/4 稳定、9/9 读图确证；默认关，待验收后拍板。
+    patch_refine_enabled: bool = False
     confidence: ConfidenceConfig = field(default_factory=ConfidenceConfig)
     seq_align: SeqAlignConfig = field(default_factory=SeqAlignConfig)
 

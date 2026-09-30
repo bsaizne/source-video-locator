@@ -89,6 +89,22 @@ class PatchReranker:
         """懒加载 patch 特征提取器(DML ONNX 优先/torch 回退);不可用返回 False(禁用重排)。"""
         return self._ensure()
 
+    def frame_dual(self, frame_bgr) -> tuple[np.ndarray, np.ndarray]:
+        """BGR 帧 → (cls(384) L2, patches(1369,384) L2) 双输出（shot_split 式后处理精排用）。"""
+        if self.device == "dml":
+            from device.dinov2_model import _imagenet_preprocess
+
+            inp = _imagenet_preprocess(frame_bgr).numpy()[0][None].astype(np.float32)
+            oc, op = self._session.run(["embedding", "patches"],
+                                       {"input": np.ascontiguousarray(inp)})
+            return (_l2(oc[0].astype(np.float32)),
+                    _l2(op[0].astype(np.float32)))
+        torch, model = self._model
+        with torch.no_grad():
+            cls, pt = model.forward_features(_pre(frame_bgr, torch))
+        return (_l2(cls[0].numpy().astype(np.float32)),
+                _l2(pt[0].numpy().astype(np.float32)))
+
     def frame_patches(self, frame_bgr) -> np.ndarray:
         """BGR 帧 → (1369,384) L2 patch 特征。"""
         if self.device == "dml":
