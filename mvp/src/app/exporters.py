@@ -35,6 +35,7 @@ from domain.enums import ConfidenceLevel
 
 __all__ = [
     "ExportClip", "build_export_plan", "snap_clips_to_scenes",
+    "split_clips_at_boundaries",
     "seconds_to_frames", "timecode_ndf", "render_edl", "render_fcp7_xml",
     "plan_jianying_assets", "create_jianying_draft_dir", "write_jianying_draft",
     "expand_material_spans",
@@ -76,6 +77,7 @@ class ExportClip:
     sub_index: int = 0
     snap_in: bool = False
     snap_out: bool = False
+    split_index: int = -1   # 展示层两件套①: >=0 = 该 clip 是切点展开的第 k 段（0 起）
 
     @property
     def orig_width(self) -> float:
@@ -218,6 +220,79 @@ def snap_clips_to_scenes(clips: list[ExportClip], scenes, *, tol_s: float = 1.0,
 
 
 # --------------------------------------------------------------------- #
+# 展示层两件套①: 时间线真实切点展开（竞品 boundary_guard._record_boundary_split 语义）
+# --------------------------------------------------------------------- #
+def split_clips_at_boundaries(plan: list[ExportClip], scenes, *,
+                              min_piece_s: float = 0.5,
+                              orig_duration: float | None = None) -> int:
+    """把跨镜头的主 clip 在**内部真实转场切点**上展开成多段（EDL/FCP7/剪映时间线通用）。
+
+    - 切点来源 = ``scenes`` 边界并集中严格落在 ``(orig_start+min_piece, orig_end-min_piece)``
+      内的边界（两端各留 ``min_piece_s``——**单帧守卫**：绝不产生短碎片，边缘不足
+      ``min_piece_s`` 的切点不用）。
+    - 记录侧（编辑时间轴）按源片侧宽度**等比分配**（匀速假设，与剪映 speed 计算一致），
+      各段记录槽首尾相接、总和不变。
+    - 只动主 clip（``main``/``low``）；无镜头表/单镜头 span 原样返回。
+    - 返回被展开的 clip 数（展开产生的分段数不计）。
+    """
+    import numpy as np
+    if scenes is None or getattr(scenes, "size", 0) == 0:
+        return 0
+    boundaries = _scene_boundaries(scenes)
+    if boundaries is None:
+        return 0
+    out: list[ExportClip] = []
+    n_split = 0
+    for c in plan:
+        if c.kind not in ("main", "low") or c.orig_end - c.orig_start <= 2 * min_piece_s:
+            out.append(c)
+            continue
+        lo = np.searchsorted(boundaries, c.orig_start + min_piece_s, side="right")
+        hi = np.searchsorted(boundaries, c.orig_end - min_piece_s, side="left")
+        cuts = [float(boundaries[j]) for j in range(lo, hi)]
+        if not cuts:
+            out.append(c)
+            continue
+        edges = [c.orig_start] + cuts + [c.orig_end]
+        # 单帧守卫（硬）: 相邻切点间 < min_piece_s 的碎片并入前一段（首尾段因切点
+        # 选取已 ≥ min_piece_s），绝不产生 1 帧闪烁片——竞品 segments/builder 单帧守卫语义。
+        merged = [[edges[0], edges[1]]]
+        for s, e in zip(edges[1:], edges[2:]):
+            if e - s < min_piece_s:
+                merged[-1][1] = e          # 碎片并入前段（跨一个真切的代价 < 闪烁片段）
+            else:
+                merged.append([s, e])
+        edges = [merged[0][0]] + [seg[1] for seg in merged]
+        src_total = c.orig_end - c.orig_start
+        rec_total = c.record_width
+        rec_pos = c.edited_start
+        n_pieces = len(edges) - 1
+        for k in range(n_pieces):
+            ps, pe = edges[k], edges[k + 1]
+            if orig_duration is not None and orig_duration > 0:
+                ps = min(max(ps, 0.0), orig_duration)
+                pe = min(max(pe, 0.0), orig_duration)
+            if pe - ps <= 0:
+                continue
+            rec_w = rec_total * (pe - ps) / src_total
+            piece = ExportClip(
+                kind=c.kind, edited_start=rec_pos,
+                edited_end=rec_pos + rec_w,
+                orig_start=round(ps, 3), orig_end=round(pe, 3),
+                confidence=c.confidence, score=c.score,
+                from_scene_pool=c.from_scene_pool, from_event_pool=c.from_event_pool,
+                seg_index=c.seg_index, sub_index=c.sub_index,
+                snap_in=(c.snap_in if k == 0 else False),
+                snap_out=(c.snap_out if k == n_pieces - 1 else False),
+                split_index=k)
+            out.append(piece)
+            rec_pos += rec_w
+        n_split += 1
+    plan[:] = out
+    return n_split
+
+
+# --------------------------------------------------------------------- #
 # 时间换算
 # --------------------------------------------------------------------- #
 def seconds_to_frames(t: float, fps: float) -> int:
@@ -292,9 +367,15 @@ def render_edl(plan: list[ExportClip], *, title: str, source_name: str,
         if c.snap_out:
             snap.append("out")
         snap_txt = ",".join(snap) if snap else "none"
+        split_txt = ""
+        if c.split_index >= 0:
+            n_pieces = sum(1 for x in mains
+                           if x.seg_index == c.seg_index and x.kind == c.kind
+                           and x.split_index >= 0)
+            split_txt = f" split={c.split_index + 1}/{n_pieces}"
         lines.append(f"* LOCATOR: seg={c.seg_index + 1} conf={c.confidence} "
                      f"score={c.score:.2f} orig={c.orig_start:.2f}-{c.orig_end:.2f} "
-                     f"snap={snap_txt}")
+                     f"snap={snap_txt}{split_txt}")
         lines.append("")
     return "\n".join(lines)
 
@@ -341,6 +422,8 @@ def render_fcp7_xml(plan: list[ExportClip], *, seq_name: str, source_path: str |
             notes.append("snapped: " + ("in" if c.snap_in else "")
                          + ("," if c.snap_in and c.snap_out else "")
                          + ("out" if c.snap_out else ""))
+        if c.split_index >= 0:
+            notes.append(f"boundary-split piece {c.split_index + 1}")
         # 每个 clipitem 携带完整 <file> 定义（与 Premiere 自身导出一致，按 id 去重）
         return f"""      <clipitem id="{cid}">
         <masterclipid>{file_id}</masterclipid>
@@ -505,6 +588,8 @@ def expand_material_spans(plan: list[ExportClip], scenes, *,
         return 0
     changed = 0
     for c in plan:
+        if c.split_index >= 0:
+            continue   # 切点展开段已按真实转场定界, 再扩会与相邻段重叠（展示层两件套①）
         if c.orig_end - c.orig_start <= 0:
             continue
         covered = scenes[(scenes[:, 0] < c.orig_end) & (scenes[:, 1] > c.orig_start)]
@@ -531,14 +616,18 @@ def plan_jianying_assets(plan: list[ExportClip]) -> list[JianyingAsset]:
                    key=lambda x: (x.edited_start, x.edited_end))
     assets: list[JianyingAsset] = []
     cur: JianyingAsset | None = None
+    cur_is_split = False
     for c in clips:
-        if cur is not None and c.orig_start <= cur.orig_end + 1e-6:
-            # 源区间重叠 → 并入当前素材（扩到并集），不产生重复片段
+        # 切点展开段（split_index>=0）不回并: 时间线上要呈现真实转场切点（展示层两件套①）；
+        # 严格重叠（非贴接）仍并入当前素材，避免重复片段。
+        if (cur is not None and c.orig_start < cur.orig_end - 1e-6
+                and not cur_is_split and c.split_index < 0):
             cur.orig_end = max(cur.orig_end, c.orig_end)
             continue
         # 素材名带原片时间区间（反馈四轮：时间线上直接可溯源）
         cur = JianyingAsset(file_stem=f"og{int(round(c.orig_start))}-{int(round(c.orig_end))}",
                             orig_start=c.orig_start, orig_end=c.orig_end)
+        cur_is_split = c.split_index >= 0
         assets.append(cur)
     # 顺序卷轴：原速、首尾相接
     t = 0.0

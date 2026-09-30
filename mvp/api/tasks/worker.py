@@ -14,9 +14,9 @@ from __future__ import annotations
 from typing import Callable
 
 from app.models import ProgressEvent, ProgressStage
-from infrastructure.errors import ApplicationError
+from infrastructure.errors import ApplicationError, public_error
 
-from .models import Task, TaskStage
+from .models import Task, TaskKind, TaskStage
 
 LogFn = Callable[..., None]
 
@@ -25,6 +25,9 @@ LogFn = Callable[..., None]
 # 2026-08-30 重构：旧版每阶段一个固定百分比（45→60→75→85 跳变），且检索/
 # 定位/置信（管线最长的逐段循环）完全无进度——长任务看起来像卡死。
 _STAGE_RANGES: dict[ProgressStage, tuple[TaskStage, int, int]] = {
+    # 多原片合并发生在建索引之前（2026-09-29 video.concat 移植），复用 INDEXING 展示区间；
+    # 后续 INDEX_BUILD 事件被 run_worker 单调钳制，百分比不回跳。
+    ProgressStage.MERGE_SOURCES: (TaskStage.INDEXING, 0, 12),
     ProgressStage.INDEX_BUILD: (TaskStage.INDEXING, 0, 12),
     ProgressStage.EDITED_FEATURE_EXTRACTION: (TaskStage.EMBEDDING, 12, 18),
     ProgressStage.SEGMENT_DETECTION: (TaskStage.SEGMENTING, 30, 8),
@@ -34,6 +37,8 @@ _STAGE_RANGES: dict[ProgressStage, tuple[TaskStage, int, int]] = {
     ProgressStage.LOCALIZATION: (TaskStage.RETRIEVAL, 38, 54),
     ProgressStage.CONFIDENCE: (TaskStage.RETRIEVAL, 38, 54),
     ProgressStage.EXPORT: (TaskStage.EXPORTING, 92, 7),
+    # 成片渲染是**独立任务**（kind=render），独占整条进度区间；定位任务永不发该阶段。
+    ProgressStage.RENDER_MOVIE: (TaskStage.EXPORTING, 0, 99),
 }
 
 
@@ -47,7 +52,9 @@ def map_progress_stage(ev: ProgressEvent) -> tuple[TaskStage, int]:
     """
     stage, base, span = _STAGE_RANGES.get(ev.stage, (TaskStage.IDLE, 0, 0))
     if ev.total and ev.total > 0:
-        if ev.stage in (ProgressStage.INDEX_BUILD, ProgressStage.EDITED_FEATURE_EXTRACTION):
+        if ev.stage in (ProgressStage.MERGE_SOURCES, ProgressStage.INDEX_BUILD,
+                        ProgressStage.EDITED_FEATURE_EXTRACTION,
+                        ProgressStage.RENDER_MOVIE):
             frac = ev.current / ev.total
         else:
             frac = (ev.current + 1) / ev.total
@@ -58,6 +65,9 @@ def map_progress_stage(ev: ProgressEvent) -> tuple[TaskStage, int]:
 
 def run_worker(task: Task, service, *, log: LogFn | None = None) -> None:
     """后台线程入口：跑一次 locate 并更新 task 状态。永不抛出（异常转 task.error/failed）。"""
+    if task.kind is TaskKind.RENDER:
+        run_render_worker(task, service, log=log)
+        return
     if log is None:
         log = lambda *a, **k: None  # noqa: E731
     task.mark_running()
@@ -72,9 +82,20 @@ def run_worker(task: Task, service, *, log: LogFn | None = None) -> None:
         task.update_progress(stage, pct, message=ev.message or "")
 
     try:
+        # 多原片输入（2026-09-29 video.concat 移植）：≥2 段先物理合并为单文件，
+        # 产物回写 task.original_path，下游 locate/结果/导出维持单原片口径。
+        original = task.original_path
+        sources = [p for p in task.original_paths if str(p).strip()]
+        if len(sources) > 1:
+            info = service.merge_originals(sources, on_progress=on_progress,
+                                           cancel_token=task.token)
+            original = str(info["merged_path"])
+            task.original_path = original
+        elif len(sources) == 1 and not original:
+            original = sources[0]
         batch = service.locate(
             task.edited_path,
-            task.original_path,
+            original,
             on_progress=on_progress,
             cancel_token=task.token,
         )
@@ -84,12 +105,79 @@ def run_worker(task: Task, service, *, log: LogFn | None = None) -> None:
             task.mark_cancelled()
             log("task %s cancelled", task.task_id)
         else:
-            task.mark_failed(f"{type(exc).__name__}: {exc}")
-            log("task %s failed: %s", task.task_id, exc)
+            # task.error 直接进前端错误条幅 → 存对外话术（码），技术细节走日志（T1-2 同源）。
+            pub = public_error(exc)
+            task.mark_failed(f"{pub['message']}（{pub['code']}）")
+            log("task %s failed [%s] %s: %s", task.task_id, pub["code"], type(exc).__name__, exc)
     except Exception as exc:  # noqa: BLE001 — worker 必须兜住一切，转为 failed
-        task.mark_failed(f"{type(exc).__name__}: {exc}")
-        log("task %s failed: %s", task.task_id, exc)
+        pub = public_error(exc)
+        task.mark_failed(f"{pub['message']}（{pub['code']}）")
+        log("task %s failed [%s] %s: %s", task.task_id, pub["code"], type(exc).__name__, exc)
     else:
         result = batch.to_dict() if hasattr(batch, "to_dict") else batch
         task.mark_completed(result)
         log("task %s completed", task.task_id)
+
+
+def run_render_worker(task: Task, service, *, log: LogFn | None = None) -> None:
+    """后台线程入口（``kind=render``）：渲染成片并更新任务状态。永不抛出。
+
+    渲染目标是**提交时**锁定的结果批（``task.render_batch``），不读会话"最新批"——
+    否则用户在渲染排队期间又跑了一次定位就会渲染错批（竞态）。缺失则回退 service
+    最近一次 locate 的结果批（与 ``/api/export`` 同口径）。
+    """
+    if log is None:
+        log = lambda *a, **k: None  # noqa: E731
+    task.mark_running()
+    last_pct = 0
+
+    def on_progress(ev: ProgressEvent) -> None:
+        nonlocal last_pct
+        stage, pct = map_progress_stage(ev)
+        pct = max(pct, last_pct)
+        last_pct = pct
+        task.update_progress(stage, pct, message=ev.message or "")
+
+    batch = task.render_batch
+    if batch is None:
+        batch = getattr(service, "last_result_batch", lambda: None)()
+    if batch is None:
+        task.mark_failed("没有可渲染的结果批（请先完成一次分析）")
+        log("task %s failed: no batch to render", task.task_id)
+        return
+    params = dict(task.render_params or {})
+    try:
+        info = service.render_movie(
+            batch,
+            out_dir=params.get("out_dir") or None,
+            min_confidence=params.get("min_confidence"),
+            low_policy=params.get("low_policy"),
+            snap_scenes=params.get("snap_scenes"),
+            on_progress=on_progress,
+            cancel_token=task.token)
+    except ApplicationError as exc:
+        if task.token.is_cancelled():
+            task.mark_cancelled()
+            log("task %s cancelled (render)", task.task_id)
+        else:
+            pub = public_error(exc)
+            task.mark_failed(f"{pub['message']}（{pub['code']}）")
+            log("task %s render failed [%s] %s: %s", task.task_id, pub["code"],
+                type(exc).__name__, exc)
+    except Exception as exc:  # noqa: BLE001 — MediaError 等渲染层错误也转 failed
+        if task.token.is_cancelled():
+            task.mark_cancelled()
+            log("task %s cancelled (render)", task.task_id)
+        else:
+            pub = public_error(exc)
+            task.mark_failed(f"{pub['message']}（{pub['code']}）")
+            log("task %s render failed [%s] %s: %s", task.task_id, pub["code"],
+                type(exc).__name__, exc)
+    except Exception as exc:  # noqa: BLE001 — worker 兜住一切，转为 failed
+        pub = public_error(exc)
+        task.mark_failed(f"{pub['message']}（{pub['code']}）")
+        log("task %s render failed [%s] %s: %s", task.task_id, pub["code"],
+            type(exc).__name__, exc)
+    else:
+        task.mark_completed({"kind": "render", **info})
+        log("task %s render completed: %s", task.task_id, info.get("movie_path"))

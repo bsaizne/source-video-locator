@@ -140,5 +140,60 @@ class DirectMLFeatureStoreCompatTest(unittest.TestCase):
             self.assertFalse(store.index_dir(SYNTH).exists())
 
 
+class AssetIntegrityTest(unittest.TestCase):
+    """A 类（环境无关）：ONNX 资产 sha256 校验——临时目录造资产，不碰真实模型文件。"""
+
+    def _make(self, td: str, *, mode: str = "real", write_asset=True):
+        """造一个临时资产目录。mode: real(摘要正确) / none(无 sha256) / corrupt(摘要被改)
+        / missing_file(asset 列了不存在的文件)。"""
+        import hashlib
+        import json
+        d = Path(td)
+        files = {"m.onnx": b"graph-bytes", "m.onnx.data": b"weight-bytes" * 8}
+        for name, blob in files.items():
+            (d / name).write_bytes(blob)
+        if not write_asset:
+            return d / "m.onnx"
+        sha = {name: hashlib.sha256(blob).hexdigest() for name, blob in files.items()}
+        meta = {"name": "test_asset", "opset": 17}
+        if mode == "real":
+            meta["sha256"] = sha
+        elif mode == "corrupt":
+            meta["sha256"] = dict(sha, **{"m.onnx.data": "0" * 64})
+        elif mode == "missing_file":
+            meta["sha256"] = dict(sha, **{"gone.data": "b" * 64})
+        elif mode != "none":
+            raise AssertionError(f"bad mode {mode!r}")
+        (d / "asset.json").write_text(json.dumps(meta), encoding="utf-8")
+        return d / "m.onnx"
+
+    def test_verified_when_digests_match(self):
+        from device.directml_backend import verify_asset
+        with tempfile.TemporaryDirectory() as td:
+            self.assertEqual(verify_asset(self._make(td, mode="real")), "verified")
+
+    def test_legacy_asset_without_digests_is_tolerated(self):
+        from device.directml_backend import verify_asset
+        with tempfile.TemporaryDirectory() as td:
+            self.assertEqual(verify_asset(self._make(td, mode="none")), "legacy_unverified")
+        with tempfile.TemporaryDirectory() as td:      # 连 asset.json 都没有
+            self.assertEqual(verify_asset(self._make(td, write_asset=False)),
+                             "legacy_unverified")
+
+    def test_corrupted_weights_raise_not_silently_loaded(self):
+        from device.directml_backend import verify_asset
+        from infrastructure.errors import DeviceError
+        with tempfile.TemporaryDirectory() as td:
+            with self.assertRaises(DeviceError):
+                verify_asset(self._make(td, mode="corrupt"))
+
+    def test_missing_listed_file_raises(self):
+        from device.directml_backend import verify_asset
+        from infrastructure.errors import DeviceError
+        with tempfile.TemporaryDirectory() as td:
+            with self.assertRaises(DeviceError):
+                verify_asset(self._make(td, mode="missing_file"))
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

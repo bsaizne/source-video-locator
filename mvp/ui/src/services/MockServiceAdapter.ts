@@ -9,8 +9,10 @@ import {
   mockIndexBuildSteps,
   mockIndexMeta,
   mockIndexValidation,
+  mockMediaInfo,
   mockResultBatch,
   mockSegments,
+  mockSourceMerge,
 } from './mockData'
 import type {
   AnalysisOutput,
@@ -21,14 +23,16 @@ import type {
   IndexMetaJson,
   IndexStatus,
   IndexValidationJson,
+  MediaInfoJson,
   ProgressEventJson,
   ResultBatchJson,
   ResultJson,
+  SourceMergeJson,
   TaskEvent,
   TaskJson,
   TaskStage,
 } from './types'
-import type { BuildOpts, ServiceAPI } from './ServiceAPI'
+import type { BuildOpts, RenderOpts, ServiceAPI } from './ServiceAPI'
 
 type Listener = (event: ProgressEventJson) => void
 
@@ -98,6 +102,18 @@ export class MockServiceAdapter implements ServiceAPI {
 
   async getIndexMeta(_originalPath: string): Promise<IndexMetaJson | null> {
     return mockIndexMeta()
+  }
+
+  async getMediaInfo(_path: string): Promise<MediaInfoJson> {
+    return mockMediaInfo()
+  }
+
+  // 多原片合并（Mock）：与后端一样拒绝 <2 段，便于 UI 契约测试覆盖两条分支。
+  async mergeSources(paths: string[]): Promise<SourceMergeJson> {
+    const sources = paths.map((p) => p.trim()).filter(Boolean)
+    if (sources.length < 2) throw new Error('at least 2 original files are required')
+    await sleep(200, this.token)
+    return mockSourceMerge(sources)
   }
 
   getIndexValidation(_originalPath: string): IndexValidationJson {
@@ -228,9 +244,14 @@ export class MockServiceAdapter implements ServiceAPI {
   }
 
   // ------------------------------------------------------------------ async tasks (mock)
-  async startAnalyzeTask(editedPath: string, originalPath: string): Promise<{ task_id: string }> {
+  async startAnalyzeTask(
+    editedPath: string,
+    originalPath: string,
+    originalPaths?: string[],
+  ): Promise<{ task_id: string }> {
     void editedPath
     void originalPath
+    void originalPaths
     const task: TaskJson = {
       task_id: 'mock-task-0001',
       status: 'pending',
@@ -242,6 +263,39 @@ export class MockServiceAdapter implements ServiceAPI {
       error: null,
       cancel_requested: false,
       message: '',
+    }
+    this._mockTask = task
+    return { task_id: task.task_id }
+  }
+
+  // 成片渲染任务（Mock）：与后端同 kind='render' 形态，第一次轮询即完成，
+  // 便于 dev 态把 UI 的进度/结果分支走通（产物路径是假路径，UI 会同时显示 Mock 横幅）。
+  async startRenderTask(opts?: RenderOpts): Promise<{ task_id: string }> {
+    void opts
+    const task: TaskJson = {
+      task_id: 'mock-render-0001',
+      kind: 'render',
+      status: 'completed',
+      stage: 'finished',
+      progress: 100,
+      created_at: new Date().toISOString(),
+      finished_at: new Date().toISOString(),
+      result: {
+        kind: 'render',
+        movie_path: 'C:/mock/rendered/movie_mock.mp4',
+        mode: 'copy',
+        reused: false,
+        segments: 3,
+        fps: '25',
+        duration_s: 12.5,
+        total_frames: 312,
+        actual_encoder: 'libx264',
+        hdr_downgraded: false,
+        clips: 3,
+      },
+      error: null,
+      cancel_requested: false,
+      message: '最终视频生成成功',
     }
     this._mockTask = task
     return { task_id: task.task_id }

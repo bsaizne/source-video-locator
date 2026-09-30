@@ -4,8 +4,10 @@ import AppSidebar from '@/components/AppSidebar.vue'
 import CommandPalette from '@/components/CommandPalette.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import { useSessionStore } from '@/stores/session'
+import { serviceIsMock } from '@/services/inject'
 
 const session = useSessionStore()
+const mockMode = serviceIsMock()
 
 const initDone = computed(() => session.initState === 'READY')
 const initFailed = computed(() => session.initState === 'FAILED')
@@ -43,7 +45,12 @@ onMounted(() => {
   <!-- Main app -->
   <div v-else class="app-shell">
     <div class="app-sidebar"><AppSidebar /></div>
-    <main class="app-main"><router-view /></main>
+    <main class="app-main">
+      <div v-if="mockMode" class="mock-strip" data-testid="mock-strip">
+        MOCK 模式 —— 当前显示的是界面假数据，未连接 Python 后端（设 VITE_BACKEND_MODE=http 后重启）
+      </div>
+      <router-view />
+    </main>
     <CommandPalette />
   </div>
 </template>
@@ -66,4 +73,9 @@ onMounted(() => {
 .gate__fill { height: 100%; background: var(--accent, #4cc2ff); transition: width 0.3s ease; }
 .gate__pct { color: var(--fg-muted, #9e9e9e); font-size: var(--fs-xs, 12px); }
 .gate__hint { color: var(--fg-faint, #666); font-size: var(--fs-xs, 12px); margin: 0; }
+
+.mock-strip {
+  padding: 6px 14px; font-size: var(--fs-xs, 12px); letter-spacing: 0.02em;
+  color: #4a2f00; background: #ffcc66; border-bottom: 1px solid #d9a83f;
+}
 </style>

@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useResultsStore } from '@/stores/results'
 import { useService } from '@/services'
+import { useRenderMovie } from '@/composables/useRenderMovie'
 import { formatOriginal } from '@/utils/format'
 import { reasonText } from '@/utils/reasons'
 import ResultTable from '@/components/ResultTable.vue'
@@ -20,10 +21,17 @@ const service = useService()
 const exporting = ref(false)
 const exportedPath = ref<string | null>(null)
 const exportError = ref<string | null>(null)
+// /api/export 的对外告警（如 LOC-2001 碎片告警）：后端只产出不裁剪，这里如实展示。
+const exportWarnings = ref<string[]>([])
 const showExport = ref(false)
-// 反馈 ⑨：导出即最终工程——固定不含低置信（LOW 不导出）；格式默认剪映草稿。
+// 反馈 ⑨：导出即最终工程——默认不含低置信（LOW 不导出）；格式默认剪映草稿。
+// A4：门槛/低置信处理/边界吸附改为**用户可选**（后端与适配器本就支持，此前被页面写死），
+// 默认值与旧行为逐字一致，不选就等于没改。
 const exportFormat = ref<'jianying' | 'fcp7_xml' | 'edl' | 'json'>('jianying')
 const materialWidth = ref<'scene' | 'core'>('scene')   // 片段宽度（反馈四轮：可选+提示）
+const minConfidence = ref<'HIGH' | 'MEDIUM' | 'LOW'>('MEDIUM')
+const lowPolicy = ref<'exclude' | 'backup'>('exclude')
+const snapScenes = ref<'on' | 'off'>('on')   // BaseSelect 只吃 string，调用处再转 bool
 const EXPORT_DIR_KEY = 'vl.exportDir'
 const JY_EXPORT_DIR_KEY = 'vl.exportDirJianying'
 const exportDir = computed(() => localStorage.getItem(EXPORT_DIR_KEY) ?? '')
@@ -149,17 +157,20 @@ async function doExport(): Promise<void> {
   exporting.value = true
   exportedPath.value = null
   exportError.value = null
+  exportWarnings.value = []
   try {
-    const { path } = await service.exportResults(results.batch, {
+    const res = await service.exportResults(results.batch, {
       outDir: activeExportDir.value,
       format: exportFormat.value,
-      minConfidence: 'MEDIUM',   // 反馈 ⑨：不含低置信
-      lowPolicy: 'exclude',
-      snapScenes: true,
+      minConfidence: minConfidence.value,
+      lowPolicy: lowPolicy.value,
+      snapScenes: snapScenes.value === 'on',
       materialWidth: materialWidth.value,
     })
-    exportedPath.value = path
-    showExport.value = false
+    exportedPath.value = res.path
+    exportWarnings.value = res.warnings ?? []
+    // 有告警 → 对话框保持打开，用户确认过内容才收；无告警 → 维持旧行为直接关。
+    if (!exportWarnings.value.length) showExport.value = false
   } catch (e) {
     exportError.value = e instanceof Error ? e.message : String(e)
   } finally {
@@ -173,6 +184,39 @@ const FORMAT_LABEL: Record<string, string> = {
   edl: 'CMX3600 EDL',
   json: 'JSON 结果数据',
 }
+
+// ---- 成片渲染（2026-09-29 续30，竞品 video_renderer 移植）----
+// 与导出共用同一套策略（门槛/低置信/吸附），渲染的是**同一份 clip 计划**；
+// 独立异步任务（渲染要几十秒到几分钟），进度走轮询、可取消。
+const {
+  running: renderRunning,
+  progress: renderProgress,
+  message: renderMessage,
+  moviePath: renderMoviePath,
+  result: renderResult,
+  error: renderError,
+  start: startRender,
+  cancel: cancelRender,
+  revealFolder: revealRender,
+} = useRenderMovie()
+
+function doRender(): void {
+  void startRender({
+    outDir: activeExportDir.value,
+    minConfidence: minConfidence.value,
+    lowPolicy: lowPolicy.value,
+    snapScenes: snapScenes.value === 'on',
+  })
+}
+
+const renderSummary = computed(() => {
+  const r = renderResult.value
+  if (!r) return ''
+  const mode = r.mode === 'reused' ? '命中既有成片'
+    : r.mode === 'copy' ? '视频流复制合并' : '重编码合并'
+  const hdr = r.hdr_downgraded ? ' · HDR 源已降为 SDR 成片' : ''
+  return `${r.segments} 段 · ${r.total_frames} 帧 · ${r.fps}fps · ${mode} · 编码器 ${r.actual_encoder}${hdr}`
+})
 </script>
 
 <template>
@@ -193,6 +237,8 @@ const FORMAT_LABEL: Record<string, string> = {
     </div>
 
     <p v-if="exportedPath" class="results__exported mono">已导出 → {{ exportedPath }}</p>
+    <p v-for="(w, i) in (!showExport ? exportWarnings : [])" :key="'ew' + i"
+       class="rd__notice rd__notice--warn">{{ w }}</p>
 
     <div v-if="hasResults" class="results__split">
       <div class="results__list">
@@ -315,13 +361,71 @@ const FORMAT_LABEL: Record<string, string> = {
             <option value="core">仅核心窗口——只含定位命中部分，片段更紧凑</option>
           </BaseSelect>
         </label>
+        <label class="rd__field">
+          <span>置信门槛</span>
+          <BaseSelect v-model="minConfidence">
+            <option value="MEDIUM">高 + 中（推荐）</option>
+            <option value="HIGH">仅高置信</option>
+            <option value="LOW">全部（低置信也作为主片段导出）</option>
+          </BaseSelect>
+        </label>
+        <label v-if="minConfidence !== 'LOW'" class="rd__field">
+          <span>低置信段</span>
+          <BaseSelect v-model="lowPolicy">
+            <option value="exclude">不进工程（默认）</option>
+            <option value="backup">进独立备用轨，供人工核对</option>
+          </BaseSelect>
+        </label>
+        <label class="rd__field">
+          <span>边界吸附</span>
+          <BaseSelect v-model="snapScenes">
+            <option value="on">吸附到原片镜头切点（推荐）</option>
+            <option value="off">保持定位给出的边界，不吸附</option>
+          </BaseSelect>
+        </label>
         <p class="rd__note">
-          仅导出高/中置信片段，<strong>不包含低置信</strong>；剪映/PR 工程按剪辑时间轴摆放定位片段，
-          导出即最终工程，可直接在剪辑软件里继续微调。
+          {{ minConfidence === 'LOW'
+            ? '全部片段都会导出（含低置信）——低置信段定位可靠性较低，建议在剪辑软件里逐段核对。'
+            : (lowPolicy === 'backup'
+              ? '高/中置信进主轨；低置信段进独立备用轨，便于人工核对后取舍。'
+              : '仅导出高/中置信片段，低置信不进工程。') }}
+          剪映/PR 工程按剪辑时间轴摆放定位片段，导出即最终工程，可直接在剪辑软件里继续微调。
+        </p>
+        <p v-if="exportWarnings.length" class="rd__notice rd__notice--warn">
+          导出已完成，但有以下提醒：
+          <ul style="margin: 4px 0 0; padding-left: 18px">
+            <li v-for="(w, i) in exportWarnings" :key="i">{{ w }}</li>
+          </ul>
         </p>
         <p v-if="exportError" class="rd__notice rd__notice--err">{{ exportError }}</p>
+
+        <!-- 成片渲染（2026-09-29 续30）：与工程文件同源的另一条交付通道 -->
+        <div class="ex__render">
+          <div class="rd__sec-title">成片渲染</div>
+          <p class="rd__note">
+            按上面的门槛与吸附口径，把定位片段从**原片**里裁出来拼成一个可直接播放的成片
+            （音轨取原片对应区间；未定位/未过门槛的段直接跳过，不填黑场）。
+            工程文件仍按剪辑时间轴摆放，两者互不影响。
+          </p>
+          <div class="hstack" style="gap: 8px">
+            <BaseButton icon="film" :loading="renderRunning"
+                        :disabled="!hasResults || renderRunning" @click="doRender">
+              {{ renderRunning ? '渲染中…' : '渲染成片' }}
+            </BaseButton>
+            <BaseButton v-if="renderRunning" variant="danger" @click="cancelRender">取消</BaseButton>
+            <BaseButton v-if="renderMoviePath" @click="revealRender">打开所在目录</BaseButton>
+          </div>
+          <p v-if="renderRunning" class="rd__note">
+            {{ renderProgress }}% · {{ renderMessage || '准备渲染…' }}
+          </p>
+          <p v-if="renderMoviePath" class="results__exported mono">
+            成片 → {{ renderMoviePath }}<span v-if="renderSummary"> · {{ renderSummary }}</span>
+          </p>
+          <p v-if="renderError" class="rd__notice rd__notice--err">{{ renderError }}</p>
+        </div>
+
         <div class="rd__form" style="justify-content: flex-end">
-          <BaseButton @click="showExport = false">取消</BaseButton>
+          <BaseButton @click="showExport = false">{{ exportWarnings.length ? '知道了' : '取消' }}</BaseButton>
           <BaseButton variant="primary" :loading="exporting" :disabled="!hasResults" @click="doExport">导出</BaseButton>
         </div>
       </div>

@@ -36,6 +36,9 @@ class MediaError(LocatorError):
     Carries the tail of the subprocess stderr.
     """
 
+    code = "LOC-1107"
+    user_message = "视频读取/剪辑处理失败，请确认文件未损坏、未被其它程序占用后重试。"
+
 
 def _brief(args: list[str], *, n: int = 8) -> str:
     return " ".join(f"{a!r}" if " " in a else a for a in args[:n])

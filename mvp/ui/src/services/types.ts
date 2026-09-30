@@ -120,6 +120,31 @@ export interface IndexValidationJson {
   reason: string | null
 }
 
+// Mirror of GET /api/media/info (mvp/api/routes/media.py — ffprobe metadata).
+// Display-only (project cards / detail page); never a branching key.
+export interface MediaInfoJson {
+  path: string
+  duration: number      // seconds (format.duration; reliable on MKV)
+  fps: number           // avg_frame_rate; 0 when unknown
+  width: number
+  height: number
+  size_bytes: number
+  format_name: string
+  video_codec: string
+  has_audio: boolean
+}
+
+// Mirror of POST /api/source/merge (mvp/api/routes/source.py — 多原片入库前物理合并,
+// 竞品 processing.video.concat 对应)。merged_path 是稳定命名缓存文件，可直接当普通单原片用。
+export interface SourceMergeJson {
+  merged_path: string
+  /** copy=流复制(签名全等) / transcode=重编码链 / passthrough=单文件直通 */
+  mode: string
+  /** true = 命中既有缓存（同一组原片此前已合并过，秒回） */
+  reused: boolean
+  duration_s: number | null
+}
+
 // A query unit (edited-side shot). numpy `feats`/`times` stay on the backend;
 // the UI only needs the span + a label.
 export interface ShotSegmentJson {
@@ -160,6 +185,7 @@ export interface ProgressEventJson {
 // ---- Async task lifecycle (mvp/api/tasks + /ws/progress) ----
 // Mirrors mvp/api/tasks/models.py Task + the WS frame shapes.
 export type TaskStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
+export type TaskKind = 'analyze' | 'render'
 export type TaskStage =
   | 'idle'
   | 'indexing'
@@ -169,14 +195,35 @@ export type TaskStage =
   | 'exporting'
   | 'finished'
 
+// 成片渲染结果（POST /api/tasks/render 完成后的 task.result，2026-09-29 续30）。
+// ⚠️ 与分析任务的 ResultBatchJson 共用 task.result 字段，靠 task.kind 区分。
+export interface RenderMovieJson {
+  kind?: 'render'
+  movie_path: string
+  /** copy=流复制合并 / transcode=重编码合并 / reused=命中稳定命名缓存 */
+  mode: string
+  reused: boolean
+  segments: number
+  /** 成片恒定帧率（FFmpeg 分数字符串，如 24000/1001） */
+  fps: string
+  duration_s: number | null
+  total_frames: number | null
+  actual_encoder: string
+  hdr_downgraded?: boolean
+  clips?: number
+  clip_ranges?: Array<[number, number]>
+}
+
 export interface TaskJson {
   task_id: string
+  /** analyze=定位（默认）；render=成片渲染。缺省按 analyze 处理（旧后端兼容）。 */
+  kind?: TaskKind
   status: TaskStatus
   stage: TaskStage
   progress: number
   created_at: string
   finished_at: string | null
-  result: ResultBatchJson | null
+  result: ResultBatchJson | RenderMovieJson | null
   error: string | null
   cancel_requested: boolean
   /** Human-readable current step, e.g. "特征提取 50/200 帧". */

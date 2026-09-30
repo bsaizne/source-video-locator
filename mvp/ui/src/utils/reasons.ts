@@ -18,6 +18,13 @@ const REASONS: Record<string, string> = {
   no_candidates: '未找到候选',
   no_span: '未定位到区间',
   text_card_not_in_source: '黑底文字卡 / 片尾标识——非源片内容',
+  // conf_v2 并行通道（竞品四项加权置信，默认关）
+  insufficient_samples: '采样证据不足',
+  weak_offset_support: '证据未收敛到单一区间',
+  weak_local_consistency: '局部一致性偏弱',
+  small_candidate_margin: '与次选差距很小',
+  weighted_confidence_low: '四项加权置信度偏低',
+  confidence_v2_downgraded: '稳定性不足，置信已降一档',
 }
 
 export function reasonText(key: string): string {

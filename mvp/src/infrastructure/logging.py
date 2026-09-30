@@ -1,4 +1,4 @@
-"""infrastructure.logging — 统一日志基础设施（stderr + 文件，自动轮转）。
+"""infrastructure.logging — 统一日志基础设施（stderr + 文件，自动轮转，**落盘前脱敏**）。
 
 设计：
 - 纯 stdlib ``logging``，无第三方依赖。
@@ -9,11 +9,16 @@
 - 结构化文本格式：``时间 级别 module=<name> session=<sid> <message>``。
 - ``session_id``：轻量 ``contextvars``（uuid4 hex 前 8 位），无需数据库；供未来
   FastAPI 每请求 / 多任务并发时区分日志行。
+- **脱敏（2026-09-28 续19, T1-2）**：日志里的本机绝对路径只保留文件名、URL 只保留
+  scheme+host、``?token=``/``?session=`` 之类查询参数一律打码。理由 = 日志是售后
+  唯一要发给外人的产物（``/api/logs/download`` 打 zip），而客户素材路径属隐私。
+  本地排查可用 env ``SVL_LOG_REDACTION=off`` 关闭。
 """
 from __future__ import annotations
 
 import logging
 import os
+import re
 import sys
 from contextvars import ContextVar
 from logging.handlers import RotatingFileHandler
@@ -25,6 +30,65 @@ MAX_BYTES = 10 * 1024 * 1024   # 10MB
 BACKUP_COUNT = 5
 
 _FMT = "%(asctime)s %(levelname)s module=%(name)s session=%(session_id)s %(message)s"
+
+# ---------------------------------------------------------------- 脱敏
+_SECRET_QUERY = re.compile(r"([?&](?:token|session|svl_session|api_key)=)[^&\s\"']*", re.I)
+_WIN_PATH = re.compile(r"\b[A-Za-z]:[\\/][^\s\"'<>|]*")
+_UNC_PATH = re.compile(r"\\\\[^/\s\"'<>|]+(?:/[^\s\"'<>|]*)?")
+_POSIX_PATH = re.compile(r"/(?:Users|home|var|opt|mnt|media|srv)/[^\s\"'<>|]*")
+_URL = re.compile(r"\b(?:file|https?|ftp)://[^\s\"'<>|]+", re.I)
+_TRAILING = ".,;:)]}\"'"
+
+
+def _basename(p: str) -> str:
+    tail = p.rstrip(_TRAILING)
+    keep = p[len(tail):]          # 匹配吃掉的收尾标点要还回去
+    name = tail.replace("\\", "/").rstrip("/").rsplit("/", 1)[-1]
+    return (("<PATH:%s>" % name) if name else "<PATH>") + keep
+
+
+def _redact_url(m: re.Match) -> str:
+    """file:// 只留文件名；http(s)/ftp 保留 host+path（诊断需要），只打码查询串
+    （令牌/密钥都在 query 里）。"""
+    raw = m.group(0)
+    url = raw.rstrip(_TRAILING)
+    keep = raw[len(url):]
+    scheme, rest = url.split("://", 1)
+    if scheme.lower() == "file":
+        return _basename(rest) + keep
+    head, _, query = rest.partition("?")
+    masked = head if not query else head + "?<REDACTED>"
+    return "%s://%s%s" % (scheme.lower(), masked, keep)
+
+
+def redaction_enabled() -> bool:
+    return str(os.environ.get("SVL_LOG_REDACTION", "")).strip().lower() not in (
+        "off", "0", "false", "no")
+
+
+def redact_text(text: str) -> str:
+    """打码顺序：查询参数 → URL → 绝对路径（Win 先于 UNC，避免 repr 的双反斜杠被
+    UNC 规则截断留下盘符）。相对路径不动。``SVL_LOG_REDACTION=off`` 时原样返回。"""
+    if not text or not redaction_enabled():
+        return text
+    text = _SECRET_QUERY.sub(lambda m: m.group(1) + "<REDACTED>", text)
+    text = _URL.sub(_redact_url, text)
+    text = _WIN_PATH.sub(lambda m: _basename(m.group(0)), text)
+    text = _UNC_PATH.sub(lambda m: _basename(m.group(0)), text)
+    text = _POSIX_PATH.sub(lambda m: _basename(m.group(0)), text)
+    return text
+
+
+class RedactingFilter(logging.Filter):
+    """在格式化前改写 record：脱敏 msg 与异常文本。返回 True（只脱敏不丢弃）。"""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        try:
+            record.msg = redact_text(record.getMessage())
+            record.args = ()
+        except Exception:  # noqa: BLE001 - 脱敏失败不能吞掉日志
+            pass
+        return True
 
 # ---------------------------------------------------------------- session id
 _session: ContextVar[str] = ContextVar("svl_session", default="")
@@ -64,6 +128,10 @@ class _SvlFormatter(logging.Formatter):
             record.session_id = get_session_id() or "-"
         return super().format(record)
 
+    def formatException(self, ei) -> str:
+        """traceback 里同样可能带素材绝对路径（FFmpeg stderr / open(path) 异常）。"""
+        return redact_text(super().formatException(ei))
+
 
 def _make_formatter() -> logging.Formatter:
     return _SvlFormatter(_FMT)
@@ -90,6 +158,7 @@ def _ensure_stream_handler(stream, root: logging.Logger) -> None:
             return
     h = logging.StreamHandler(stream or sys.stderr)
     h.setFormatter(_make_formatter())
+    h.addFilter(RedactingFilter())
     setattr(h, "_svl_stream", True)
     root.addHandler(h)
 
@@ -106,6 +175,7 @@ def _ensure_file_handler(log_dir: str | Path | None, root: logging.Logger) -> No
     fh = RotatingFileHandler(str(target), maxBytes=MAX_BYTES,
                              backupCount=BACKUP_COUNT, encoding="utf-8")
     fh.setFormatter(_make_formatter())
+    fh.addFilter(RedactingFilter())
     setattr(fh, "_svl_file", True)
     root.addHandler(fh)
 

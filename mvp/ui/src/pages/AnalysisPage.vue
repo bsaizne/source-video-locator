@@ -40,6 +40,11 @@ watch([editedList, () => analysis.pinnedProjectId], () => {
 }, { immediate: true })
 
 const original = computed(() => pinned.value?.sourceVideo ?? '')
+// 多原片（续27 video.concat）：库里 ≥2 段且尚未合并 → 把清单交给后端，
+// worker 在建索引前物理合并成单个母片（合并进度复用「准备原片索引」阶段展示）。
+const sources = computed(() => projects.absoluteSources(pinned.value))
+const willMerge = computed(() => sources.value.length >= 2 && !pinned.value?.merge)
+const hasSource = computed(() => !!original.value || sources.value.length > 0)
 
 const progress = computed(() => analysis.progress)
 
@@ -65,7 +70,11 @@ async function run(): Promise<void> {
   startElapsed()
   try {
     // 一键分析（反馈 ②）：原片索引已包含在流程内，无需单独构建。
-    const batch = await analysis.runLocate(edited.value, original.value)
+    const batch = await analysis.runLocate(
+      edited.value,
+      original.value,
+      willMerge.value ? sources.value : undefined,
+    )
     results.setBatch(batch)
     router.push('/results')
   } catch {
@@ -102,17 +111,28 @@ function cancel(): void {
           </BaseSelect>
         </label>
       </div>
-      <div class="an__row" v-if="original">
+      <div v-if="hasSource" class="an__row an__row--source">
         <span class="an__k">源片</span>
-        <span class="mono">{{ original }}</span>
+        <template v-if="pinned?.merge">
+          <span class="mono">{{ original }}</span>
+          <span class="an__tag">合并自 {{ sources.length }} 段 · {{ pinned.merge.mode }}</span>
+        </template>
+        <template v-else-if="willMerge">
+          <span class="mono an__multi">{{ sources.length }} 段原片（分析开始时先合并为单个母片）</span>
+        </template>
+        <span v-else class="mono">{{ original }}</span>
       </div>
+      <ul v-if="willMerge" class="an__srclist">
+        <li v-for="(s, i) in sources" :key="s" class="mono">{{ i + 1 }}. {{ s }}</li>
+      </ul>
       <p v-if="!pinned" class="an__hint">还没有项目——先到「项目」页新建一个。</p>
+      <p v-else-if="!hasSource" class="an__hint">该项目还没有源片：到项目详情页「源片库」选择或添加原片。</p>
     </div>
 
     <div class="an__actions">
       <BaseButton variant="primary" size="lg" @click="run" :loading="analysis.running"
-                  :disabled="analysis.running || !pinned || !edited" icon="play">
-        {{ analysis.running ? '分析中…' : '开始分析' }}
+                  :disabled="analysis.running || !pinned || !edited || !hasSource" icon="play">
+        {{ analysis.running ? '分析中…' : (willMerge ? '合并并分析' : '开始分析') }}
       </BaseButton>
       <BaseButton v-if="analysis.running" variant="danger" @click="cancel">取消</BaseButton>
     </div>
@@ -143,6 +163,15 @@ function cancel(): void {
 .an__field { display: flex; flex-direction: column; gap: 6px; font-size: var(--fs-xs); color: var(--fg-faint); }
 .an__k { font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.04em; color: var(--fg-faint); }
 .an__hint { color: var(--fg-faint); font-size: var(--fs-sm); margin: 0; }
+.an__row--source { align-items: baseline; }
+.an__tag {
+  padding: 2px 8px; border-radius: var(--radius-s);
+  background: var(--accent-soft); color: var(--accent-glow);
+  font-size: var(--fs-2xs); white-space: nowrap;
+}
+.an__multi { color: var(--fg-muted); }
+.an__srclist { list-style: none; margin: 6px 0 0; padding: 0 0 0 4px; color: var(--fg-faint); font-size: var(--fs-xs); }
+.an__srclist li { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .an__actions { display: flex; gap: 12px; margin: 22px 0; }
 .an__pipeline { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-m); padding: 18px; }
 .an__error {

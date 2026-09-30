@@ -10,7 +10,7 @@ import queue
 import threading
 from typing import Callable
 
-from .models import Task
+from .models import Task, TaskKind
 from .worker import run_worker
 
 # 默认后台执行：起一个 daemon 线程跑 `fn`。
@@ -29,13 +29,35 @@ class TaskManager:
         self._tasks: dict[str, Task] = {}
         self._lock = threading.Lock()
 
-    def submit_analyze(self, edited_path: str, original_path: str) -> Task:
+    def submit_analyze(self, edited_path: str, original_path: str,
+                       original_paths: list[str] | None = None) -> Task:
         """创建一个 PENDING 任务并在后台调度 worker。返回 Task（可在任何线程查）。"""
-        task = Task(edited_path=edited_path, original_path=original_path)
+        task = Task(edited_path=edited_path, original_path=original_path,
+                    original_paths=list(original_paths or []))
         with self._lock:
             self._tasks[task.task_id] = task
-        self._log("task submitted task_id=%s edited=%s original=%s",
-                  task.task_id, edited_path, original_path)
+        self._log("task submitted task_id=%s edited=%s original=%s originals=%s",
+                  task.task_id, edited_path, original_path, len(task.original_paths))
+        self._run(lambda: run_worker(task, self._service, log=self._log))
+        return task
+
+    def submit_render(self, batch, *, out_dir: str | None = None,
+                      min_confidence: str | None = None, low_policy: str | None = None,
+                      snap_scenes: bool | None = None) -> Task:
+        """创建成片渲染任务（2026-09-29 续30）。结果批**在提交时锁定**放进 task，
+        worker 只读它，不读"会话最新批"（避免排队期间新定位把渲染目标换掉）。"""
+        task = Task(kind=TaskKind.RENDER,
+                    edited_path=str(getattr(batch, "edited_video", "") or ""),
+                    original_path=str(getattr(batch, "original_video", "") or ""),
+                    render_batch=batch,
+                    render_params={"out_dir": out_dir or "",
+                                   "min_confidence": min_confidence,
+                                   "low_policy": low_policy,
+                                   "snap_scenes": snap_scenes})
+        with self._lock:
+            self._tasks[task.task_id] = task
+        self._log("task submitted (render) task_id=%s original=%s edited=%s",
+                  task.task_id, task.original_path, task.edited_path)
         self._run(lambda: run_worker(task, self._service, log=self._log))
         return task
 

@@ -12,7 +12,7 @@
 ``cosine_similarity`` / ``finloc_window`` / ``domain.Candidate`` / ``IndexBundle``。
 
 产品语义：仅供蒙太奇段生成多段输出 + 蒙太奇诚实降 LOW；非蒙太奇段（clean）不改变既有
-单 span 定位结果（``localize_segment``）。不改相似度/检索/排序/单段定位语义。
+单 span 定位结果（现行生产实现 = ``EvidenceLocalizer``）。不改相似度/检索/排序/单段定位语义。
 """
 from __future__ import annotations
 

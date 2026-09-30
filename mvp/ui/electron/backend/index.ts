@@ -10,12 +10,14 @@ export {
   createBackendConfig,
   prodBackendConfig,
   buildUvicornArgs,
+  configWithListen,
 } from './config'
 export type { BackendConfig } from './config'
 
 export { BackendManager, BackendStartError, nodeSpawner } from './manager'
 export type {
   BackendManagerOptions,
+  BackendListen,
   BackendMode,
   BackendState,
   BackendSpawner,

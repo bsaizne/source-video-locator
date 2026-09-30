@@ -85,6 +85,66 @@ class FeatureStoreTest(unittest.TestCase):
             store2 = FeatureStore(self.ffmpeg, td, feature_version="other@0.5_l2")
             self.assertEqual(store2.validate_index(SYNTH).status, IndexValidationStatus.INVALID)
 
+    def test_preprocess_sha_recorded_and_stable(self):
+        """A2：新建索引必须写入真实预处理摘要（历史上这字段恒为空串）。"""
+        with tempfile.TemporaryDirectory() as td:
+            store = FeatureStore(self.ffmpeg, td)
+            meta = store.create_index(SYNTH, FakeBackend())
+            self.assertTrue(meta.extractor.preprocess_sha, "preprocess_sha must be recorded")
+            self.assertEqual(store.validate_index(SYNTH).status, IndexValidationStatus.VALID)
+            # 摘要稳定（同口径重复计算必须一致，否则会误判失效）
+            self.assertEqual(meta.extractor.preprocess_sha, store.preprocess_sha(384))
+
+    def test_preprocess_change_invalidates(self):
+        """预处理口径变了（如 resize 518->384）而 feature_version 没 bump -> 必须 INVALID。"""
+        with tempfile.TemporaryDirectory() as td:
+            store = FeatureStore(self.ffmpeg, td)
+            store.create_index(SYNTH, FakeBackend())
+            self._tamper_sha(td, store, "deadbeefdeadbeef")
+            v = store.validate_index(SYNTH)
+            self.assertEqual(v.status, IndexValidationStatus.INVALID)
+            self.assertIn("preprocess", v.reason or "")
+
+    def test_legacy_index_without_sha_backfilled_not_rebuilt(self):
+        """字段实装前建的历史索引：放行一次并回填摘要，不触发全量重建。"""
+        with tempfile.TemporaryDirectory() as td:
+            store = FeatureStore(self.ffmpeg, td)
+            store.create_index(SYNTH, FakeBackend())
+            self._tamper_sha(td, store, "")
+            self.assertEqual(store.validate_index(SYNTH).status, IndexValidationStatus.VALID)
+            import json
+            d = json.loads((store.index_dir(SYNTH) / "index.json").read_text(encoding="utf-8"))
+            self.assertTrue(d["extractor"]["preprocess_sha"],
+                            "legacy index should be upgraded in place")
+            # 回填后第二次校验仍 VALID（幂等，不反复写盘）
+            self.assertEqual(store.validate_index(SYNTH).status, IndexValidationStatus.VALID)
+
+    def _tamper_sha(self, td, store, value):
+        import json
+        p = store.index_dir(SYNTH) / "index.json"
+        d = json.loads(p.read_text(encoding="utf-8"))
+        d["extractor"]["preprocess_sha"] = value
+        p.write_text(json.dumps(d), encoding="utf-8")
+
+    def test_probe_fingerprint_tracks_actual_preprocess(self):
+        """指纹测的是真实函数行为：换 resize 必须改变摘要（声明式字段做不到这点）。"""
+        from unittest.mock import patch
+
+        from device import dinov2_model as dm
+        from engine.feature_store.feature_store import preprocess_probe_bytes
+        base = preprocess_probe_bytes()
+        self.assertEqual(preprocess_probe_bytes(), base)
+        real = dm._imagenet_preprocess
+
+        def smaller(frame):           # 模拟 resize 杠杆（518 -> 224）
+            import torch
+            t = real(frame)
+            return torch.nn.functional.interpolate(t, size=(224, 224), mode="bilinear")
+
+        with patch.object(dm, "_imagenet_preprocess", smaller):
+            self.assertNotEqual(preprocess_probe_bytes(), base)
+        self.assertEqual(preprocess_probe_bytes(), base)   # patch 退出后恢复
+
 
 class CPUBackendTest(unittest.TestCase):
     def test_cheap_interface_no_model_load(self):

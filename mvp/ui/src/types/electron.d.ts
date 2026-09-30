@@ -16,6 +16,8 @@ declare global {
       openPath(target: string): Promise<string>
       /** Native video file picker — absolute path, or null if cancelled. */
       openFile(): Promise<string | null>
+      /** 多原片选择器 — 绝对路径数组（按用户选择顺序），取消为空数组。 */
+      openFiles(): Promise<string[]>
       openDirectory(): Promise<string | null>
       /** Absolute path of a File dropped into the renderer (Electron). */
       getPathForFile(file: File): string

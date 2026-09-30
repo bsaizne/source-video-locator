@@ -76,7 +76,7 @@ class MPSBackend:
 
     def load_feature_model(self) -> DinoV2Small:
         if self._model is None:
-            ckpt = torch.load(str(self.weights_path), map_location="cpu")
+            ckpt = torch.load(str(self.weights_path), map_location="cpu", weights_only=True)
             model = DinoV2Small()
             model.load_state_dict(ckpt)   # official state_dict is bare (no 'model' key)
             model.eval().to(self._device)

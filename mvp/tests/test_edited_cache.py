@@ -46,6 +46,19 @@ class EditedCacheTest(unittest.TestCase):
             np.testing.assert_array_equal(g1[0], f1)
             np.testing.assert_array_equal(g2[0], f2)
 
+    def test_dense_quality_roundtrip_and_legacy_none(self):
+        # 腿 c 质量通道: roundtrip 逐位一致; 旧 dense 文件(无 q 键) → load 返回 None。
+        with tempfile.TemporaryDirectory() as td:
+            c = EditedCache(Path(td) / "ec")
+            dk = c.dense_key(1.0, 2.0)
+            c.save_dense("k", dk, np.random.rand(5, 384).astype(np.float32), np.arange(5.0))
+            self.assertIsNone(c.load_dense_quality("k", dk))   # legacy: 只有特征无质量
+            q = np.random.rand(5, 3).astype(np.float32)
+            c.save_dense_quality("k", dk, q)
+            gq = c.load_dense_quality("k", dk)
+            np.testing.assert_array_equal(gq, q)
+            self.assertIsNone(c.load_dense_quality("k", c.dense_key(9.0, 9.5)))
+
     def test_corrupt_returns_none(self):
         with tempfile.TemporaryDirectory() as td:
             c = EditedCache(Path(td) / "ec")

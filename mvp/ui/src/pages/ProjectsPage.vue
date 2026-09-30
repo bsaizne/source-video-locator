@@ -1,20 +1,22 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router'
 import { useProjectsStore } from '@/stores/projects'
+import { useCreateProject } from '@/composables/useCreateProject'
 import ProjectCard from '@/components/ProjectCard.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 
 const router = useRouter()
 const projects = useProjectsStore()
+const { createProjectViaPicker } = useCreateProject()
 
 function open(id: string): void {
   projects.selectProject(id)
   router.push(`/projects/${id}`)
 }
 
-function create(): void {
-  const p = projects.addProject({ name: `未命名项目 ${projects.projects.length + 1}`, sourceVideo: 'movie.mkv' })
-  router.push(`/projects/${p.id}`)
+async function create(): Promise<void> {
+  const p = await createProjectViaPicker()
+  if (p) router.push(`/projects/${p.id}`)
 }
 </script>
 

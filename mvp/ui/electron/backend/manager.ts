@@ -5,15 +5,29 @@
 // themselves); it only health-checks. In `prod` it spawns the bundled python and
 // won't report `running` until /api/health answers ok.
 //
+// Random port (续20): spawn config with `port === 0` means the backend picks an
+// OS-assigned port and announces it on stdout as `BACKEND_LISTEN <host> <port>`
+// (printed by mvp/api/launcher AFTER a successful bind — never a guess). The
+// manager parses each forwarded line, gates waitForHealth on that announcement,
+// and health-checks the REAL address via configWithListen.
+//
 // Everything here is injected (spawner, health, logger, config) so tests drive the
 // whole lifecycle with fakes and never launch Python or touch the network.
-import type { BackendConfig } from './config'
+import { configWithListen, type BackendConfig } from './config'
 import type { BackendProcessHandle, LogFn } from './process'
 import { spawnBackendProcess } from './process'
 import { createHealthChecker, BackendStartError, type HealthChecker } from './health'
 
 export type BackendState = 'starting' | 'running' | 'stopped' | 'failed'
 export type BackendMode = 'dev' | 'prod'
+
+/** Parsed `BACKEND_LISTEN <host> <port>` stdout announcement. */
+export interface BackendListen {
+  host: string
+  port: number
+}
+
+const LISTEN_RE = /^BACKEND_LISTEN\s+(\S+)\s+(\d+)\s*$/
 
 /** Given config + logger, returns a process handle. Tests inject a fake. */
 export type BackendSpawner = (config: BackendConfig, onLog: LogFn) => BackendProcessHandle
@@ -39,15 +53,24 @@ export class BackendManager {
   private readonly _config: BackendConfig
   private readonly _mode: BackendMode
   private readonly _spawner: BackendSpawner
-  private readonly _health: HealthChecker
+  private readonly _healthOverride: HealthChecker | null
   private readonly _log: (msg: string) => void
   private readonly _devProbeMs: number
+
+  /** 最近一次 BACKEND_LISTEN 公告（随机端口模式下的唯一真实端口来源）。 */
+  private _listen: BackendListen | null = null
+  /** 本次 spawn 的公告等待器；resolve 于收到 BACKEND_LISTEN，reject 于进程提前退出。 */
+  private _announce: {
+    promise: Promise<BackendListen>
+    resolve: (l: BackendListen) => void
+    reject: (err: Error) => void
+  } | null = null
 
   constructor(opts: BackendManagerOptions) {
     this._config = opts.config
     this._mode = opts.mode
     this._spawner = opts.spawner ?? nodeSpawner
-    this._health = opts.health ?? createHealthChecker(this._config)
+    this._healthOverride = opts.health ?? null
     this._log = opts.log ?? (() => {})
     this._devProbeMs = opts.devProbeMs ?? 2000
   }
@@ -62,6 +85,69 @@ export class BackendManager {
 
   get pid(): number | undefined {
     return this._proc?.pid
+  }
+
+  /** 公告过的真实监听地址；未收到公告 = null。 */
+  get listen(): BackendListen | null {
+    return this._listen
+  }
+
+  get listenPort(): number | null {
+    return this._listen?.port ?? null
+  }
+
+  /** 健康检查用的有效配置：收到公告后切到真实 host/port（否则维持 spawn 配置）。 */
+  private _resolvedConfig(): BackendConfig {
+    return this._listen ? configWithListen(this._config, this._listen) : this._config
+  }
+
+  private _healthFor(): HealthChecker {
+    return this._healthOverride ?? createHealthChecker(this._resolvedConfig())
+  }
+
+  /** stdout/stderr 行分发：识别 BACKEND_LISTEN 公告（其余行只进日志）。 */
+  private _handleOutputLine(line: string): void {
+    const m = LISTEN_RE.exec(line)
+    if (!m) return
+    const port = Number(m[2])
+    if (!Number.isInteger(port) || port <= 0) return
+    this._listen = { host: m[1], port }
+    this._log(`backend announced listen ${m[1]}:${port}`)
+    this._announce?.resolve(this._listen)
+  }
+
+  private _beginAnnounce(): void {
+    this._listen = null
+    let resolve!: (l: BackendListen) => void
+    let reject!: (err: Error) => void
+    const promise = new Promise<BackendListen>((res, rej) => {
+      resolve = res
+      reject = rej
+    })
+    // 无人等待时（如公告后来但 waitForHealth 已失败）不产生 unhandled rejection。
+    promise.catch(() => {})
+    this._announce = { promise, resolve, reject }
+  }
+
+  private async _awaitAnnounce(timeoutMs?: number): Promise<void> {
+    if (!this._announce) {
+      throw new BackendStartError('backend not started; cannot await BACKEND_LISTEN')
+    }
+    const ms = timeoutMs ?? this._config.timeoutMs
+    let timer: ReturnType<typeof setTimeout> | undefined
+    try {
+      await Promise.race([
+        this._announce.promise,
+        new Promise<never>((_, rej) => {
+          timer = setTimeout(
+            () => rej(new BackendStartError(`no BACKEND_LISTEN announcement within ${ms}ms`)),
+            ms,
+          )
+        }),
+      ])
+    } finally {
+      if (timer !== undefined) clearTimeout(timer)
+    }
   }
 
   /**
@@ -81,8 +167,18 @@ export class BackendManager {
       return
     }
     try {
-      this._proc = this._spawner(this._config, (line) => this._log(`backend: ${line}`))
+      this._beginAnnounce()
+      this._proc = this._spawner(this._config, (line: string) => {
+        this._handleOutputLine(line)
+        this._log(`backend: ${line}`)
+      })
       this._log(`backend pid=${this._proc.pid ?? '?'}`)
+      const proc = this._proc
+      void proc.exited.then(() =>
+        this._announce?.reject(
+          new BackendStartError('backend exited before announcing BACKEND_LISTEN'),
+        ),
+      )
     } catch (err) {
       this._state = 'failed'
       this._log(`backend failed to spawn: ${String(err)}`)
@@ -90,10 +186,12 @@ export class BackendManager {
     }
   }
 
-  /** Poll /api/health until ok (or the config timeout → BackendStartError). */
+  /** Poll /api/health until ok (or the config timeout → BackendStartError).
+   *  随机端口（config.port===0）时先等 BACKEND_LISTEN 公告，再打真实地址。 */
   async waitForHealth(timeoutMs?: number): Promise<void> {
     try {
-      await this._health.waitHealthy({ timeoutMs })
+      if (this._config.port === 0 && !this._listen) await this._awaitAnnounce(timeoutMs)
+      await this._healthFor().waitHealthy({ timeoutMs })
       this._state = 'running'
       this._log('health connected: backend running')
     } catch (err) {
@@ -107,7 +205,7 @@ export class BackendManager {
    *  Non-fatal: on timeout it marks `stopped` (not `failed`) and returns false. */
   async checkDevBackend(): Promise<boolean> {
     try {
-      await this._health.waitHealthy({ timeoutMs: this._devProbeMs })
+      await this._healthFor().waitHealthy({ timeoutMs: this._devProbeMs })
       this._state = 'running'
       this._log('dev backend connected')
       return true

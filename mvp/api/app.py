@@ -13,11 +13,12 @@ from fastapi.exceptions import HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from infrastructure.errors import LocatorError
+from infrastructure.errors import LocatorError, public_error
 from infrastructure.logging import configure_logging, get_logger, set_session_id
 
 from .dependencies import get_context
-from .routes import analysis, health, index, logs, preview, progress, results, settings, tasks
+from .session import build_channel, resolve_session_token, session_middleware
+from .routes import analysis, health, index, logs, media, preview, progress, results, settings, source, tasks
 
 _log = get_logger("api")
 
@@ -56,16 +57,26 @@ def create_app() -> FastAPI:
         _log.info("%s %s", request.method, request.url.path)
         return response
 
+    # 本机门禁（T1-3）：注册在 CORS 之前 ⇒ CORS 仍是最外层，401 也带跨域头可被前端读到。
+    session_token = resolve_session_token()
+    if session_token is None:
+        _log.warning("local API session gate DISABLED (no SVL_SESSION_TOKEN; channel=%s)",
+                     build_channel())
+    else:
+        _log.info("local API session gate enabled (channel=%s)", build_channel())
+    app.middleware("http")(session_middleware(session_token))
+
     # 路由
     for r in (health.router, index.router, analysis.router, results.router, tasks.router,
-              progress.router, preview.router, settings.router, logs.router):
+              progress.router, preview.router, settings.router, logs.router, media.router,
+              source.router):
         app.include_router(r)
 
     # 异常处理
     @app.exception_handler(LocatorError)
     async def _locator_handler(request: Request, exc: LocatorError) -> JSONResponse:
         _log.exception("locator error on %s %s: %s", request.method, request.url.path, exc)
-        return JSONResponse(status_code=500, content={"error": type(exc).__name__, "detail": str(exc)})
+        return JSONResponse(status_code=500, content=public_error(exc))
 
     @app.exception_handler(HTTPException)
     async def _http_handler(request: Request, exc: HTTPException) -> JSONResponse:
@@ -75,7 +86,7 @@ def create_app() -> FastAPI:
     @app.exception_handler(Exception)
     async def _unhandled_handler(request: Request, exc: Exception) -> JSONResponse:
         _log.exception("unhandled error on %s %s", request.method, request.url.path)
-        return JSONResponse(status_code=500, content={"error": type(exc).__name__, "detail": str(exc)})
+        return JSONResponse(status_code=500, content=public_error(exc))
 
     # CORS 放最外层，保证预检 (OPTIONS) 在访问日志之前被处理
     app.add_middleware(

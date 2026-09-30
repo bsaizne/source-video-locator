@@ -5,9 +5,11 @@ import type {
   DeviceSettingsJson,
   IndexMetaJson,
   IndexStatus,
+  MediaInfoJson,
   ProgressEventJson,
   ResultBatchJson,
   ResultJson,
+  SourceMergeJson,
   TaskEvent,
   TaskJson,
 } from './types'
@@ -21,6 +23,14 @@ export interface BuildOpts {
 
 export type ExportFormat = 'json' | 'edl' | 'fcp7_xml' | 'jianying'
 
+// 成片渲染请求（POST /api/tasks/render；策略缺省取后端 config.export/render）。
+export interface RenderOpts {
+  outDir?: string
+  minConfidence?: 'HIGH' | 'MEDIUM' | 'LOW'
+  lowPolicy?: 'exclude' | 'backup'
+  snapScenes?: boolean
+}
+
 // The single seam between the UI and the backend. Every concrete adapter
 // (Mock for standalone dev, Http for the real Python service — see
 // HttpServiceAdapter) implements this interface; pages depend only on it.
@@ -29,6 +39,12 @@ export interface ServiceAPI {
   getIndexStatus(originalPath: string): Promise<IndexStatus>
   buildIndex(originalPath: string, opts?: BuildOpts): Promise<IndexStatus>
   getIndexMeta(originalPath: string): Promise<IndexMetaJson | null>
+  // ffprobe 元数据（项目卡/详情页展示真实时长与分辨率）。后端 GET /api/media/info。
+  getMediaInfo(path: string): Promise<MediaInfoJson>
+
+  // 多原片入库前物理合并（POST /api/source/merge，2026-09-29 video.concat 移植）。
+  // ≥2 段才有效：后端 <2 返回 400。产物是稳定命名缓存文件，可直接当单原片索引/定位。
+  mergeSources(paths: string[]): Promise<SourceMergeJson>
 
   // ---- Analysis Service ----
   analyzeEdited(editedPath: string, opts?: BuildOpts): Promise<AnalysisOutput>
@@ -47,7 +63,7 @@ export interface ServiceAPI {
       materialWidth?: 'scene' | 'core'
       cancelToken?: CancelToken
     },
-  ): Promise<{ path: string }>
+  ): Promise<{ path: string; warnings?: string[] }>
   loadResults(path: string): Promise<ResultBatchJson>
   // 手动替换某条结果的原片区（后端批同步更新 → 导出即替换后的最终工程）。
   overrideResult(resultId: string, start: number, end: number): Promise<ResultJson>
@@ -73,10 +89,19 @@ export interface ServiceAPI {
   setDeviceSettings(preferred: DevicePreference): Promise<DeviceSettingsJson>
 
   // ---- async task lifecycle (WS real-time progress) ----
-  startAnalyzeTask(editedPath: string, originalPath: string): Promise<{ task_id: string }>
+  // `originalPaths` ≥2 时后端 worker 会先把它们物理合并再建索引（多原片入库）。
+  startAnalyzeTask(
+    editedPath: string,
+    originalPath: string,
+    originalPaths?: string[],
+  ): Promise<{ task_id: string }>
   getTask(taskId: string): Promise<TaskJson>
   cancelTask(taskId: string): Promise<void>
   subscribeProgress(taskId: string, cb: (event: TaskEvent) => void): () => void
+
+  // ---- 成片渲染任务（2026-09-29 续30，竞品 video_renderer 移植） ----
+  // 渲染会话当前结果批为单个成片；进度/取消与定位任务同通道（GET /api/tasks/{id}）。
+  startRenderTask(opts?: RenderOpts): Promise<{ task_id: string }>
 
   // ---- progress + cancellation ----
   onProgress(listener: (event: ProgressEventJson) => void): () => void

@@ -6,13 +6,13 @@
 //   POST /api/analyze {edited_path}         -> {segments:[{id,label,span,nq}]}
 //   POST /api/results {edited_path,original_path} -> ResultBatchJson  (confidence flattened)
 //   POST /api/export  {output_dir}          -> {path}
+//   POST /api/results/load {path}           -> ResultBatchJson
 //   GET  /api/health                        -> {status,version}
 //
-// The Python bridge has no WS and no GET index-status/load-results endpoints, so:
+// The Python bridge has no WS and no GET index-status endpoint, so:
 //   - onProgress emits coarse "INDEXING / ANALYZING / LOCATING" stage hints (no WebSocket).
 //   - getIndexStatus / getIndexMeta reflect the last buildIndex result, else a MISSING
 //     placeholder (the backend exposes no status query; this is honest, not fabricated).
-//   - loadResults throws BackendUnavailableError (no endpoint).
 //   - cancel() is a no-op over a blocking HTTP request (no WS to signal cancellation).
 
 import { type CancelToken } from './cancel'
@@ -27,17 +27,34 @@ import type {
   DeviceType,
   IndexStatus,
   IndexValidationJson,
+  MediaInfoJson,
   ProgressEventJson,
   ResultJson,
   ResultBatchJson,
+  SourceMergeJson,
   TaskEvent,
   TaskJson,
 } from './types'
-import type { BuildOpts, ServiceAPI } from './ServiceAPI'
+import type { BuildOpts, RenderOpts, ServiceAPI } from './ServiceAPI'
 
 type Listener = (event: ProgressEventJson) => void
 
 const DEFAULT_BASE = 'http://127.0.0.1:8765'
+const SESSION_QUERY = 'svl_session'
+
+/** Electron 主进程把后端实际端口与会话令牌挂在页面 URL query 上（T1-3 本机门禁）。
+ *  浏览器 dev（Vite + 手工 uvicorn）没有这两个参数：端口回退 env/默认、令牌为空 = 门禁关闭。
+ *  ⚠️ 优先级（2026-09-28 打包验收修正）：**运行时 svl_port > 构建期 VITE_API_BASE**——
+ *  发行包 .env.production 钉死了 8765，而后端打包态走 OS 随机端口；env 优先会让
+ *  渲染层所有直连 baseUrl 的媒体 URL（<video src>）指错端口（实测 MEDIA_ERR_SRC_NOT_SUPPORTED）。 */
+export function readBackendBootstrap(): { baseUrl: string; session: string } {
+  const q = typeof location === 'undefined' ? null : new URLSearchParams(location.search)
+  const port = q?.get('svl_port')
+  const session = q?.get(SESSION_QUERY) ?? ''
+  const envBase = (import.meta.env.VITE_API_BASE as string | undefined) ?? ''
+  const baseUrl = (port && /^\d+$/.test(port) ? `http://127.0.0.1:${port}` : '') || envBase || DEFAULT_BASE
+  return { baseUrl, session }
+}
 
 const TERMINAL_TYPES = new Set(['completed', 'failed', 'cancelled', 'error'])
 function isTerminal(event: TaskEvent): boolean {
@@ -69,16 +86,32 @@ export class BackendUnavailableError extends Error {
 export class HttpServiceAdapter implements ServiceAPI {
   private listeners = new Set<Listener>()
   private lastIndexStatus: IndexStatus | null = null
+  private readonly baseUrl: string
   private readonly transport: Transport
 
-  constructor(private readonly baseUrl = import.meta.env.VITE_API_BASE ?? DEFAULT_BASE) {
+  private readonly session: string
+
+  constructor(baseUrl?: string) {
+    const boot = readBackendBootstrap()
+    // ⚠️ 运行时 svl_port 优先于调用方传入的 base（resolveService 会把构建期
+    // VITE_API_BASE 当 base 传进来；打包态后端是随机端口，构建期值赢就会让
+    // 所有直连 URL——<video src>/WS——指向 8765。2026-09-28 打包验收实测缺陷）。
+    const port = typeof location === 'undefined' ? null : new URLSearchParams(location.search).get('svl_port')
+    this.baseUrl = (port && /^\d+$/.test(port)) ? boot.baseUrl : (baseUrl ?? boot.baseUrl)
+    this.session = boot.session
     // Electron -> bridge (via main process, bypasses CORS); otherwise direct fetch.
     this.transport = createTransport(this.baseUrl)
   }
 
+  /** 令牌走查询参数（后端 `X-Locator-Session` 头亦可），避免改动 transport 契约。 */
+  private withSession(path: string): string {
+    if (!this.session) return path
+    return `${path}${path.includes('?') ? '&' : '?'}${SESSION_QUERY}=${encodeURIComponent(this.session)}`
+  }
+
   // ------------------------------------------------------------------ transport
   private async request<T>(path: string, init?: RequestInit): Promise<T> {
-    const res = await this.transport.request(path, {
+    const res = await this.transport.request(this.withSession(path), {
       method: init?.method ?? 'GET',
       body: init?.body as string | undefined,
     })
@@ -88,7 +121,12 @@ export class HttpServiceAdapter implements ServiceAPI {
       )
     }
     if (!res.ok) {
-      // Surface the bridge's {error,detail} (or a bare HTTP status) as an Error.
+      // Surface the bridge's {code,message,detail}: 面向用户的话术 + 稳定错误码优先，
+      // 技术 detail 留在括号外供工程师读日志（T1-2）。
+      const body = (res.data ?? {}) as { code?: string; message?: string }
+      if (body.message) {
+        throw new Error(body.code ? `${body.message}（${body.code}）` : body.message)
+      }
       let detail = `HTTP ${res.status}`
       if (res.detail) detail = res.detail
       else if (res.error) detail = res.error
@@ -141,8 +179,29 @@ export class HttpServiceAdapter implements ServiceAPI {
     }
   }
 
+  // ------------------------------------------------------------------ media metadata
+  // GET /api/media/info -> ffprobe 元数据（真实时长/fps/分辨率，替代项目卡假数据）。
+  // 路径含中文/空格/反斜杠 → 必须 encodeURIComponent。
+  async getMediaInfo(path: string): Promise<MediaInfoJson> {
+    return this.request<MediaInfoJson>(
+      `/api/media/info?path=${encodeURIComponent(path)}`,
+      { method: 'GET' },
+    )
+  }
+
   async getIndexMeta(_originalPath: string): Promise<IndexStatus['indexMeta']> {
     return this.lastIndexStatus?.indexMeta ?? null
+  }
+
+  // 多原片合并：POST /api/source/merge {paths} -> {merged_path,mode,reused,duration_s}。
+  // 后端 <2 个文件直接 400（合并语义上 0/1 段无需合并），调用方须先自己挡。
+  // MediaError（缺视频轨/时长未知/合并失败）走后端全局 handler -> 500 + public_error，
+  // 由 request() 统一转成「对外话术（LOC 码）」。
+  async mergeSources(paths: string[]): Promise<SourceMergeJson> {
+    return this.request<SourceMergeJson>('/api/source/merge', {
+      method: 'POST',
+      body: JSON.stringify({ paths }),
+    })
   }
 
   async buildIndex(originalPath: string, opts?: BuildOpts): Promise<IndexStatus> {
@@ -199,14 +258,15 @@ export class HttpServiceAdapter implements ServiceAPI {
       materialWidth?: 'scene' | 'core'
       cancelToken?: CancelToken
     },
-  ): Promise<{ path: string }> {
+  ): Promise<{ path: string; warnings?: string[] }> {
     // The bridge's /api/export exports its own session's latest results batch
     // (set by the preceding /api/results or the async task). format/置信门槛/
     // 输出目录随请求转发（Phase 22 反馈 ⑨：默认不含低置信，导出即最终工程）。
+    // warnings：后端导出前守卫产出的对外告警（如 LOC-2001 碎片告警），透传给 UI 展示。
     void _batch
     void opts?.filename
     void opts?.cancelToken
-    return this.request<{ path: string }>('/api/export', {
+    return this.request<{ path: string; warnings?: string[] }>('/api/export', {
       method: 'POST',
       body: JSON.stringify({
         output_dir: opts?.outDir ?? '',
@@ -240,7 +300,7 @@ export class HttpServiceAdapter implements ServiceAPI {
   }
 
   async downloadLogsArchive(): Promise<void> {
-    const res = await fetch(`${this.baseUrl}/api/logs/archive`)
+    const res = await fetch(this.withSession(`${this.baseUrl}/api/logs/archive`))
     if (!res.ok) throw new BackendUnavailableError(`logs archive failed: ${res.status}`)
     const blob = await res.blob()
     const url = URL.createObjectURL(blob)
@@ -251,37 +311,67 @@ export class HttpServiceAdapter implements ServiceAPI {
     URL.revokeObjectURL(url)
   }
 
-  async loadResults(_path: string): Promise<ResultBatchJson> {
-    // The bridge exposes no GET /api/results/load endpoint.
-    throw new BackendUnavailableError('loadResults is not supported by the current API')
+  async loadResults(path: string): Promise<ResultBatchJson> {
+    // POST /api/results/load -> 读回已导出的结果批（重启后恢复会话与手工修正）
+    return this.request<ResultBatchJson>('/api/results/load', {
+      method: 'POST',
+      body: JSON.stringify({ path }),
+    })
   }
 
   // ------------------------------------------------------------------ video preview
   // POST /api/preview -> { path, duration }; the playable URL is the media route
   // that serves the extracted clip (Starlette Range -> HTML5 video seeking works).
+  // ⚠️ 这两个 URL 直接进 <video src>（无法带请求头），必须把会话令牌拼进 query，
+  // 否则发行通道门禁（/api/preview/* 非放行清单）会 401 → MEDIA_ERR_SRC_NOT_SUPPORTED
+  //（2026-09-28 打包验收实测发现的真实缺陷）。
   async previewResult(originalPath: string, start: number, end: number): Promise<string> {
     const res = await this.request<{ path: string; duration: number }>('/api/preview', {
       method: 'POST',
       body: JSON.stringify({ original_path: originalPath, start, end }),
     })
     const name = res.path.split(/[\\/]/).pop() ?? ''
-    return `${this.baseUrl}/api/preview/media/${encodeURIComponent(name)}`
+    return this.withSession(`${this.baseUrl}/api/preview/media/${encodeURIComponent(name)}`)
   }
 
   getEditedVideoUrl(): string {
-    return `${this.baseUrl}/api/preview/edited`
+    return this.withSession(`${this.baseUrl}/api/preview/edited`)
   }
 
   // ------------------------------------------------------------------ async tasks
-  async startAnalyzeTask(editedPath: string, originalPath: string): Promise<{ task_id: string }> {
+  // originalPaths ≥2（多原片未合并）时后端 worker 先合并再定位；此时 original_path 留空，
+  // 由 worker 把合并产物回写任务（桥层 routes/tasks.py 同口径）。
+  async startAnalyzeTask(
+    editedPath: string,
+    originalPath: string,
+    originalPaths?: string[],
+  ): Promise<{ task_id: string }> {
+    const sources = (originalPaths ?? []).map((p) => p.trim()).filter(Boolean)
+    const body =
+      sources.length > 1
+        ? { edited_path: editedPath, original_path: '', original_paths: sources }
+        : { edited_path: editedPath, original_path: originalPath }
     return this.request<{ task_id: string }>('/api/tasks/analyze', {
       method: 'POST',
-      body: JSON.stringify({ edited_path: editedPath, original_path: originalPath }),
+      body: JSON.stringify(body),
     })
   }
 
-  async getTask(taskId: string): Promise<TaskJson> {
-    return this.request<TaskJson>(`/api/tasks/${encodeURIComponent(taskId)}`, { method: 'GET' })
+  // 成片渲染任务（POST /api/tasks/render，2026-09-29 续30）。结果批由后端取会话当前批，
+  // 不在请求体里传；策略参数缺省 = 用后端 config.export/render 的默认值。
+  async startRenderTask(opts?: RenderOpts): Promise<{ task_id: string }> {
+    return this.request<{ task_id: string }>('/api/tasks/render', {
+      method: 'POST',
+      body: JSON.stringify({
+        output_dir: opts?.outDir ?? '',
+        min_confidence: opts?.minConfidence ?? null,
+        low_policy: opts?.lowPolicy ?? null,
+        snap_scenes: opts?.snapScenes ?? null,
+      }),
+    })
+  }
+
+  async getTask(taskId: string): Promise<TaskJson> {    return this.request<TaskJson>(`/api/tasks/${encodeURIComponent(taskId)}`, { method: 'GET' })
   }
 
   async cancelTask(taskId: string): Promise<void> {

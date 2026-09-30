@@ -15,5 +15,8 @@ physically isolated from the research codebase.
 from ._runner import MediaError, resolve_binaries
 from .ffmpeg_io import FFmpegIO
 from .ffprobe import VideoMetadata
+from .source_merge import MergePlan, SourceVideoMerger
+from .timeline_render import RenderPlan, TimelineMovieRenderer
 
-__all__ = ["FFmpegIO", "VideoMetadata", "MediaError", "resolve_binaries"]
+__all__ = ["FFmpegIO", "VideoMetadata", "MediaError", "resolve_binaries",
+           "MergePlan", "SourceVideoMerger", "RenderPlan", "TimelineMovieRenderer"]

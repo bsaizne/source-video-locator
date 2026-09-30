@@ -50,6 +50,32 @@ async function main(): Promise<void> {
   const { path } = await svc.exportResults(batch, { filename: 'export' })
   assert(path.endsWith('.results.json'), 'export path')
 
+  // 多原片合并（POST /api/source/merge 同契约）：<2 拒绝、≥2 返回 merged_path/mode/reused
+  let tooFew = false
+  try {
+    await svc.mergeSources(['a.mkv'])
+  } catch {
+    tooFew = true
+  }
+  assert(tooFew, 'mergeSources rejects <2 sources')
+  const merged = await svc.mergeSources(['a.mkv', 'b.mkv'])
+  assert(typeof merged.merged_path === 'string' && merged.merged_path.length > 0, 'merge.merged_path')
+  assert(['copy', 'transcode', 'passthrough'].includes(merged.mode), 'merge.mode enum')
+  assert(typeof merged.reused === 'boolean', 'merge.reused boolean')
+  const task = await svc.startAnalyzeTask('clip.mp4', '', ['a.mkv', 'b.mkv'])
+  assert(typeof task.task_id === 'string', 'startAnalyzeTask with original_paths')
+
+  // 成片渲染任务（POST /api/tasks/render 同契约）：kind=render + 完成即带产物信息
+  const render = await svc.startRenderTask({ outDir: 'D:/out', minConfidence: 'MEDIUM' })
+  assert(typeof render.task_id === 'string', 'startRenderTask returns task_id')
+  const renderTask = await svc.getTask(render.task_id)
+  assert(renderTask.kind === 'render', 'render task kind')
+  assert(renderTask.status === 'completed', 'mock render task completes')
+  const rr = renderTask.result as { movie_path: string; mode: string; total_frames: number }
+  assert(typeof rr.movie_path === 'string' && rr.movie_path.length > 0, 'render.movie_path')
+  assert(['copy', 'transcode', 'reused'].includes(rr.mode), 'render.mode enum')
+  assert(rr.total_frames > 0, 'render.total_frames')
+
   // Progress stages observed across the locate flow
   const seen = new Set(stages)
   assert(seen.has('INDEX_BUILD'), 'saw INDEX_BUILD')

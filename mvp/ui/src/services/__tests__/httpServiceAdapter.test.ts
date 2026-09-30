@@ -3,7 +3,7 @@
 // needed. Verifies the adapter drives the real FastAPI endpoints and preserves
 // the flattened ResultBatch confidence contract.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { HttpServiceAdapter, BackendUnavailableError } from '../HttpServiceAdapter'
+import { HttpServiceAdapter, BackendUnavailableError, readBackendBootstrap } from '../HttpServiceAdapter'
 import type { ResultBatchJson } from '../types'
 
 // Minimal Response-like object (avoids depending on a global Response in Node).
@@ -97,6 +97,37 @@ describe('HttpServiceAdapter', () => {
     expect(st.validation.reason).toBe('source video missing')
   })
 
+  it('getMediaInfo GETs /api/media/info with encoded absolute path', async () => {
+    const media = {
+      path: 'D:\\电影 2014\\movie.mkv', duration: 7667.9, fps: 23.976,
+      width: 1920, height: 804, size_bytes: 123456789,
+      format_name: 'matroska,webm', video_codec: 'hevc', has_audio: true,
+    }
+    const fetchMock = vi.fn().mockResolvedValue(res(media))
+    vi.stubGlobal('fetch', fetchMock)
+    const info = await adapter.getMediaInfo('D:\\电影 2014\\movie.mkv')
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe(`${BASE}/api/media/info?path=${encodeURIComponent('D:\\电影 2014\\movie.mkv')}`)
+    expect(init.method).toBe('GET')
+    expect(info.duration).toBe(7667.9)
+    expect(info.fps).toBe(23.976)
+    expect(info.size_bytes).toBe(123456789)
+  })
+
+  it('getMediaInfo 400 invalid_path surfaces the backend detail', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      res({ error: 'invalid_path', detail: 'path must be absolute' }, false, 400),
+    ))
+    await expect(adapter.getMediaInfo('movie.mkv')).rejects.toThrow('path must be absolute')
+  })
+
+  it('getMediaInfo 500 shows user message with stable LOC code', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
+      res({ code: 'LOC-1000', message: '视频读取/剪辑处理失败，请确认文件未损坏、未被其它程序占用后重试。', error: 'MediaError', detail: 'ffprobe boom' }, false, 500),
+    ))
+    await expect(adapter.getMediaInfo('D:/broken.mkv')).rejects.toThrow(/视频读取\/剪辑处理失败.*LOC-1000/)
+  })
+
   it('locate POSTs /api/results and keeps confidence flattened', async () => {
     const batch: ResultBatchJson = {
       schema_version: 1,
@@ -167,6 +198,53 @@ describe('HttpServiceAdapter', () => {
     expect(path).toBe('D:/export/result.results.json')
   })
 
+  it('exportResults passes backend warnings through', async () => {
+    // LOC-2001 碎片告警（后端已产出）：适配器必须原样带给结果页，不得吞掉。
+    const fetchMock = vi.fn().mockResolvedValue(
+      res({ path: 'D:/export/x.loc.edl', warnings: ['LOC-2001 导出清单中有 2 个不足 0.15 秒的极短片段'] }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const out = await adapter.exportResults(
+      { schema_version: 1, original_video: null, edited_video: null, results: [] },
+      { outDir: 'D:/export', format: 'edl' },
+    )
+    expect(out.warnings).toEqual(['LOC-2001 导出清单中有 2 个不足 0.15 秒的极短片段'])
+  })
+
+  it('exportResults forwards user-chosen options instead of hardcoded defaults', async () => {
+    // A4 回归守护：门槛/低置信处理/吸附/片段宽度曾被子页面写死。
+    const fetchMock = vi.fn().mockResolvedValue(res({ path: 'D:/export/x.xml' }))
+    vi.stubGlobal('fetch', fetchMock)
+    await adapter.exportResults(
+      { schema_version: 1, original_video: null, edited_video: null, results: [] },
+      { outDir: 'D:/export', format: 'fcp7_xml', minConfidence: 'HIGH',
+        lowPolicy: 'backup', snapScenes: false, materialWidth: 'core' },
+    )
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      output_dir: 'D:/export',
+      format: 'fcp7_xml',
+      min_confidence: 'HIGH',
+      low_policy: 'backup',
+      snap_scenes: false,
+      material_width: 'core',
+    })
+  })
+
+  it('loadResults POSTs /api/results/load with the batch path', async () => {
+    // A3：读回已导出结果批（此前无端点，直接抛 BackendUnavailableError）。
+    const batch: ResultBatchJson = {
+      schema_version: 1, original_video: 'D:/movie.mkv', edited_video: 'D:/clip.mp4',
+      results: [],
+    }
+    const fetchMock = vi.fn().mockResolvedValue(res(batch))
+    vi.stubGlobal('fetch', fetchMock)
+    const out = await adapter.loadResults('D:/export/clip.results.json')
+    const [url, init] = fetchMock.mock.calls[0]
+    expect(url).toBe(`${BASE}/api/results/load`)
+    expect(JSON.parse(init.body)).toEqual({ path: 'D:/export/clip.results.json' })
+    expect(out.original_video).toBe('D:/movie.mkv')
+  })
+
   it('network failure throws BackendUnavailableError', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('network down')))
     await expect(adapter.buildIndex('x')).rejects.toBeInstanceOf(BackendUnavailableError)
@@ -185,8 +263,16 @@ describe('HttpServiceAdapter', () => {
     expect(status.indexMeta).toBeNull()
   })
 
-  it('loadResults is unsupported', async () => {
-    await expect(adapter.loadResults('x')).rejects.toBeInstanceOf(BackendUnavailableError)
+  it('non-2xx with {code,message} surfaces the user wording plus the stable code', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(res(
+      { error: 'load_failed', code: 'LOC-1103',
+        message: '结果文件无法读取，请重新运行分析或改选其它结果文件。',
+        detail: 'FileNotFoundError' },
+      false, 400,
+    )))
+    await expect(adapter.loadResults('D:/nope.results.json')).rejects.toThrow(
+      '结果文件无法读取，请重新运行分析或改选其它结果文件。（LOC-1103）',
+    )
   })
 
   it('previewResult POSTs /api/preview and returns the media URL', async () => {
@@ -205,5 +291,70 @@ describe('HttpServiceAdapter', () => {
 
   it('getEditedVideoUrl returns the session edited-video route', () => {
     expect(adapter.getEditedVideoUrl()).toBe(`${BASE}/api/preview/edited`)
+  })
+})
+
+describe('本机门禁 bootstrap (T1-3)', () => {
+  const saved = (globalThis as { location?: unknown }).location
+  afterEach(() => {
+    Object.defineProperty(globalThis, 'location', { value: saved, configurable: true, writable: true })
+    vi.unstubAllGlobals()
+  })
+
+  function setLocation(search: string) {
+    Object.defineProperty(globalThis, 'location', { value: { search }, configurable: true, writable: true })
+  }
+
+  it('reads svl_port + svl_session from the page query', () => {
+    setLocation('?svl_port=9111&svl_session=tok_123')
+    expect(readBackendBootstrap()).toEqual({ baseUrl: 'http://127.0.0.1:9111', session: 'tok_123' })
+  })
+
+  it('运行时 svl_port 优先于构建期 VITE_API_BASE（打包随机端口回归，2026-09-28 验收）', () => {
+    vi.stubEnv('VITE_API_BASE', 'http://127.0.0.1:8765')
+    setLocation('?svl_port=9111')
+    expect(readBackendBootstrap().baseUrl).toBe('http://127.0.0.1:9111')
+    // 关键回归：resolveService 会把构建期 base 作为构造参数传入，运行时端口仍必须赢。
+    const a = new HttpServiceAdapter('http://127.0.0.1:8765')
+    expect(a.getEditedVideoUrl()).toContain('http://127.0.0.1:9111')
+    vi.unstubAllEnvs()
+  })
+
+  it('ignores a non-numeric port and falls back to 8765', () => {
+    setLocation('?svl_port=abc')
+    expect(readBackendBootstrap().baseUrl).toBe('http://127.0.0.1:8765')
+  })
+
+  it('appends svl_session to gated requests, not to the exempt health probe', async () => {
+    setLocation('?svl_port=9111&svl_session=tok/123')
+    const a = new HttpServiceAdapter()
+    const healthMock = vi.fn().mockResolvedValue(res({ status: 'ok', version: '0.1' }))
+    vi.stubGlobal('fetch', healthMock)
+    await expect(a.checkHealth()).resolves.toBe('CONNECTED')
+    expect(healthMock.mock.calls[0][0]).toBe('http://127.0.0.1:9111/api/health')
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(res({ status: 'completed' })))
+    await a.buildIndex('D:/movie/source.mkv')
+    expect(vi.mocked(fetch).mock.calls[0][0]).toBe(
+      'http://127.0.0.1:9111/api/index?svl_session=tok%2F123')
+  })
+
+  it('sends no session param when the token is absent (browser dev)', async () => {
+    setLocation('')
+    const a = new HttpServiceAdapter(BASE)
+    const fetchMock = vi.fn().mockResolvedValue(res({ status: 'ok', version: '0.1' }))
+    vi.stubGlobal('fetch', fetchMock)
+    await a.checkHealth()
+    expect(fetchMock.mock.calls[0][0]).toBe(`${BASE}/api/health`)
+  })
+
+  it('媒体直链（<video src> 无法带头）必须把会话令牌拼进 query（打包验收实测缺陷回归）', async () => {
+    setLocation('?svl_port=9111&svl_session=tok_123')
+    const a = new HttpServiceAdapter()
+    expect(a.getEditedVideoUrl()).toBe(
+      'http://127.0.0.1:9111/api/preview/edited?svl_session=tok_123')
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(res({ path: 'D:/p/a1__0-5.mp4', duration: 5 })))
+    const url = await a.previewResult('D:/movie/source.mkv', 0, 5)
+    expect(url).toBe(
+      'http://127.0.0.1:9111/api/preview/media/a1__0-5.mp4?svl_session=tok_123')
   })
 })

@@ -16,12 +16,16 @@ class ProgressStage(str, Enum):
     """应用服务的显式进度阶段。"""
 
     INDEX_BUILD = "INDEX_BUILD"
+    MERGE_SOURCES = "MERGE_SOURCES"
     EDITED_FEATURE_EXTRACTION = "EDITED_FEATURE_EXTRACTION"
     SEGMENT_DETECTION = "SEGMENT_DETECTION"
     CANDIDATE_RETRIEVAL = "CANDIDATE_RETRIEVAL"
     LOCALIZATION = "LOCALIZATION"
     CONFIDENCE = "CONFIDENCE"
     EXPORT = "EXPORT"
+    # 成片渲染（2026-09-29 续30，竞品 video_renderer 移植）：只由显式渲染任务发出，
+    # 定位/文本工程导出链路永不产生该阶段。
+    RENDER_MOVIE = "RENDER_MOVIE"
 
 
 @dataclass(frozen=True)

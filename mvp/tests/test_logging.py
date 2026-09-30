@@ -15,7 +15,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))  # -> mvp/src
 
 from infrastructure.logging import (configure_logging, get_logger, get_session_id,
-                                    new_session_id, set_session_id)
+                                    new_session_id, redact_text, set_session_id)
 
 
 class _RootIsolateMixin:
@@ -113,6 +113,75 @@ class ConfigureFileTest(unittest.TestCase, _RootIsolateMixin):
                 self.assertIn(f"session={sid}", text)
             finally:
                 set_session_id("")  # clear context
+                self._restore(snap)
+
+
+class RedactionTest(unittest.TestCase, _RootIsolateMixin):
+    """T1-2：日志是售后唯一要发给外人的产物 ⇒ 绝对路径/URL/令牌必须落盘前打码。"""
+
+    def test_windows_path_keeps_only_basename(self):
+        out = redact_text(r"index failed opening D:\客户素材\2.mkv now")
+        self.assertIn("<PATH:2.mkv>", out)
+        self.assertNotIn("客户素材", out)
+
+    def test_trailing_punctuation_preserved(self):
+        self.assertEqual(redact_text("load C:/a/b.json)"), "load <PATH:b.json>)")
+
+    def test_posix_and_unc_paths(self):
+        self.assertIn("<PATH:movie.mp4>", redact_text("see /home/alex/movie.mp4"))
+        self.assertNotIn("/home/alex", redact_text("see /home/alex/movie.mp4"))
+        self.assertIn("<PATH:", redact_text(r"\\nas\share\clip.mov"))
+
+    def test_url_keeps_path_drops_query(self):
+        out = redact_text("license server https://api.example.com/v1/licenses/activate?k=secret")
+        self.assertIn("https://api.example.com/v1/licenses/activate?<REDACTED>", out)
+        self.assertNotIn("secret", out)
+
+    def test_file_url_reduced_to_basename(self):
+        self.assertIn("<PATH:a.mp4>", redact_text("src file:///D:/vid/a.mp4"))
+
+    def test_secret_query_params_masked(self):
+        out = redact_text("GET /api/preview?session=abc123&token=zzz tail")
+        self.assertNotIn("abc123", out)
+        self.assertNotIn("zzz", out)
+        self.assertIn("session=<REDACTED>", out)
+
+    def test_relative_paths_and_plain_text_untouched(self):
+        for s in ("index started video=test.mkv", "wrote work/x.json",
+                  "module=svl.file session=- ok", "batch 5/69 segs"):
+            self.assertEqual(redact_text(s), s)
+
+    def test_idempotent(self):
+        once = redact_text(r"open D:\a\b\c.npy")
+        self.assertEqual(redact_text(once), once)
+
+    def test_off_switch(self):
+        import os
+        old = os.environ.get("SVL_LOG_REDACTION")
+        os.environ["SVL_LOG_REDACTION"] = "off"
+        try:
+            self.assertEqual(redact_text(r"open D:\a\b.c"), r"open D:\a\b.c")
+        finally:
+            if old is None:
+                del os.environ["SVL_LOG_REDACTION"]
+            else:
+                os.environ["SVL_LOG_REDACTION"] = old
+
+    def test_traceback_is_redacted_too(self):
+        snap = self._snapshot()
+        with tempfile.TemporaryDirectory() as td:
+            try:
+                configure_logging(level=logging.INFO, log_dir=td)
+                try:
+                    open(r"D:\私密目录\不存在.mkv")
+                except OSError:
+                    get_logger("svl.tb").exception("read failed")
+                self._flush_files()
+                text = (Path(td) / "video_locator.log").read_text(encoding="utf-8")
+                self.assertIn("read failed", text)
+                self.assertNotIn("私密目录", text)
+                self.assertIn("<PATH:", text)
+            finally:
                 self._restore(snap)
 
 

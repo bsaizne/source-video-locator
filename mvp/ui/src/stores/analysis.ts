@@ -94,7 +94,7 @@ export const useAnalysisStore = defineStore('analysis', () => {
   async function pollTaskUntilDone(taskId: string): Promise<ResultBatchJson> {
     for (;;) {
       const t = await service.getTask(taskId)
-      if (t.status === 'completed') return t.result as ResultBatchJson
+      if (t.status === 'completed') return (t.result ?? null) as ResultBatchJson
       if (t.status === 'failed') throw new Error(t.error || '分析失败')
       if (t.status === 'cancelled') throw new Error('已取消')
       if (t.status === 'running' || t.status === 'pending') {
@@ -105,13 +105,13 @@ export const useAnalysisStore = defineStore('analysis', () => {
     }
   }
 
-  async function runLocate(edited: string, original: string) {
+  async function runLocate(edited: string, original: string, originalPaths?: string[]) {
     ensureSubscribed()
     running.value = true
     error.value = null
     idleSteps()
     try {
-      const { task_id } = await service.startAnalyzeTask(edited, original)
+      const { task_id } = await service.startAnalyzeTask(edited, original, originalPaths)
       activeTaskId.value = task_id
       const batch = await pollTaskUntilDone(task_id)
       steps.value = steps.value.map((s) => (s.status === 'error' ? s : { ...s, status: 'done' }))

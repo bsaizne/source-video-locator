@@ -40,14 +40,32 @@ class TaskStage(str, Enum):
     FINISHED = "finished"
 
 
+class TaskKind(str, Enum):
+    """任务种类。``analyze`` = 定位（默认，历史行为）；``render`` = 成片渲染
+    （2026-09-29 续30，竞品 video_renderer 移植；不进定位链路，独立任务）。"""
+
+    ANALYZE = "analyze"
+    RENDER = "render"
+
+
 @dataclass
 class Task:
-    """一次后台分析任务。``result`` 存 ``ResultBatch.to_dict()``（或 None）；``error`` 存
-    失败原因。所有状态变更经 ``*_set*`` 方法（锁内），并自动向订阅者广播对应帧。"""
+    """一次后台任务。``result`` 存 ``ResultBatch.to_dict()``（分析）或渲染信息 dict
+    （渲染）；``error`` 存失败原因。所有状态变更经 ``*_set*`` 方法（锁内），并自动向
+    订阅者广播对应帧。"""
 
     task_id: str = field(default_factory=lambda: str(uuid.uuid4()))
+    kind: TaskKind = TaskKind.ANALYZE
     edited_path: str = ""
     original_path: str = ""
+    # 多原片输入（2026-09-29 video.concat 移植）：≥2 时 worker 先合并再定位；
+    # 合并产物回写 original_path，下游（结果/导出/预览）仍单原片口径。
+    original_paths: list[str] = field(default_factory=list)
+    # 渲染任务参数（out_dir / 置信门槛 / 吸附），由 routes.tasks 传入、worker 消费。
+    render_params: dict = field(default_factory=dict)
+    # 渲染任务的目标结果批（内存对象，不参与序列化；worker 用它渲染，
+    # 避免"提交后到执行前又有新 locate → 渲染错批"的竞态）。
+    render_batch: object | None = field(default=None, repr=False, compare=False)
     status: TaskStatus = TaskStatus.PENDING
     stage: TaskStage = TaskStage.IDLE
     progress: int = 0
@@ -182,6 +200,7 @@ class Task:
         with self._lock:
             return {
                 "task_id": self.task_id,
+                "kind": self.kind.value,
                 "status": self.status.value,
                 "stage": self.stage.value,
                 "progress": self.progress,

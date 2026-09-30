@@ -26,6 +26,9 @@ __all__ = ["PreviewError", "PreviewResult", "PreviewService"]
 class PreviewError(LocatorError):
     """预览抽取失败（文件缺失 / 时间非法 / ffmpeg 失败）。桥映射为 HTTP 500。"""
 
+    code = "LOC-1109"
+    user_message = "预览片段生成失败，可直接在剪辑软件里按给出的时间码核对。"
+
 
 @dataclass(frozen=True)
 class PreviewResult:

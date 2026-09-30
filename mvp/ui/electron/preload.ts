@@ -20,6 +20,8 @@ const api = {
   openPath: (target: string) => ipcRenderer.invoke('app:openPath', target),
   /** Native file picker for a video — returns the absolute path, or null if cancelled. */
   openFile: () => ipcRenderer.invoke('app:openFile'),
+  /** Multi-select picker for 多原片（合并入库）— absolute paths in pick order, [] if cancelled. */
+  openFiles: () => ipcRenderer.invoke('app:openFiles'),
   openDirectory: () => ipcRenderer.invoke('app:openDirectory'),
   /** Absolute path of a File dropped into the renderer (for video import). */
   getPathForFile: (file: File) => webUtils.getPathForFile(file),

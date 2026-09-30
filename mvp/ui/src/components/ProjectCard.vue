@@ -2,11 +2,25 @@
 import { computed } from 'vue'
 import type { Project } from '@/stores/projects'
 import { formatDuration } from '@/utils/format'
+import { basename } from '@/utils/path'
 import StatusBadge from './StatusBadge.vue'
 import BaseIcon from './ui/BaseIcon.vue'
 
 const props = defineProps<{ project: Project }>()
 const emit = defineEmits<{ (e: 'open'): void }>()
+
+// sourceVideo 现在存绝对路径；卡片只显示文件名，未选文件时给占位文案。
+// 多原片项目（2026-09-29 续27）：已合并显示产物名+段数，未合并显示「N 段原片」。
+const sourceLabel = computed(() => {
+  const p = props.project
+  const lib = p.sourceVideos ?? []
+  if (p.merge) return `${basename(p.merge.mergedPath) || p.merge.mergedPath}（合并 ${p.merge.sources.length} 段）`
+  if (lib.length >= 2) return `${lib.length} 段原片（待合并）`
+  return basename(p.sourceVideo) || '未选择源片'
+})
+const durationLabel = computed(() =>
+  props.project.sourceDuration > 0 ? formatDuration(props.project.sourceDuration) : '—',
+)
 
 const statusTone = computed(() => {
   switch (props.project.status) {
@@ -31,8 +45,8 @@ const STATUS_LABEL: Record<string, string> = {
       <StatusBadge :label="STATUS_LABEL[project.status] ?? project.status" :tone="statusTone" />
     </div>
     <div class="pcard__name">{{ project.name }}</div>
-    <div class="pcard__meta mono">{{ project.sourceVideo }}</div>
-    <div class="pcard__meta"><span class="faint">时长</span> {{ formatDuration(project.sourceDuration) }}</div>
+    <div class="pcard__meta mono">{{ sourceLabel }}</div>
+    <div class="pcard__meta"><span class="faint">时长</span> {{ durationLabel }}</div>
     <div class="pcard__meta"><span class="faint">剪辑</span> {{ project.editedVideos.length ? project.editedVideos.join(', ') : '—' }}</div>
     <div class="pcard__foot">
       <span class="faint">上次分析</span>

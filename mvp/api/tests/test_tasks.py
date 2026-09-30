@@ -126,7 +126,9 @@ class WorkerExceptionTest(TaskApiTestBase):
         self.fake.mode = "fail"
         task = self.tm.submit_analyze("D:/e.mp4", "D:/o.mkv")
         self.assertEqual(task.status, TaskStatus.FAILED)
-        self.assertIn("boom", task.error)
+        # 续19-T1-2 口径：task.error 直接进前端错误条幅 → 对外话术 + 稳定码（技术串走日志）。
+        self.assertIn("LOC-1000", task.error)
+        self.assertIn("支持人员", task.error)
         self.assertIsNone(task.result)
 
 

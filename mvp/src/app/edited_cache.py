@@ -116,13 +116,60 @@ class EditedCache:
         out[f"d{dkey}_t"] = np.asarray(times, dtype=np.float64)
         self._atomic_save(p, out)
 
+    # ---- dense quality（fast_global 腿 c 质量权重专用通道, 2026-09-29）----
+    # 原始三元组 (n,3) float32: 亮度/对比/清晰度（归一化在应用层按全 ED 密帧做）。
+    # 与 dense 特征同文件不同键前缀(q{dkey}); 旧缓存无该键 → load 返回 None(应用层回退均匀权)。
+
+    def load_dense_quality(self, key: str, dkey: str) -> np.ndarray | None:
+        p = self._dense_path(key)
+        if not p.exists():
+            return None
+        try:
+            with np.load(p, allow_pickle=False) as z:
+                if f"q{dkey}" not in z.files:
+                    return None
+                q = np.asarray(z[f"q{dkey}"], dtype=np.float32)
+                return q if q.ndim == 2 and q.shape[0] > 0 else None
+        except Exception:
+            return None
+
+    def save_dense_quality(self, key: str, dkey: str, quality: np.ndarray) -> None:
+        p = self._dense_path(key)
+        out = {}
+        if p.exists():
+            try:
+                with np.load(p, allow_pickle=False) as z:
+                    out = {k: z[k] for k in z.files}
+            except Exception:
+                out = {}
+        out["schema"] = np.array(_SCHEMA)
+        out[f"q{dkey}"] = np.asarray(quality, dtype=np.float32)
+        self._atomic_save(p, out)
+
+    @staticmethod
+    def _fsync_dir(path: Path) -> None:
+        """尽力 fsync 目录项（掉电时避免 rename 后留空文件）。Windows 不支持, 静默跳过。"""
+        try:
+            fd = os.open(str(path.parent), os.O_RDONLY)
+        except OSError:
+            return
+        try:
+            os.fsync(fd)
+        except OSError:
+            pass
+        finally:
+            os.close(fd)
+
     @staticmethod
     def _atomic_save(path: Path, arrays: dict) -> None:
         tmp = path.with_suffix(f".tmp{os.getpid()}")
         try:
             with open(tmp, "wb") as f:
                 np.savez(f, **arrays)
+                f.flush()
+                os.fsync(f.fileno())
             os.replace(tmp, path)
+            EditedCache._fsync_dir(path)
         except Exception:
             try:
                 tmp.unlink(missing_ok=True)

@@ -13,7 +13,8 @@
 - ``scene_feats.npy``：[S,384] float32 L2 场景指纹（场景内帧均值），与 scenes 行对齐。
 
 失效判定（§4）：size/duration/model/dim/sampling_fps/feature_version 快检 +
-内容 hash 硬检。任一不满足 -> INVALID；无索引 -> MISSING。失效旧索引入
+内容 hash 硬检 + **预处理指纹**（``extractor.preprocess_sha``，INDEX_SPEC §4 判据的实装）。
+任一不满足 -> INVALID；无索引 -> MISSING。失效旧索引入
 ``.stale`` 隔离命名空间（§4），不静默覆盖。
 """
 from __future__ import annotations
@@ -56,6 +57,9 @@ EVENT_TABLE_VERSION = "evt1"
 class FeatureStoreError(LocatorError):
     """FeatureStore 操作失败（索引缺失/损坏/无法读取等）。"""
 
+    code = "LOC-1103"   # 与 IndexError 同一对外码族：客户侧都是"索引问题"
+    user_message = "原片索引不可用，请重新建立该原片的索引后再试。"
+
 
 def _feature_version(fps: float) -> str:
     # +scn1：索引含场景表（scenes.npy + scene_feats.npy）; +evt1：含事件表
@@ -64,6 +68,25 @@ def _feature_version(fps: float) -> str:
     # embed 数值口径的参数（如 batch）必须 bump 此版本号并全程（索引+查询）统一。
     return (f"handwritten_vits14_cls_384d@{fps:g}_l2"
             f"+{SCENE_TABLE_VERSION}+{EVENT_TABLE_VERSION}")
+
+
+_PROBE_SEED = 20260928          # 固定输入 -> 固定指纹（改种子等于换口径，会让全部索引失效）
+
+
+def preprocess_probe_bytes() -> bytes:
+    """固定合成帧跑一遍**真实** ``_imagenet_preprocess``，取其输出张量字节当指纹。
+
+    为什么测而不声明：``preprocess_sha`` 若只是把 resize/mean/std 抄成字符串，抄的人一旦
+    漏改就成了假保险。直接对真实函数取行为指纹，则 resize 尺寸、均值/方差、插值方式、
+    归一化顺序任何一处改动都会改变摘要（STATE 里「518→384」那类性能杠杆正是此型改动）。
+    不碰标注 frozen 的模型文件，成本 = 一次 60x80 帧的 numpy 变换（微秒级）。
+    """
+    from device.dinov2_model import _imagenet_preprocess
+
+    rng = np.random.RandomState(_PROBE_SEED)
+    frame = rng.randint(0, 256, (60, 80, 3), dtype=np.uint8)
+    t = _imagenet_preprocess(frame)
+    return t.detach().cpu().numpy().astype(np.float32).tobytes()
 
 
 class FeatureStore:
@@ -125,6 +148,9 @@ class FeatureStore:
             feature_dim=int(feats.shape[1]),
             backend=backend.device_name(),
             created_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            extractor=ExtractorConfig(
+                normalize="l2", resize="518x518", mean_std="imagenet",
+                preprocess_sha=self.preprocess_sha(int(feats.shape[1]))),
         )
         (d / "index.json").write_text(
             json.dumps(meta.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8")
@@ -265,6 +291,31 @@ class FeatureStore:
     # ------------------------------------------------------------------ #
     # Validate / invalidate
     # ------------------------------------------------------------------ #
+    def preprocess_sha(self, feature_dim: int = 384) -> str:
+        """当前预处理口径的摘要（INDEX_SPEC §4 的 ``extractor.preprocess_sha`` 判据）。
+
+        覆盖：feature_version + sampling_fps + feature_dim + normalize 标记 + **真实预处理
+        行为指纹**。注意 L2 归一发生在 ``backend.embed_frames`` 而非 ``_imagenet_preprocess``，
+        故 normalize 一项仍是声明式标记（诚实边界：换后端若改了归一顺序，靠 feature_version
+        bump 兜底，本摘要测不到）。
+        """
+        h = hashlib.sha256()
+        h.update(json.dumps({"fv": self.feature_version, "fps": self.sampling_fps,
+                             "dim": int(feature_dim), "normalize": "l2"},
+                            sort_keys=True, ensure_ascii=False).encode("utf-8"))
+        h.update(preprocess_probe_bytes())
+        return h.hexdigest()[:16]
+
+    def _backfill_preprocess_sha(self, d: Path, meta: IndexMeta, sha: str) -> None:
+        """历史索引（该字段为空）在快检全通过后回填一次摘要，避免为补保险而全量重建。
+
+        回填前提是 size/duration/model/dim/fps/feature_version/内容 hash 均已核对通过，
+        即这些维度上确实没有漂移；写回后该索引才纳入预处理指纹保护。
+        """
+        meta.extractor = ExtractorConfig(**{**meta.extractor.to_dict(), "preprocess_sha": sha})
+        (d / "index.json").write_text(json.dumps(meta.to_dict(), indent=2, ensure_ascii=False),
+                                      encoding="utf-8")
+
     def validate_index(self, original_video: str | Path) -> IndexValidation:
         video = Path(original_video)
         d = self.index_dir(video)
@@ -300,6 +351,15 @@ class FeatureStore:
         cur_hash = "sha256:" + self.ffmpeg.hash_file(video)
         if cur_hash != meta.file_hash:
             return IndexValidation(IndexValidationStatus.INVALID, "content hash changed")
+
+        # 预处理指纹（INDEX_SPEC §4）：空值 = 该字段实装前建的历史索引 -> 回填后放行（不重建）
+        sha = self.preprocess_sha(meta.feature_dim)
+        stored = meta.extractor.preprocess_sha
+        if not stored:
+            self._backfill_preprocess_sha(d, meta, sha)
+        elif stored != sha:
+            return IndexValidation(IndexValidationStatus.INVALID,
+                                   f"preprocess changed ({stored} -> {sha})")
         return IndexValidation(IndexValidationStatus.VALID)
 
     def invalidate_index(self, original_video: str | Path) -> None:

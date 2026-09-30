@@ -9,9 +9,11 @@ Run with the venv python:
 from __future__ import annotations
 
 import logging
+import os
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from types import SimpleNamespace
@@ -41,6 +43,7 @@ class FakeService:
         self.analyze_calls: list[str] = []
         self.locate_calls: list[tuple[str, str]] = []
         self.export_calls: list[tuple | None] = []
+        self.load_calls: list[str] = []
 
     def build_original_index(self, video_path, *, on_progress=None, cancel_token=None):
         if self.fail_build:
@@ -82,6 +85,9 @@ class FakeService:
         return getattr(self, "_last_batch", None)
 
     def load_results(self, path):
+        if getattr(self, "fail_load", False):
+            raise FileNotFoundError(path)
+        self.load_calls.append(str(path))
         return _sample_batch()
 
 
@@ -213,6 +219,35 @@ class ResultsTest(ApiTestBase):
         self.assertEqual(r.json()["error"], "no_original")
 
 
+class LoadResultsTest(ApiTestBase):
+    """A3：读回已导出结果批，恢复会话（后端 load_results 早就有，此前缺 HTTP 端点）。"""
+
+    def test_load_restores_batch_and_context(self):
+        r = self._client.post("/api/results/load",
+                              json={"path": "D:/exports/trailer.results.json"})
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertEqual(body["schema_version"], 1)
+        self.assertEqual(body["results"][0]["confidence"], "HIGH")
+        self.assertEqual(self.fake.load_calls, ["D:/exports/trailer.results.json"])
+        self.assertIsNotNone(self.context.current_batch)
+        self.assertEqual(self.context.current_original, Path("Interstellar (2014).mkv"))
+
+    def test_load_then_export_uses_restored_batch(self):
+        self._client.post("/api/results/load", json={"path": "D:/exports/x.results.json"})
+        r = self._client.post("/api/export", json={"output_dir": "D:/exports", "format": "edl"})
+        self.assertEqual(r.status_code, 200)
+        self.assertIn("path", r.json())
+
+    def test_load_missing_file_returns_400_not_500(self):
+        self.fake.fail_load = True
+        r = self._client.post("/api/results/load", json={"path": "D:/nope.results.json"})
+        self.assertEqual(r.status_code, 400)
+        body = r.json()
+        self.assertEqual(body["error"], "load_failed")
+        self.assertIn("FileNotFoundError", body["detail"])
+
+
 class ExportTest(ApiTestBase):
     def test_export_without_batch_returns_400(self):
         r = self._client.post("/api/export", json={"output_dir": "D:/export"})
@@ -226,6 +261,16 @@ class ExportTest(ApiTestBase):
         self.assertEqual(r.status_code, 200)
         self.assertTrue(str(r.json()["path"]).endswith("result.results.json"))
         self.assertEqual(self.fake.export_calls[0][0], "D:/export")
+
+    def test_export_passes_service_warnings_through(self):
+        # 续19 碎片告警（LOC-2001）由 service.last_export_warnings 产出，端点原样透传给 UI。
+        self._client.post("/api/results",
+                          json={"edited_path": "D:/clip.mp4", "original_path": "D:/movie/source.mkv"})
+        self.fake.last_export_warnings = ["LOC-2001 导出清单中有 2 个不足 0.15 秒的极短片段"]
+        r = self._client.post("/api/export", json={"output_dir": "D:/export"})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["warnings"],
+                         ["LOC-2001 导出清单中有 2 个不足 0.15 秒的极短片段"])
 
     def test_export_edl_format_routes_to_export_project(self):
         self._client.post("/api/results",
@@ -302,6 +347,62 @@ class SessionLogTest(ApiTestBase):
             finally:
                 set_session_id("")  # 清理上下文
                 self._restore(snap)
+
+
+class SessionGateTest(unittest.TestCase):
+    """T1-3 本机门禁：令牌必须校验，健康探针放行，发行通道缺令牌拒启。"""
+
+    TOKEN = "tok_" + "a" * 40
+
+    def _client(self, **env):
+        base = {"SVL_BUILD_CHANNEL": "dev", "SVL_SESSION_TOKEN": ""}
+        base.update(env)
+        patcher = mock.patch.dict(os.environ, base, clear=False)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        app = create_app()
+        ctx = AppContext(service=FakeService())
+        app.dependency_overrides[get_context] = lambda: ctx
+        client = TestClient(app)
+        client.__enter__()
+        self.addCleanup(lambda: client.__exit__(None, None, None))
+        return client
+
+    def test_no_token_configured_means_open(self):
+        c = self._client()
+        self.assertEqual(c.get("/api/health").status_code, 200)
+        self.assertEqual(c.post("/api/results", json={"edited_path": "D:/clip.mp4", "original_path": "D:/movie/source.mkv"}).status_code, 200)
+
+    def test_gate_rejects_missing_and_wrong_token(self):
+        c = self._client(SVL_SESSION_TOKEN=self.TOKEN)
+        self.assertEqual(c.get("/api/health").status_code, 200)      # 探针放行
+        r = c.post("/api/results", json={})
+        self.assertEqual(r.status_code, 401)
+        self.assertEqual(r.json()["code"], "LOC-1201")
+        r2 = c.post("/api/results", json={"edited_path": "D:/clip.mp4", "original_path": "D:/movie/source.mkv"},
+                    headers={"X-Locator-Session": "wrong"})
+        self.assertEqual(r2.status_code, 401)
+
+    def test_header_and_query_both_accepted(self):
+        c = self._client(SVL_SESSION_TOKEN=self.TOKEN)
+        self.assertEqual(c.post("/api/results", json={"edited_path": "D:/clip.mp4", "original_path": "D:/movie/source.mkv"},
+                                headers={"X-Locator-Session": self.TOKEN}).status_code, 200)
+        self.assertEqual(c.post("/api/results?svl_session=%s" % self.TOKEN,
+                                json={"edited_path": "D:/clip.mp4", "original_path": "D:/movie/source.mkv"}).status_code, 200)
+
+    def test_release_channel_without_token_refuses_to_start(self):
+        from infrastructure.errors import ConfigError
+        with mock.patch.dict(os.environ, {"SVL_BUILD_CHANNEL": "release",
+                                          "SVL_SESSION_TOKEN": ""}, clear=False):
+            with self.assertRaises(ConfigError):
+                create_app()
+
+    def test_export_response_carries_warnings_field(self):
+        c = self._client()
+        c.post("/api/results", json={"edited_path": "D:/clip.mp4", "original_path": "D:/movie/source.mkv"})
+        r = c.post("/api/export", json={"format": "json", "output_dir": "D:/export"})
+        self.assertEqual(r.status_code, 200)
+        self.assertIsInstance(r.json().get("warnings"), list)
 
 
 if __name__ == "__main__":

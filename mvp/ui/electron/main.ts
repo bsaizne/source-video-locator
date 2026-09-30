@@ -4,6 +4,7 @@
 // stays green even before the electron binary is installed. See docs/DESKTOP.md.
 import { app, BrowserWindow, shell, dialog, ipcMain, clipboard } from 'electron'
 import * as path from 'node:path'
+import { randomBytes } from 'node:crypto'
 import * as fs from 'node:fs'
 import {
   BackendManager,
@@ -37,6 +38,25 @@ backendConfig.spawnEnv = {
   ...backendConfig.spawnEnv,
   SVL_DATA_DIR: dataDir,
   SVL_LOG_DIR: logsDir,
+}
+
+// --- 本机 API 门禁 (T1-3) ---------------------------------------------------
+// 打包态 = 发行通道：每次启动生成一次性会话令牌注入后端，并由后端强制校验
+// （缺令牌时后端直接拒启，不静默降级为无鉴权服务）。开发态由开发者自己跑
+// uvicorn，不注入令牌 = 门禁关闭，本地手工调试不受影响。
+const sessionToken = app.isPackaged ? randomBytes(24).toString('base64url') : ''
+if (sessionToken) {
+  backendConfig.spawnEnv.SVL_SESSION_TOKEN = sessionToken
+  backendConfig.spawnEnv.SVL_BUILD_CHANNEL = 'release'
+}
+// --- 随机端口 (续20, T1-3 接线补全) ------------------------------------------
+// 打包态让 OS 分配端口（backend.exe 走 SVL_BACKEND_PORT=0），真实监听地址由后端
+// 绑定成功后打印的 BACKEND_LISTEN 公告回报（manager 解析并据此做健康检查）。
+// config.port 此时置 0 = "必须等公告"；bootstrap 成功后回填真实 host/port，
+// bridge/WS/页面 query 全部走该真实值。开发态不 spawn，维持固定 8765。
+if (app.isPackaged) {
+  backendConfig.spawnEnv.SVL_BACKEND_PORT = '0'
+  backendConfig.port = 0
 }
 // Ship the DirectML/CPU ONNX model with the app (resources/models) and point the
 // backend at it via SVL_DML_MODEL — so GPU (DirectML) works out of the box, and
@@ -80,6 +100,18 @@ ipcMain.handle('app:openFile', async () => {
     filters: [{ name: '视频', extensions: ['mp4', 'mkv', 'mov', 'avi', 'webm', 'm4v', 'ts', 'flv', 'wmv'] }],
   })
   return canceled || filePaths.length === 0 ? null : filePaths[0]
+})
+
+// 多原片选择（2026-09-29 续27 video.concat 移植的 UI 入口）：一次框选多集/多段母片。
+// 返回**用户选择顺序**的绝对路径数组；取消 = 空数组（调用方据此不改状态）。
+// 顺序有意义：合并是按时序拼接（ep1+ep2），乱序选会得到不同的时间轴。
+ipcMain.handle('app:openFiles', async () => {
+  const { canceled, filePaths } = await dialog.showOpenDialog({
+    title: '选择多个源片文件（按播放顺序）',
+    properties: ['openFile', 'multiSelections'],
+    filters: [{ name: '视频', extensions: ['mp4', 'mkv', 'mov', 'avi', 'webm', 'm4v', 'ts', 'flv', 'wmv'] }],
+  })
+  return canceled ? [] : filePaths
 })
 
 // Renderer -> main -> Node fetch -> FastAPI. The renderer never hits localhost
@@ -147,11 +179,17 @@ function createWindow(): BrowserWindow {
     },
   })
 
+  // 令牌/端口经页面 query 交给渲染进程（HttpServiceAdapter.readBackendBootstrap 读取）
+  const query: Record<string, string> = {}
+  if (sessionToken) query.svl_session = sessionToken
+  if (backend.listenPort) query.svl_port = String(backend.listenPort)
   const url = devServerUrl()
   if (url) {
-    void win.loadURL(url)
+    const target = new URL(url)
+    for (const [k, v] of Object.entries(query)) target.searchParams.set(k, v)
+    void win.loadURL(target.toString())
   } else {
-    void win.loadFile(path.join(__dirname, '../../dist/index.html'))
+    void win.loadFile(path.join(__dirname, '../../dist/index.html'), { query })
   }
 
   return win
@@ -162,6 +200,13 @@ async function bootstrap(): Promise<void> {
     try {
       await backend.startBackend()
       await backend.waitForHealth()
+      // 随机端口：公告解析成功 → bridge/WS/health 的活配置切到真实监听地址。
+      const listen = backend.listen
+      if (listen) {
+        backendConfig.host = listen.host
+        backendConfig.port = listen.port
+        backendConfig.healthUrl = `http://${listen.host}:${listen.port}${backendConfig.healthPath}`
+      }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       const { response } = await dialog.showMessageBox({

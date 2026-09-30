@@ -2,6 +2,7 @@
 
 - ``POST /api/results``：原片为 ``original_path`` 或最近一次 /api/index 记录的原片；
   两者皆无 → 400。返回 ``ResultBatch.to_dict()`` 原样（拍平 confidence，冻结线格式）。
+- ``POST /api/results/load``：读回已导出的 ``*.results.json`` → 恢复为当前会话结果批。
 - ``POST /api/export``：导出最近一次 /api/results 得到的结果批。
 """
 from __future__ import annotations
@@ -15,7 +16,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from domain.enums import ResultSource
-from infrastructure.errors import ApplicationError
+from infrastructure.errors import ApplicationError, public_error
 
 from ..dependencies import AppContext, get_context
 from ..schemas import ExportRequest, ResultsRequest
@@ -39,6 +40,16 @@ class OverrideRequest(BaseModel):
     end: float
 
 
+class LoadResultsRequest(BaseModel):
+    """读回一个已导出的结果批（``*.results.json``），恢复会话上下文。
+
+    补这条链是因为：后端 ``service.load_results`` 早就存在，但没有 HTTP 端点，
+    前端重启后只能重新跑一遍定位——用户的手工修正随之作废。
+    """
+
+    path: str
+
+
 @router.post("/api/results")
 def locate(req: ResultsRequest, ctx: AppContext = Depends(get_context)) -> dict:
     original = req.original_path or ctx.current_original
@@ -53,6 +64,23 @@ def locate(req: ResultsRequest, ctx: AppContext = Depends(get_context)) -> dict:
     batch = ctx.service.locate(req.edited_path, original)
     ctx.current_batch = batch
     ctx.current_original = Path(original)
+    return batch.to_dict()
+
+
+@router.post("/api/results/load")
+def load_results(req: LoadResultsRequest, ctx: AppContext = Depends(get_context)) -> dict:
+    """从磁盘读回结果批并设为当前会话批（之后可直接 /api/export）。"""
+    try:
+        batch = ctx.service.load_results(req.path)
+    except Exception as exc:                       # 缺文件/坏 JSON/schema 不符
+        return JSONResponse(
+            status_code=400,
+            content={"error": "load_failed", "code": "LOC-1103",
+                     "message": "结果文件无法读取，请重新运行分析或改选其它结果文件。",
+                     "detail": f"{type(exc).__name__}: {exc}"},
+        )
+    ctx.current_batch = batch
+    ctx.current_original = Path(batch.original_video) if batch.original_video else None
     return batch.to_dict()
 
 
@@ -123,12 +151,14 @@ def export(req: ExportRequest, ctx: AppContext = Depends(get_context)) -> dict:
                 snap_scenes=req.snap_scenes,
                 material_width=req.material_width)
     except ApplicationError as exc:
-        return JSONResponse(status_code=400, content={"error": "export_failed",
-                                                      "detail": str(exc)})
+        body = public_error(exc)
+        body["error"] = "export_failed"
+        return JSONResponse(status_code=400, content=body)
     # 导出即弃会话预览：清空预览缓存目录，避免自动生成的预览片段长期占用磁盘。
     if ctx.preview_service is not None:
         try:
             ctx.preview_service.cleanup()
         except Exception:  # noqa: BLE001 - 清理失败不阻塞导出
             pass
-    return {"path": str(path)}
+    return {"path": str(path),
+            "warnings": list(getattr(ctx.service, "last_export_warnings", []) or [])}

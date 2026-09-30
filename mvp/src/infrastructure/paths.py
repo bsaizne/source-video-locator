@@ -53,6 +53,24 @@ def models_root(*, override: str | Path | None = None) -> Path:
     return ensure_dir(app_data_dir(override=override) / "models")
 
 
+def merged_source_root(*, override: str | Path | None = None) -> Path:
+    """多原片合并产物根目录（竞品 video.concat 的稳定命名缓存文件所在，2026-09-29）。
+
+    不写用户素材目录——合并是产品派生产物，与索引/导出同级放在 app data 下，
+    删除可由「残留清理」统一管理。
+    """
+    return ensure_dir(app_data_dir(override=override) / "merged")
+
+
+def rendered_root(*, override: str | Path | None = None) -> Path:
+    """成片渲染产物根目录（2026-09-29 续30，竞品 video_renderer 移植）。
+
+    与 ``merged`` 同族：产品派生产物进 app data，不写用户素材目录；稳定命名可复用，
+    残留清理由统一入口管理。用户显式指定 ``render.out_dir`` 时优先该目录。
+    """
+    return ensure_dir(app_data_dir(override=override) / "rendered")
+
+
 def dinov2_dml_asset_dir(*, override: str | Path | None = None) -> Path:
     """冻结 DINOv2 CLS-384 的 DirectML ONNX 资产目录。"""
     return ensure_dir(models_root(override=override) / "dinov2_cls_384")

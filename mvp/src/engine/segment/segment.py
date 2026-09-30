@@ -42,8 +42,8 @@ SEG_EPS = 1e-8
 class ShotSegment:
     """一个 edited 查询单元（一个 shot 的边界 + 其特征/时间切片）。
 
-    携带 ``feats``/``times`` 切片（numpy 读视图，不 copy），可直接喂给
-    ``produce_candidates`` / ``localize_segment``（第 7 项 app service 逐段调用）。
+    携带 ``feats``/``times`` 切片（numpy 读视图，不 copy），可直接喂给检索/定位层
+    （生产路径 = ``EvidenceLocalizer.localize``）。
     属 engine 层（可含 numpy），与 ``Hits``/``LocalizationResult`` 同级；domain 禁 numpy。
 
     ``card_ratio``：段内黑底文字卡帧占比（card_guard,app 层填充;0=非卡片段）。

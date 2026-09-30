@@ -54,6 +54,33 @@ describe('spawnBackendProcess', () => {
     expect(log).toHaveBeenCalledWith('INFO started')
   })
 
+  it('reassembles a line split across chunks (BACKEND_LISTEN 公告不被切碎)', () => {
+    const cfg = createBackendConfig({ pythonExecutable: 'py.exe', backendCwd: 'cwd' })
+    const child = fakeChild()
+    const log = vi.fn()
+    spawnBackendProcess(cfg, log, vi.fn().mockReturnValue(child))
+    const out = child.stdout as unknown as EventEmitter
+    out.emit('data', Buffer.from('noise\nBACKEND_LIS'))
+    out.emit('data', Buffer.from('TEN 127.0.0.1 5555\nrest'))
+    expect(log).toHaveBeenCalledWith('noise')
+    expect(log).toHaveBeenCalledWith('BACKEND_LISTEN 127.0.0.1 5555')
+    expect(log).not.toHaveBeenCalledWith('rest') // 行尾未换行 → 等待后续 chunk
+    out.emit('data', Buffer.from('line2\n'))
+    expect(log).toHaveBeenCalledWith('restline2')
+  })
+
+  it('emits multiple complete lines from one chunk and flushes tail on end', () => {
+    const cfg = createBackendConfig({ pythonExecutable: 'py.exe', backendCwd: 'cwd' })
+    const child = fakeChild()
+    const log = vi.fn()
+    spawnBackendProcess(cfg, log, vi.fn().mockReturnValue(child))
+    const out = child.stdout as unknown as EventEmitter
+    out.emit('data', Buffer.from('a\nb\n\n'))
+    expect(log.mock.calls.map((c) => c[0])).toEqual(['a', 'b']) // 空行丢弃
+    ;(out as unknown as EventEmitter).emit('end')
+    expect(log).not.toHaveBeenCalledWith('')
+  })
+
   it('exposes pid and stop() kills the child', () => {
     const cfg = createBackendConfig({ pythonExecutable: 'py.exe', backendCwd: 'cwd' })
     const child = fakeChild()

@@ -3,6 +3,7 @@ import { computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useProjectsStore } from '@/stores/projects'
 import { useSessionStore } from '@/stores/session'
+import { useCreateProject } from '@/composables/useCreateProject'
 import ProjectCard from '@/components/ProjectCard.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseIcon from '@/components/ui/BaseIcon.vue'
@@ -10,6 +11,7 @@ import BaseIcon from '@/components/ui/BaseIcon.vue'
 const router = useRouter()
 const projects = useProjectsStore()
 const session = useSessionStore()
+const { createProjectViaPicker } = useCreateProject()
 
 const recent = computed(() => projects.projects.slice(0, 6))
 
@@ -24,14 +26,15 @@ function openProject(id: string): void {
   router.push(`/projects/${id}`)
 }
 
-function newProject(): void {
-  const p = projects.addProject({ name: `未命名项目 ${projects.projects.length + 1}`, sourceVideo: 'movie.mkv' })
-  router.push(`/projects/${p.id}`)
+async function newProject(): Promise<void> {
+  const p = await createProjectViaPicker()
+  if (p) router.push(`/projects/${p.id}`)
 }
 
 onMounted(() => {
-  const source = projects.activeProject?.sourceVideo ?? 'Interstellar (2014).mkv'
-  void session.refreshIndex(source)
+  // 只查真实源片的索引状态；无源片/旧数据裸文件名不查询（此前用假文件名恒查出一堆"缺失"）。
+  const source = projects.activeProject?.sourceVideo ?? ''
+  if (source) void session.refreshIndex(source)
 })
 </script>
 

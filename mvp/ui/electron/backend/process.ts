@@ -34,7 +34,9 @@ export function buildSpawnCommand(config: BackendConfig): {
   }
 }
 
-/** Spawn the backend with piped stdio, forwarding every stdout/stderr line to `onLog`. */
+/** Spawn the backend with piped stdio, forwarding every stdout/stderr line to `onLog`.
+ *  Line-buffered: the `BACKEND_LISTEN <host> <port>` announcement must survive chunk
+ *  boundaries, so raw chunks are split on newlines and complete lines are forwarded. */
 export function spawnBackendProcess(
   config: BackendConfig,
   onLog: LogFn,
@@ -48,8 +50,24 @@ export function spawnBackendProcess(
     windowsHide: true, // suppress the console window for the console-subsystem backend
   })
 
-  child.stdout?.on('data', (chunk: Buffer) => onLog(chunk.toString().replace(/\s+$/g, '')))
-  child.stderr?.on('data', (chunk: Buffer) => onLog(chunk.toString().replace(/\s+$/g, '')))
+  const forwardLines = (stream: NodeJS.ReadableStream | undefined): void => {
+    if (!stream) return
+    let buf = ''
+    stream.on('data', (chunk: unknown) => {
+      buf += String(chunk)
+      const lines = buf.split(/\r?\n/)
+      buf = lines.pop() ?? ''
+      for (const line of lines) if (line) onLog(line)
+    })
+    stream.on('end', () => {
+      if (buf) {
+        onLog(buf)
+        buf = ''
+      }
+    })
+  }
+  forwardLines(child.stdout ?? undefined)
+  forwardLines(child.stderr ?? undefined)
 
   const exited = new Promise<void>((resolve) => {
     child.once('exit', () => resolve())

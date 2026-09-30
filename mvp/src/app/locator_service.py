@@ -2,8 +2,8 @@
 
 产品胶水层：只做 ``orchestrate / progress / cancellation / error 汇总``，不写视觉算法。
 冻结链路（只调用不改语义）：FFmpegIO 抽帧 -> DINOv2 特征 -> FeatureStore 索引 ->
-``engine.segment`` 切分 -> ``produce_candidates``(cluster/rank v2_score) ->
-``localize_segment``(finloc + confidence) -> ``domain.Result``。
+``engine.segment`` 切分 -> ``EvidenceLocalizer``（逐查询帧 top1 聚类 + 每簇 finloc 精化 +
+seq_align moment + patch/scene/event 扩池）-> ``ConfidenceEngine.assess_evidence`` -> ``domain.Result``。
 
 失败隔离（§四）：单个 edited segment 失败 -> unresolved(LOW) Result，带 ``failure_reason``，
 完整异常记日志，**继续处理后续 segment**，不让整个 edited task 失败。
@@ -30,6 +30,11 @@ from concurrent.futures import ThreadPoolExecutor
 from engine.confidence import ConfidenceEngine
 from engine.feature_store import FeatureStore, FeatureStoreError, IndexBundle
 from engine.localization.evidence_localize import EvidenceLocalizer, EvidenceResult
+from engine.localization.degradation_gate import (apply_degradation_gate,
+                                                  duplicate_claim_warnings,
+                                                  fragment_warnings)
+from engine.localization.dense_start_check import dense_start_shift
+from engine.localization.offset_vote_prior import offset_vote_seed
 from engine.localization.temporal_repair import (find_overlap_conflicts,
                                                  find_temporal_outliers, relocate_in_window)
 from engine.localization.conflict_rerank import (accept_repair, best_free_span,
@@ -55,10 +60,12 @@ from infrastructure.logging import get_logger, get_session_id, new_session_id
 from infrastructure.results_repo import (load_results as _load_results,
                                          save_results as _save_results)
 from media.ffmpeg import FFmpegIO, MediaError
+from media.ffmpeg.source_merge import SourceVideoMerger
+from media.ffmpeg.timeline_render import TimelineMovieRenderer
 
 from .exporters import (EXPORT_FORMATS, ExportClip, build_export_plan,
                         create_jianying_draft_dir, expand_material_spans,
-                        plan_jianying_assets,
+                        plan_jianying_assets, split_clips_at_boundaries,
                         render_edl, render_fcp7_xml, seconds_to_frames,
                         snap_clips_to_scenes, write_jianying_draft)
 from .models import CancellationToken, ProgressEvent, ProgressStage
@@ -100,6 +107,9 @@ class SourceLocatorService:
         self.index_root = Path(index_root) if index_root else paths.index_root(override=data_dir)
         self.export_root = Path(export_root) if export_root else paths.export_root(override=data_dir)
         self._log = get_logger(__name__)
+        self._last_gate_stats = None          # 退化拒绝门统计（locate() 写入，供诊断/脚本读）
+        self.last_export_warnings: list[str] = []   # 导出前告警（碎片/降级），API 透传给 UI
+        self.last_render_info: dict | None = None   # 最近一次成片渲染信息（2026-09-29 续30）
         # multi-evidence 主定位器（query-axis 逐帧 top1 聚类；无 IO，仅参数，构造即安全）
         p = self.config.pipeline
         sa = p.seq_align
@@ -130,6 +140,7 @@ class SourceLocatorService:
             event_max_expand_frames=p.event_max_expand_frames,
         )
         self._dense_cache = {}
+        self._dense_quality_cache: dict = {}
         self._tr_query_cache: dict = {}
         self._grab_cache: dict = {}  # grab_frame 进程内缓存(patch rerank/text anchor 重复抓同帧)
         self._edited_cache: EditedCache | None = None
@@ -593,6 +604,184 @@ class SourceLocatorService:
             embs.append(self.backend.embed_frames(bgr_list[i:i + _BS]))
         return np.concatenate(embs, axis=0)
 
+    def _apply_offset_vote_prior(self, results, shots, bundle, *, cfg, cancel_token) -> None:
+        """偏移投票起点先验（竞品 coarse_retrieval 语义重建, 2026-09-27 续10m/续11 立项）。
+
+        段内采样帧逐帧独立检索全片源索引 -> 0.05s 分桶加权偏移投票 -> 共识簇质心 = 起点种子。
+        采纳门 = support_ratio(>=min_support) + max_shift(<=4s, 防 2mkv 型多实例种子偏置)。
+        只移起点、宽度保持; 零解码开销(复用索引特征); 逐段失败隔离; 不碰 confidence/子 span。
+        挂接在密集复核之前（镜像快速管线「粗投票种子 -> 10fps 密集对齐」顺序）。
+        """
+        lib_feats = bundle.features
+        lib_times = np.asarray(bundle.times, dtype=np.float64)
+        src_dur = float(lib_times[-1]) if len(lib_times) else None
+        n = len(results)
+        applied = 0
+        for idx, (result, shot) in enumerate(zip(results, shots)):
+            if result.failure_reason or result.not_in_source:
+                continue
+            span = result.original
+            if span is None or span.end - span.start <= 0.01:
+                continue
+            try:
+                seed, info = offset_vote_seed(
+                    shot.feats, shot.times, lib_feats, lib_times,
+                    bucket_s=float(cfg.vote_prior_bucket_s),
+                    cluster_half_buckets=int(cfg.vote_prior_cluster_half_buckets),
+                    min_support=float(cfg.vote_prior_min_support),
+                    max_shift_s=float(cfg.vote_prior_max_shift_s),
+                    span_start=float(span.start),
+                    source_duration_s=src_dur)
+                if seed is not None:
+                    result.original = TimeSpan(seed, span.end)
+                    applied += 1
+                self._log.info("segment %d/%d vote prior: %s", idx + 1, n, info)
+            except Exception:
+                self._log.exception("segment %d/%d vote prior failed (keep original span)",
+                                    idx + 1, n)
+        self._log.info("offset vote prior applied %d/%d (support>=%.2f max_shift=%.1fs)",
+                       applied, n, cfg.vote_prior_min_support, cfg.vote_prior_max_shift_s)
+
+    def _apply_fast_global_anchor(self, results, shots, bundle, edited, *,
+                                  cfg, cancel_token) -> None:
+        """快速全局锚定（PROJECT_FAST_GLOBAL_ANCHOR, 2026-09-28 立项"立"）。
+
+        vote_prior 同内核超集: 输入=8fps dense 缓存降采样至 fast_global_fps(默认3fps, 零额外解码),
+        门= support + 簇内分散度(**无位移上限**——主病灶"同场景选错时刻"18~21s 级, 4s 帽挡死它),
+        采纳=平移保宽度(大位移下 end 跟随, 不扭曲段长)。逐段失败隔离; 不碰 confidence/子 span。
+        """
+        from engine.localization.offset_vote_prior import global_offset_anchor
+        lib_times = np.asarray(bundle.times, dtype=np.float64)
+        src_dur = float(lib_times[-1]) if len(lib_times) else None
+        dense_fps = float(self.config.pipeline.seq_align.edit_fps)
+        step = max(1, int(round(dense_fps / max(float(cfg.fast_global_fps), 0.5))))
+        qw_on = bool(getattr(cfg, "fast_global_quality_weights_enabled", False))
+        # 腿 c 预扫: 全 ED 密帧质量 min-max 归一化范围（沙盒 F1 语义——归一是全片级,
+        # 非逐段; 密帧只覆盖 shot span, 与沙盒全片 3fps 采样存在口径差, 推断级适配）。
+        qw_lo = qw_hi = None
+        if qw_on:
+            all_q = [q for q in (self._dense_quality(s, edited)
+                                 for s in shots if s is not None) if q is not None]
+            if all_q:
+                cat = np.concatenate(all_q, axis=0)
+                qw_lo = cat.min(axis=0)
+                qw_hi = cat.max(axis=0)
+                self._log.info("fast_global quality weights on: frames=%d lo=%s hi=%s",
+                               int(cat.shape[0]), np.round(qw_lo, 3), np.round(qw_hi, 3))
+            else:
+                qw_on = False
+                self._log.info("fast_global quality weights requested but no stats; uniform")
+        n = len(results)
+        applied = 0
+        for idx, (result, shot) in enumerate(zip(results, shots)):
+            self._check_cancel(cancel_token)
+            if result.failure_reason or result.not_in_source:
+                continue
+            span = result.original
+            if span is None or span.end - span.start <= 0.01:
+                continue
+            try:
+                dense = self._embed_dense_query(shot, edited)
+                if dense is None:
+                    continue
+                feats = dense[0][::step]
+                times = np.asarray(dense[1], dtype=np.float64)[::step]
+                quality_w = None
+                if qw_on:
+                    q = self._dense_quality(shot, edited)
+                    if q is not None and q.shape[0] == dense[0].shape[0]:
+                        def _nz(x):
+                            d = qw_hi - qw_lo
+                            return np.where(d > 1e-9, (x - qw_lo) / np.where(d > 1e-9, d, 1.0), 1.0)
+                        qw = (float(cfg.fast_global_qw_bright) * _nz(q[:, 0])
+                              + float(cfg.fast_global_qw_contrast) * _nz(q[:, 1])
+                              + float(cfg.fast_global_qw_sharp) * _nz(q[:, 2]))
+                        quality_w = np.clip(qw, 0.2, 1.0)[::step]
+                width = span.end - span.start
+                seed, info = global_offset_anchor(
+                    feats, times, bundle.features, lib_times,
+                    bucket_s=float(cfg.vote_prior_bucket_s),
+                    cluster_half_buckets=int(cfg.vote_prior_cluster_half_buckets),
+                    min_support=float(cfg.fast_global_min_support),
+                    min_cluster_votes=int(cfg.fast_global_min_cluster_votes),
+                    wide_win_s=float(cfg.fast_global_wide_win_s),
+                    min_wide_support=float(cfg.fast_global_min_wide_support),
+                    vote_top_k=int(getattr(cfg, "fast_global_vote_top_k", 1)),
+                    wide_std_max_s=float(getattr(cfg, "fast_global_wide_std_max_s", 0.0)),
+                    min_valid_samples=int(getattr(cfg, "fast_global_min_valid_samples", 2)),
+                    quality_w=quality_w,
+                    span_start=float(span.start),
+                    source_duration_s=src_dur)
+                if seed is not None:
+                    end = seed + width
+                    if src_dur is not None:
+                        end = min(end, src_dur)
+                    result.original = TimeSpan(seed, end)
+                    applied += 1
+                self._log.info("segment %d/%d fast_global: %s", idx + 1, n, info)
+            except ApplicationError:
+                raise
+            except Exception:
+                self._log.exception("segment %d/%d fast_global failed (keep original span)",
+                                    idx + 1, n)
+        self._log.info("fast global anchor applied %d/%d (support>=%.2f wide>=%.2f@%.1fs fps=%.1f)",
+                       applied, n, cfg.fast_global_min_support,
+                       cfg.fast_global_min_wide_support, cfg.fast_global_wide_win_s,
+                       cfg.fast_global_fps)
+
+    def _apply_dense_start_recheck(self, results, shots, orig_path, *,
+                                   cfg, cancel_token) -> None:
+        """P0 密集起点复核（竞品 dense_alignment 语义重建, DECISIONS 2026-09-26 豁免裁决）。
+
+        已定位主 span 起点 ±margin @10fps 密集窗, 查询侧取段内采样帧 3 个均匀代表帧做
+        多帧首段证据打分; 采纳门 = 增益(>=min_gain) + max_shift(<=2s) + 距离平局裁决。
+        只移起点、宽度保持; 逐段失败隔离(回退原 span); 不碰 confidence/子 span/alternatives。
+        """
+        margin = float(cfg.dense_recheck_margin_s)
+        fps = int(cfg.dense_recheck_fps)
+        n = len(results)
+        applied = 0
+        for idx, (result, shot) in enumerate(zip(results, shots)):
+            if result.failure_reason or result.not_in_source:
+                continue
+            span = result.original
+            if span is None or span.end - span.start <= 0.01:
+                continue
+            try:
+                start_t = max(0.0, span.start - margin)
+                end_t = span.start + margin
+                ts: list[float] = []
+                feat_chunks: list[np.ndarray] = []
+                batch: list = []
+                for t, fr in self.ffmpeg.iter_frames(orig_path, fps, start=start_t, end=end_t):
+                    self._check_cancel(cancel_token)
+                    batch.append(fr)
+                    ts.append(float(t))
+                    if len(batch) >= 16:
+                        feat_chunks.append(self._embed_batch(batch, cancel_token))
+                        batch = []
+                if batch:
+                    feat_chunks.append(self._embed_batch(batch, cancel_token))
+                if len(ts) < 3:
+                    continue
+                win_feats = np.concatenate(feat_chunks, axis=0)
+                win_times = np.array(ts, dtype=np.float64)
+                new_start, info = dense_start_shift(
+                    shot.feats, shot.times, win_feats, win_times,
+                    span_start=float(span.start),
+                    margin_s=margin,
+                    min_gain=float(cfg.dense_recheck_min_gain),
+                    max_shift_s=float(cfg.dense_recheck_max_shift_s))
+                if new_start is not None:
+                    result.original = TimeSpan(round(new_start, 2), span.end)
+                    applied += 1
+                self._log.info("segment %d/%d dense recheck: %s", idx + 1, n, info)
+            except Exception:
+                self._log.exception("segment %d/%d dense recheck failed (keep original span)",
+                                    idx + 1, n)
+        self._log.info("dense start recheck applied %d/%d (margin=%.1fs gain>=%.2f max_shift=%.1fs)",
+                       applied, n, margin, cfg.dense_recheck_min_gain, cfg.dense_recheck_max_shift_s)
+
     def _refine_cut_twopass(self, edited: Path, cut_t: float, vfps: float,
                             fine_fps: float, window_frames: int, cancel_token,
                             cfg) -> float:
@@ -627,6 +816,144 @@ class SourceLocatorService:
 
 
     # ------------------------------------------------------------------ #
+    # 用例二点五：多原片合并（竞品 video.concat 移植, 2026-09-29）
+    # ------------------------------------------------------------------ #
+    def merge_originals(self, sources: list, *,
+                        on_progress: ProgressCb | None = None,
+                        cancel_token: CancellationToken | None = None) -> dict:
+        """把多段原片物理合并为单文件，返回 ``{merged_path, mode, reused, duration_s}``。
+
+        竞品形态（processing.video.concat + web.file_api.concat）：签名全等流复制，
+        否则 HEVC 转码尝试链（硬件→libx265 兜底）；稳定命名缓存复用。
+        ``len(sources) <= 1`` 直通（mode=passthrough，单原片零影响）；开关
+        ``source_merge.enabled``。
+        """
+        ps = [str(Path(p).resolve()) for p in sources if str(p).strip()]
+        if not ps:
+            raise IndexError("源片路径无效：空的原始文件列表")
+        if len(ps) == 1:
+            return {"merged_path": ps[0], "mode": "passthrough",
+                    "reused": False, "duration_s": None}
+        cfgm = self.config.source_merge
+        if not cfgm.enabled:
+            raise IndexError(
+                f"检测到 {len(ps)} 个原片文件，但多原片合并未启用（source_merge.enabled=false）。"
+                "请提供单个原片文件或启用合并。")
+        self._check_cancel(cancel_token)
+        merger = SourceVideoMerger(
+            self.ffmpeg.ffmpeg, self.ffmpeg.ffprobe,
+            paths.merged_source_root(override=self.config.data_dir),
+            timeout_s=cfgm.timeout_s, prefer_hw=cfgm.prefer_hw, crf=cfgm.crf,
+            log=lambda fmt, *a: self._log.info(fmt, *a))
+
+        def _progress(frac, message):
+            self._notify(on_progress, ProgressStage.MERGE_SOURCES,
+                         current=max(0, min(100, int(frac * 100))) if frac is not None else 0,
+                         total=100, message=message)
+
+        info = merger.merge(ps, progress=_progress,
+                            cancel=(cancel_token.is_cancelled if cancel_token else None))
+        self._log.info("merged originals: %d -> %s (mode=%s reused=%s)",
+                       len(ps), Path(info["merged_path"]).name, info["mode"], info["reused"])
+        return info
+
+    # ------------------------------------------------------------------ #
+    # 用例二·B：成片渲染（2026-09-29 续30，竞品 video_renderer 移植）
+    # ------------------------------------------------------------------ #
+    def render_movie(self, batch: ResultBatch, *, out_dir: str | Path | None = None,
+                     min_confidence: str | None = None, low_policy: str | None = None,
+                     snap_scenes: bool | None = None,
+                     on_progress: ProgressCb | None = None,
+                     cancel_token: CancellationToken | None = None) -> dict:
+        """把结果批渲染成**单个可播放成片**，返回
+        ``{movie_path, mode, reused, segments, fps, duration_s, total_frames,
+        actual_encoder, hdr_downgraded, clips}``。
+
+        口径（用户 2026-09-29 拍板，详见 FINDINGS_VIDEO_RENDER_PORT.md）：
+
+        - **紧凑拼接**：按记录（剪辑）时间轴顺序取主定位 clip，逐段从**原片**取
+          ``[orig_start, orig_end]``；未定位/被排除/门槛之下的段**直接跳过**，
+          不填黑场（竞品有黑场腿，我方明确不落地）。成片时长 = Σ 片段时长。
+        - clip 来源与 NLE 工程**同一套计划代码**：``build_export_plan``（门槛/不导规则）
+          → ``snap_clips_to_scenes``（切点吸附）→ ``split_clips_at_boundaries``
+          （真实转场切点展开 + 单帧守卫），保证成片与 EDL/XML 的时间线内容一致。
+        - **音轨 = 原片对应区间音频**（统一 aac/48k/stereo），不用解说轨。
+        - 逐段帧数校验 + 输出总帧数校验；硬件 H.264 失败拉黑回退 libx264；
+          停滞看门狗与取消在 ``media.ffmpeg.timeline_render`` 内。
+        - 显式入口才触发：定位链路 / 文本工程导出永不调用它，生产基线零影响。
+        """
+        self._check_cancel(cancel_token)
+        rcfg = self.config.render
+        if not rcfg.enabled:
+            raise ApplicationError("成片渲染未启用（render.enabled=false）")
+        if not batch.original_video:
+            raise ApplicationError("result batch has no original_video; cannot render movie")
+        xcfg = self.config.export
+        mc = min_confidence or xcfg.min_confidence
+        lp = low_policy or xcfg.low_policy
+        do_snap = xcfg.snap_scenes if snap_scenes is None else bool(snap_scenes)
+        if mc not in ("LOW", "MEDIUM", "HIGH"):
+            raise ApplicationError(f"invalid min_confidence: {mc!r}")
+        if lp not in ("exclude", "backup"):
+            raise ApplicationError(f"invalid low_policy: {lp!r}")
+
+        orig_path = Path(batch.original_video)
+        plan = build_export_plan(batch, min_confidence=mc, low_policy=lp,
+                                 include_subs=False)
+        scenes, orig_duration = None, None
+        try:
+            bundle = self.store.load_index(orig_path)
+            scenes = bundle.scenes
+            orig_duration = float(bundle.meta.duration or 0.0) or None
+        except Exception:
+            if do_snap:
+                self._log.warning("render: scene snap skipped, index unavailable for %s",
+                                  orig_path.name)
+        if do_snap and plan:
+            snap_clips_to_scenes(plan, scenes, tol_s=float(xcfg.snap_tolerance_s),
+                                 orig_duration=orig_duration)
+        if xcfg.boundary_split_enabled and plan and scenes is not None:
+            split_clips_at_boundaries(plan, scenes,
+                                      min_piece_s=float(xcfg.boundary_min_piece_s),
+                                      orig_duration=orig_duration)
+        # 紧凑拼接：按记录时间轴顺序取源片区间；零宽/负宽段由渲染层再过滤一次
+        clips = [(c.orig_start, c.orig_end) for c in plan
+                 if c.kind in ("main", "low") and c.orig_end > c.orig_start]
+        if not clips:
+            raise ApplicationError(
+                "没有可渲染的片段（全部未定位、被排除或未过置信门槛）")
+
+        self._notify(on_progress, ProgressStage.RENDER_MOVIE, current=0, total=100,
+                     message=f"开始渲染成片（{len(clips)} 段）")
+        target_dir = Path(out_dir) if out_dir else (
+            Path(rcfg.out_dir) if rcfg.out_dir
+            else paths.rendered_root(override=self.config.data_dir))
+        renderer = TimelineMovieRenderer(
+            self.ffmpeg.ffmpeg, self.ffmpeg.ffprobe, target_dir,
+            crf=rcfg.crf, preset=rcfg.preset, prefer_hw=rcfg.prefer_hw,
+            workers=rcfg.workers, stall_timeout_s=rcfg.stall_timeout_s,
+            timeout_s=rcfg.timeout_s, sample_rate=rcfg.sample_rate,
+            log=lambda fmt, *a: self._log.info(fmt, *a))
+
+        def _progress(frac, message):
+            self._notify(on_progress, ProgressStage.RENDER_MOVIE,
+                         current=max(0, min(100, int(frac * 100))) if frac is not None else 0,
+                         total=100, message=message)
+
+        info = renderer.render(clips, orig_path, progress=_progress,
+                               cancel=(cancel_token.is_cancelled if cancel_token else None))
+        info["clips"] = len(clips)
+        # 实际渲染的源片区间（吸附/切点展开**之后**）——验收与 UI 展示都以此为准，
+        # 不再由外部重算计划（重算必然与 service 内部口径漂移）。
+        info["clip_ranges"] = [[round(float(a), 3), round(float(b), 3)] for a, b in clips]
+        info["movie_path"] = str(Path(info["movie_path"]))
+        self.last_render_info = info
+        self._log.info("render movie: %s segments=%d mode=%s encoder=%s frames=%s",
+                       Path(info["movie_path"]).name, info["segments"], info["mode"],
+                       info["actual_encoder"], info["total_frames"])
+        return info
+
+    # ------------------------------------------------------------------ #
     # 用例三：主链路（Original + Edited -> ResultBatch）
     # ------------------------------------------------------------------ #
     def locate(self, edited: str | Path, original: str | Path | IndexBundle, *,
@@ -653,6 +980,39 @@ class SourceLocatorService:
                                         on_progress=on_progress,
                                         cancel_token=cancel_token,
                                         edited=edited)
+        if getattr(self.config.pipeline, "fast_global_enabled", False):
+            # 快速全局锚定（立项 2026-09-28）: vote_prior 同内核超集(密帧/无帽/分散度门/保宽度),
+            # 启用时**替换** vote_prior 应用点, 同一机制不叠加二次平移。
+            try:
+                self._apply_fast_global_anchor(results, shots, bundle, edited,
+                                               cfg=self.config.pipeline,
+                                               cancel_token=cancel_token)
+            except ApplicationError:
+                raise
+            except Exception:
+                self._log.exception("fast global anchor failed (non-fatal)")
+        elif getattr(self.config.pipeline, "vote_prior_enabled", False):
+            # 偏移投票起点先验（续10m/续11 立项）: 全局共识种子在密集复核之前落地,
+            # 让 P0 密集复核（若开）围绕种子窗复核, 镜像快速管线「粗种子 -> 密集对齐」顺序。
+            try:
+                self._apply_offset_vote_prior(results, shots, bundle,
+                                              cfg=self.config.pipeline,
+                                              cancel_token=cancel_token)
+            except ApplicationError:
+                raise
+            except Exception:
+                self._log.exception("offset vote prior failed (non-fatal)")
+        if getattr(self.config.pipeline, "dense_recheck_enabled", False):
+            # P0 密集起点复核（续10i/k, DECISIONS 2026-09-26 豁免裁决）: 在全部定位/重排之前
+            # 修正主 span 起点, 让下游(text_anchor/seq_dp/temporal_repair)看到修正后的位置。
+            try:
+                self._apply_dense_start_recheck(results, shots, orig_path,
+                                                cfg=self.config.pipeline,
+                                                cancel_token=cancel_token)
+            except ApplicationError:
+                raise
+            except Exception:
+                self._log.exception("dense start recheck failed (non-fatal)")
         if self.config.pipeline.text_anchor_enabled:
             try:
                 self._apply_text_anchor(results, edited, orig_path,
@@ -697,6 +1057,43 @@ class SourceLocatorService:
                 raise
             except Exception:
                 self._log.exception("temporal ambiguity failed (non-fatal)")
+        # E1 连续重复起点修正（竞品 resolve_consecutive_scene_offsets 语义重建, 默认关）:
+        # 放在全部定位/重排之后、退化门前 = 看到的是最终主 span; 平移只动后段起点。
+        if getattr(self.config.pipeline, "resolve_consecutive_enabled", False):
+            try:
+                from engine.localization.consecutive_offsets import (
+                    resolve_consecutive_offsets)
+                _lt = np.asarray(bundle.times, dtype=np.float64)
+                st = resolve_consecutive_offsets(
+                    results,
+                    dup_tol_s=float(self.config.pipeline.resolve_consecutive_dup_tol_s),
+                    source_duration_s=float(_lt[-1]) if len(_lt) else None)
+                for e in st.shifted:
+                    self._log.info("segment %d consecutive-offset shift: %.1f-%.1f -> %.1f-%.1f",
+                                   e["index"] + 1, e["from"][0], e["from"][1],
+                                   e["to"][0], e["to"][1])
+                for e in st.skipped:
+                    self._log.info("segment %d consecutive-offset skip: %s",
+                                   e["index"] + 1, e["reason"])
+                self._log.info("consecutive offsets resolved shifted=%d skipped=%d (tol=%.1fs)",
+                               len(st.shifted), len(st.skipped),
+                               self.config.pipeline.resolve_consecutive_dup_tol_s)
+            except ApplicationError:
+                raise
+            except Exception:
+                self._log.exception("consecutive offset resolve failed (non-fatal)")
+        # 退化拒绝门 + 场景覆盖门槛（竞品 results.validation 语义, 2026-09-28 续19; 默认关）。
+        # 放在全部定位/重排之后 = 看到的是最终主 span 归属, 重复率判定才有意义。
+        gate = apply_degradation_gate(
+            results,
+            enabled=self.config.pipeline.degradation_gate_enabled,
+            max_duplicate_scene_ratio=self.config.pipeline.max_duplicate_scene_ratio,
+            min_scene_coverage=self.config.pipeline.min_scene_coverage,
+            log=self._log)
+        if gate.rejected or gate.subs_dropped:
+            self._log.info("degradation gate rejected=%d subs_dropped=%d subs_kept=%d",
+                           len(gate.rejected), gate.subs_dropped, gate.subs_kept)
+        self._last_gate_stats = gate
         batch = ResultBatch(schema_version=1, original_video=str(orig_path),
                             edited_video=str(Path(edited).resolve()), results=results)
         self._current_batch = batch
@@ -934,6 +1331,11 @@ class SourceLocatorService:
         self._notify(on_progress, ProgressStage.EXPORT, message=f"exporting {fmt}")
         # 计划：门槛 + 不导规则 + 主 span 展平（候选子 span 不进剪辑软件——反馈二轮）
         plan = build_export_plan(batch, min_confidence=mc, low_policy=lp, include_subs=False)
+        # 导出前碎片告警（竞品 segments.builder 语义）：只告警不裁剪，透传给 UI 由用户决定。
+        self.last_export_warnings = fragment_warnings(
+            plan, min_clip_s=float(self.config.export.min_clip_s))
+        for w in self.last_export_warnings:
+            self._log.warning("export guard: %s", w)
         # 场景切点吸附（TODO 第 2 项）：scenes.npy 边界 ±tol；索引不可用则降级
         scenes, orig_duration, bundle = None, None, None
         try:
@@ -953,6 +1355,17 @@ class SourceLocatorService:
             n_snapped = snap_clips_to_scenes(
                 plan, scenes, tol_s=float(xcfg.snap_tolerance_s),
                 orig_duration=orig_duration)
+        # 展示层两件套①（竞品 boundary_guard._record_boundary_split 语义, 2026-09-29）:
+        # 跨镜头主 clip 在内部真实转场切点上展开成多段（记录侧等比分配, 单帧守卫=
+        # <min_piece_s 碎片并入邻段）; 索引不可用则降级跳过。
+        n_split = 0
+        if xcfg.boundary_split_enabled and plan and scenes is not None:
+            n_split = split_clips_at_boundaries(
+                plan, scenes, min_piece_s=float(xcfg.boundary_min_piece_s),
+                orig_duration=orig_duration)
+            if n_split:
+                self._log.info("boundary split: %d clips expanded (min_piece=%.2fs)",
+                               n_split, float(xcfg.boundary_min_piece_s))
         # 元数据：源片/编辑片 fps（timecode 换算）+ 分辨率（XML/剪映字段）
         meta = self._probe_meta(orig_path)
         rec_meta = self._probe_meta(Path(batch.edited_video)) if batch.edited_video else None
@@ -1008,6 +1421,15 @@ class SourceLocatorService:
                              current=i + 1, total=max(n_clips, 1),
                              message=f"准备素材 {i + 1}/{n_clips}")
             out_path = write_jianying_draft(script, assets, draft_dir)
+        # 重复认领告警（续31，退化判据的同构安全形态）：clip 几何全部定稿后再算，
+        # 只提示不删答案 —— 唯一认领式拒识实测砍正确段，见 DECISIONS 续19/续31。
+        if xcfg.duplicate_claim_warn and plan:
+            self.last_export_warnings = list(self.last_export_warnings) + \
+                duplicate_claim_warnings(plan, min_ratio=float(xcfg.duplicate_claim_min_ratio),
+                                         min_width_ratio=float(
+                                             xcfg.duplicate_claim_min_width_ratio))
+        for w in self.last_export_warnings:
+            self._log.warning("export guard: %s", w)
         self._log.info("project export fmt=%s clips=%d snapped=%d path=%s",
                        fmt, len(plan), n_snapped, out_path)
         self._notify(on_progress, ProgressStage.EXPORT,
@@ -1028,6 +1450,44 @@ class SourceLocatorService:
     # ------------------------------------------------------------------ #
     # Helpers
     # ------------------------------------------------------------------ #
+    def _dense_quality(self, shot, edited_path):
+        """每段 8fps 密帧质量三元组 (n,3)（fast_global 腿 c 专用; 会话 memo + 持久缓存）。
+
+        独立于 dense 特征通道（不复用其解码）——仅质量权重腿启用时才解码, 归一化在
+        `_apply_fast_global_anchor` 按**全 ED 密帧** min-max 做（沙盒 F1 语义, 推断级）。
+        """
+        sa = self.config.pipeline.seq_align
+        key = (str(Path(edited_path).resolve()), round(shot.span.start, 2),
+               round(shot.span.end, 2))
+        if key in self._dense_quality_cache:
+            return self._dense_quality_cache[key]
+        quality = None
+        dkey = None
+        if self.config.pipeline.edited_cache_enabled:
+            try:
+                dkey = EditedCache.dense_key(shot.span.start, shot.span.end)
+                quality = self._edited_cache_store().load_dense_quality(
+                    self._edited_fingerprint(Path(edited_path)), dkey)
+            except Exception:
+                dkey = None
+        if quality is None:
+            from engine.localization.offset_vote_prior import frame_quality_stats
+            stats = [frame_quality_stats(f) for _, f in
+                     self.ffmpeg.iter_frames(edited_path, sa.edit_fps,
+                                             start=shot.span.start, end=shot.span.end)]
+            if not stats:
+                self._dense_quality_cache[key] = None
+                return None
+            quality = np.asarray(stats, dtype=np.float32)
+            if dkey is not None:
+                try:
+                    self._edited_cache_store().save_dense_quality(
+                        self._edited_fingerprint(Path(edited_path)), dkey, quality)
+                except Exception:
+                    pass
+        self._dense_quality_cache[key] = quality
+        return quality
+
     def _embed_dense_query(self, shot, edited_path):
         """对 shot 用 seq_edit_fps 密帧重采样（app 层 IO+embed，会话内 memo 防重复）。
 
@@ -1707,8 +2167,12 @@ class SourceLocatorService:
         device_tag = (f"{type(be).__name__}:{getattr(be, 'device_type', lambda: '?')()}:"
                       f"b{self.config.device.dml_batch_size}")
         from dataclasses import asdict
+        pipeline_dict = asdict(self.config.pipeline)
+        # 置信配置不参与编辑侧特征（shots/dense 只取决于切分+采样+设备口径），
+        # 从缓存键剔除，否则置信调参（如 conf_v2 A/B、翻默认开）会触发无谓的编辑侧重算。
+        pipeline_dict.pop("confidence", None)
         key = edited_cache_fingerprint(
-            edited, self.store.feature_version, asdict(self.config.pipeline), device_tag)
+            edited, self.store.feature_version, pipeline_dict, device_tag)
         self._edited_cache_key_by_path[str(edited)] = key
         return key
 

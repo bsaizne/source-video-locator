@@ -7,9 +7,11 @@ import type {
   BackendInfoJson,
   IndexMetaJson,
   IndexValidationJson,
+  MediaInfoJson,
   ResultBatchJson,
   ResultJson,
   ShotSegmentJson,
+  SourceMergeJson,
 } from './types'
 
 const ORIGINAL = 'Interstellar (2014).mkv'
@@ -37,6 +39,33 @@ export function mockIndexMeta(): IndexMetaJson {
     created_at: '2026-08-26T10:14:00Z',
     device_machine_id: 'SVL-WORKSTATION',
     extractor: { normalize: 'l2', resize: '518x518', mean_std: 'imagenet', preprocess_sha: 'a1b2c3d4' },
+  }
+}
+
+/** POST /api/source/merge 的 Mock 形态：合并产物路径按输入顺序稳定派生
+ *  （真实后端用 md5 内容签名命名缓存，这里用文件名拼接代替，仅 dev 展示用）。 */
+export function mockSourceMerge(paths: string[]): SourceMergeJson {
+  const names = paths.map((p) => p.split(/[\\/]/).pop() ?? p)
+  return {
+    merged_path: `C:/mock/merged/${names.join('+').slice(0, 40)}.mp4`,
+    mode: 'copy',
+    reused: false,
+    duration_s: 8310,
+  }
+}
+
+/** GET /api/media/info 的 Mock 形态（与 mockIndexMeta 同一片假数据口径）。 */
+export function mockMediaInfo(): MediaInfoJson {
+  return {
+    path: ORIGINAL,
+    duration: 8310,
+    fps: 23.976,
+    width: 1920,
+    height: 804,
+    size_bytes: 1_073_741_824,
+    format_name: 'matroska,webm',
+    video_codec: 'hevc',
+    has_audio: true,
   }
 }
 

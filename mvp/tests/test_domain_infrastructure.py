@@ -16,8 +16,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))  # -> mvp/s
 from domain import (Alternative, Candidate, Confidence, ConfidenceLevel,
                     ExtractorConfig, IndexMeta, IndexValidation, IndexValidationStatus,
                     Result, ResultSource, TimeSpan)
-from infrastructure import (AppConfig, ConfigError, LocatorError, MediaConfig,
-                            PipelineConfig, load_config)
+from infrastructure import (AppConfig, ApplicationError, ConfigError, DeviceError,
+                            FeatureExtractionError, IndexError, LocalizationError,
+                            LocatorError, MediaConfig, PipelineConfig, load_config,
+                            public_error)
 # media.ffmpeg only imported for the error-model check; infra must not import it
 from media.ffmpeg import MediaError, FFmpegIO
 
@@ -119,6 +121,32 @@ class InfrastructureTest(unittest.TestCase):
     def test_config_missing_file_raises(self):
         with self.assertRaises(ConfigError):
             load_config("C:/nonexistent/cfg.json")
+
+    def test_error_codes_are_stable_and_unique(self):
+        """T1-2：对外码只增不改；每个可归类异常有自己的码与用户话术。"""
+        expected = {
+            ConfigError: "LOC-1101", DeviceError: "LOC-1102", IndexError: "LOC-1103",
+            FeatureExtractionError: "LOC-1104", LocalizationError: "LOC-1105",
+            ApplicationError: "LOC-1106", LocatorError: "LOC-1000",
+        }
+        for cls, code in expected.items():
+            body = public_error(cls("boom"))
+            self.assertEqual(body["code"], code, cls.__name__)
+            self.assertTrue(body["message"], cls.__name__)
+            self.assertNotIn("boom", body["message"])   # 话术不外泄技术细节
+        self.assertEqual(len(set(expected.values())), len(expected), "对外码不得重复")
+
+    def test_subsystem_errors_carry_codes(self):
+        from media.ffmpeg._runner import MediaError
+        self.assertEqual(public_error(MediaError("x"))["code"], "LOC-1107")
+        from engine.feature_store import FeatureStoreError
+        self.assertEqual(public_error(FeatureStoreError("x"))["code"], "LOC-1103")
+
+    def test_unknown_exception_falls_back(self):
+        body = public_error(ValueError("boom"))
+        self.assertEqual(body["code"], "LOC-9999")
+        self.assertEqual(body["error"], "ValueError")
+        self.assertIn("boom", body["detail"])
 
     def test_media_error_is_locator_error(self):
         # 统一错误模型：media 失败可被基础异常捕获

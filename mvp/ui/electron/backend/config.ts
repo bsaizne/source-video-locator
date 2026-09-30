@@ -60,6 +60,20 @@ export function createBackendConfig(overrides: Partial<BackendConfig> = {}): Bac
   }
 }
 
+/** BACKEND_LISTEN 公告（随机端口）解析后的派生配置：host/port/healthUrl 切到真实监听地址。 */
+export function configWithListen(
+  config: BackendConfig,
+  listen: { host: string; port: number },
+): BackendConfig {
+  const host = listen.host || config.host
+  return {
+    ...config,
+    host,
+    port: listen.port,
+    healthUrl: `http://${host}:${listen.port}${config.healthPath}`,
+  }
+}
+
 /**
  * Bundle the ffmpeg/ffprobe binaries path resolution for a packaged backend.
  * FFmpegIO reads MEDIA_FFMPEG/MEDIA_FFPROBE env vars first (see media/ffmpeg/_runner),

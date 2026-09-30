@@ -17,12 +17,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))  # -> mvp/s
 import numpy as np
 
 from domain import Candidate, ConfidenceLevel, IndexMeta
-from engine.candidates import produce_candidates
 from engine.confidence import ConfidenceEngine
 from engine.feature_store import IndexBundle
 from engine.localization import (EvidenceLocalizer, EvidenceResult, LocalizationResult,
                                  finloc_window, longest_run)
-from engine.localization.pipeline import localize_segment
 
 from infrastructure.config import ConfidenceConfig
 
@@ -111,80 +109,6 @@ class FinlocTest(unittest.TestCase):
         loc = finloc_window(cand, q, bundle.features, bundle.times)
         self.assertIsNone(loc.span)
         self.assertEqual(loc.best_cover, 0.0)
-
-
-class ConfidenceTest(unittest.TestCase):
-    def test_continuous_high(self):
-        q, _, bundle = _continuous_bundle()
-        best = Candidate(40, 58, 18, 0.99, 0.9, 0.9, 40, 10, 1.0, 0.05, 1.5)
-        competitor = Candidate(100, 110, 10, 0.8, 0.7, 0.8, 20, 5, 0.9, 0.1, 0.5)
-        cands = [best, competitor]
-        loc = finloc_window(best, q, bundle.features, bundle.times)
-        assess = ConfidenceEngine(ConfidenceConfig()).assess(cands, loc, best=best)
-        self.assertEqual(assess.confidence.level, ConfidenceLevel.HIGH)
-        self.assertFalse(assess.montage_flag)
-        self.assertFalse(assess.hard_flags)
-        self.assertGreater(assess.confidence.score, 0.7)
-        self.assertIn("rank1", assess.confidence.reasons)
-        self.assertIn("large_candidate_margin", assess.confidence.reasons)
-        self.assertTrue(any("candidate_margin" in r for r in map(str, assess.confidence.reasons)))
-
-    def test_montage_low(self):
-        q, _, bundle = _montage_bundle()
-        best = Candidate(40, 98, 58, 0.99, 0.9, 0.8, 40, 8, 1.0, 0.1, 1.0)
-        cands = [best, Candidate(120, 130, 10, 0.7, 0.6, 0.9, 10, 4, 0.9, 0.05, 1.5)]
-        loc = finloc_window(best, q, bundle.features, bundle.times)
-        assess = ConfidenceEngine(ConfidenceConfig()).assess(cands, loc, best=best)
-        self.assertTrue(assess.montage_flag)
-        self.assertEqual(assess.confidence.level, ConfidenceLevel.LOW)
-        self.assertIn("montage", assess.hard_flags)
-        self.assertIn("possible_montage", assess.confidence.reasons)
-
-    def test_no_span_low(self):
-        q, _, bundle = _continuous_bundle()
-        best = Candidate(800, 820, 20, 0.5, 0.5, 0.9, 5, 5, 0.5, 0.1, 0.0)
-        loc = finloc_window(best, q, bundle.features, bundle.times)
-        cands = [best]
-        assess = ConfidenceEngine(ConfidenceConfig()).assess(cands, loc, best=best)
-        self.assertEqual(assess.confidence.level, ConfidenceLevel.LOW)
-        self.assertIn("finloc_unstable", assess.hard_flags)
-        self.assertIn("finloc_unstable", assess.confidence.reasons)
-
-    def test_dark_confusion_penalty_no_high(self):
-        # mean_sim 高但 best_cover 低 (暗场景结构性异常) => 不冒 HIGH, 带 reason
-        best = Candidate(40, 58, 18, 0.95, 0.8, 0.9, 40, 10, 1.0, 0.05, 1.5)
-        loc = _fake_loc(best_cover=0.1, span=(40.0, 58.0), run_len_s=18,
-                        run_len_frames=10, span_stability=1.0, multi_island=False)
-        cands = [best]
-        assess = ConfidenceEngine(ConfidenceConfig()).assess(cands, loc, best=best)
-        self.assertNotEqual(assess.confidence.level, ConfidenceLevel.HIGH)
-        self.assertIn("dark_scene_semantic_confusion", assess.confidence.reasons)
-
-
-class LocalizeSegmentTest(unittest.TestCase):
-    def test_end_to_end_continuous(self):
-        q, q_times, bundle = _continuous_bundle()
-        cands = produce_candidates(q, q_times, bundle)
-        refined = localize_segment(cands, q, bundle)
-        self.assertIsNotNone(refined)
-        # best_cover 已回填（候选窗可能比精确匹配段宽，故 >0 即可）
-        self.assertGreater(refined.candidate.best_cover, 0.2)
-        self.assertFalse(refined.montage_flag)
-        # 精确 span 应落在真实拷贝区附近
-        ov = max(0.0, min(refined.original.end, 58.0) - max(refined.original.start, 40.0))
-        # 阈值 0.6 是 Windows/BLAS 口径; mac 的 numpy/BLAS 舍入会让近满分帧的 argmax
-        # tie-break 平移 ~1s（实测 0.528 仍主要落在拷贝区内）→ darwin 放宽到 0.5。
-        threshold = 0.5 if sys.platform == "darwin" else 0.6
-        self.assertGreaterEqual(ov / 18.0, threshold,
-                                f"span {refined.original.start}..{refined.original.end} not in copy region")
-        self.assertLessEqual(refined.original.start, refined.original.end)
-        self.assertIsInstance(refined.confidence.level, ConfidenceLevel)
-        self.assertIsInstance(refined.alternatives, list)
-        self.assertIsInstance(refined.montage_flag, bool)
-
-    def test_no_candidate_returns_none(self):
-        q, _, bundle = _continuous_bundle()
-        self.assertIsNone(localize_segment([], q, bundle))
 
 
 class EvidenceLocalizerTest(unittest.TestCase):

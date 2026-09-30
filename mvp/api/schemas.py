@@ -49,6 +49,37 @@ class ExportRequest(BaseModel):
 class AnalyzeTaskRequest(BaseModel):
     edited_path: str = ""
     original_path: str = ""
+    original_paths: list[str] = []   # 多原片（≥2 触发合并, 2026-09-29 video.concat 移植）
+
+
+class RenderTaskRequest(BaseModel):
+    """成片渲染任务请求（2026-09-29 续30，竞品 video_renderer 移植）。
+
+    结果批取自会话当前批（与 ``/api/export`` 同口径），不在请求体里传。
+    策略参数缺省时取 ``config.export`` / ``config.render``。
+    """
+
+    output_dir: str = ""
+    min_confidence: str | None = None
+    low_policy: str | None = None
+    snap_scenes: bool | None = None
+
+
+class RenderResponse(BaseModel):
+    task_id: str
+
+
+class SourceMergeRequest(BaseModel):
+    """多原片合并请求（竞品 processing.video.concat 的 API 层对应）。"""
+
+    paths: list[str]
+
+
+class SourceMergeResponse(BaseModel):
+    merged_path: str
+    mode: str            # copy | transcode | passthrough
+    reused: bool         # 命中稳定命名缓存
+    duration_s: float | None = None
 
 
 class PreviewRequest(BaseModel):
@@ -57,6 +88,20 @@ class PreviewRequest(BaseModel):
     original_path: str
     start: float
     end: float
+
+
+class MediaInfoResponse(BaseModel):
+    """GET /api/media/info 响应（ffprobe 元数据，纯展示层，不参与任何运行分支）。"""
+
+    path: str
+    duration: float          # 秒（format.duration，MKV 可靠口径）
+    fps: float               # avg_frame_rate 解析值；未知为 0
+    width: int
+    height: int
+    size_bytes: int
+    format_name: str
+    video_codec: str
+    has_audio: bool
 
 
 class HealthResponse(BaseModel):

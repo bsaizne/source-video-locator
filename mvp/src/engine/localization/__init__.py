@@ -4,9 +4,9 @@
 - ``LocalizationResult``：定位质量信号（best_cover / span_stability / coverage_quality /
   multi_island），供 ConfidenceEngine 使用。
 
-编排（``pipeline.localize_segment``：候选 -> 精定位 -> 置信）作为**显式子模块**，
-不从本包顶层导入 —— 避免 ``engine.confidence`` <-> ``engine.localization`` 循环导入
-（confidence 只依赖 finloc；pipeline 才同时依赖两者）。
+> 曾有 ``pipeline.localize_segment``（候选 -> 精定位 -> ``assess()`` 置信）作为单答案编排；
+> 该链路无生产调用者，2026-09-28 经用户拍板删除。生产路径 = ``EvidenceLocalizer`` 产
+> ``EvidenceResult`` -> ``ConfidenceEngine.assess_evidence``。
 """
 from .finloc import (FINLOC_STABLE_S, FINLOC_THRESH, MIN_RUN_FRAMES, MONTAGE_GAP_S,
                      LocalizationResult, finloc_window, longest_run)

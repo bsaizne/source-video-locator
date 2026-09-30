@@ -14,15 +14,19 @@ DINOv2 ViT-S/14 CLS-384 的 forward 以 ONNX 图（含外部权重 ``.onnx.data`
 """
 from __future__ import annotations
 
+import hashlib
 import os
 from pathlib import Path
 
 import numpy as np
 
+from infrastructure import logging as _svl_logging
 from infrastructure import paths
 from infrastructure.errors import DeviceError
 from .cpu_backend import _sys_memory_gb
 from .dinov2_model import _imagenet_preprocess
+
+_LOG = _svl_logging.get_logger(__name__)
 
 _ONNX_BASENAME = "dinov2_cls_384.onnx"
 _DATA_BASENAME = "dinov2_cls_384.onnx.data"
@@ -66,6 +70,46 @@ def asset_meta(model_path: str | Path) -> dict:
     return {}
 
 
+def _sha256_file(path: Path) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+_VERIFIED_ASSETS: dict[tuple, bool] = {}
+
+
+def verify_asset(model_path: str | Path) -> str:
+    """校验 ONNX 资产完整性（``asset.json`` 的 ``sha256`` 映射 {文件名: 摘要}）。
+
+    返回 ``"verified"`` / ``"legacy_unverified"``（导出时还没记摘要的历史资产——放行但留痕，
+    不让老资产变成不可用）。**摘要不符或缺文件 -> :class:`DeviceError`**：权重被替换/截断时
+    绝不静默加载（特征会整体错掉但数值仍"看起来正常"，是比崩掉更坏的失败模式）。
+    """
+    p = Path(model_path)
+    expected = asset_meta(p).get("sha256")
+    if not isinstance(expected, dict) or not expected:
+        _LOG.warning("asset integrity skipped (no sha256 in asset.json): %s", p)
+        return "legacy_unverified"
+    st = p.stat()
+    key = (str(p), st.st_mtime_ns, st.st_size)
+    if _VERIFIED_ASSETS.get(key):
+        return "verified"
+    for name, want in expected.items():
+        f = p.parent / name
+        if not f.exists():
+            raise DeviceError(f"asset file missing: {f}")
+        got = _sha256_file(f)
+        if got != want:
+            raise DeviceError(
+                f"asset sha256 mismatch for {name}: expected {want}, got {got} "
+                "(model asset corrupted or replaced; re-run mvp/scripts/export_dml_model.py)")
+    _VERIFIED_ASSETS[key] = True
+    return "verified"
+
+
 class DirectMLBackend:
     """DirectML (DmlExecutionProvider) 特征提取。``embed_frames`` -> [N,384] L2 归一化 (float32)。
 
@@ -90,6 +134,7 @@ class DirectMLBackend:
     def _build_session(self):
         import onnxruntime as ort
 
+        verify_asset(self.model_path)          # 摘要不符 -> DeviceError（上游会 CPU fallback 并留痕）
         try:
             providers = ort.get_available_providers()
         except Exception as exc:
