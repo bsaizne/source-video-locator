@@ -22,7 +22,7 @@ from app import SourceLocatorService  # noqa: E402
 from media.ffmpeg import FFmpegIO  # noqa: E402
 
 BENCH = Path(__file__).resolve().parents[2]          # -> benchmark
-REAL_ORIG = BENCH / "datasets" / "real" / "originals" / "2.mkv"
+REAL_ORIG = Path(r"D:/video/2.mkv")   # 2026-09-29 清理: 仓内副本已迁 benchmark_trash_20260928/tier2（与 D:/video/2.mkv sha256 一致）
 FFMPEG = BENCH / "tools" / "ffmpeg.exe"
 FFPROBE = (BENCH.parent / "video-dedup-tool" / ".venv" / "Lib" / "site-packages"
            / "static_ffmpeg" / "bin" / "win32" / "ffprobe.exe")

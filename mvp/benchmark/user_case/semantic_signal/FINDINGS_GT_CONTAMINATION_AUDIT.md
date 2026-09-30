@@ -83,17 +83,33 @@
 
 ---
 
-## 六、行动清单（按优先级）
+## 六、行动清单与执行状态
 
-1. **重跑 `feature_upgrade`（ViT-B 对照）配 v4 GT** —— **最高优先**。它是「该不该换更大基座」的**唯一直接证据**；
-   成本可控（CPU 前向 + 局部窗口嵌入）。结果分叉：仍无增益 → 结论坐实；出现增益 → **「特征上限」叙事需重写**。
-   注意：p08b 必须用修正后位置（1108-1110），t4r01 剔除（test4 数据无效），p26 用 1766-1770。
-2. **重跑 `phase24_1` 三探针**（成本较高：几何/patch 内点率、投影头）。
-3. **重跑 M5**（patch 级召回）。
-4. **建机制（防复发）**：
-   - 每条研究结论文档显式标注 **「基于哪一版 GT」**（v3 / v4 / verified-139）；
-   - GT 修正时，自动列出受影响结论清单（本审计即为首次人工执行）；
-   - 研究结论引用前，先查 `FINDINGS_*` 是否标注「GT 修正后作废」。
+1. ✅ **已执行（2026-09-25）— 重跑 `feature_upgrade`（ViT-S vs ViT-B）配修正 GT**。
+   产物：`mvp/scripts/research_feature_upgrade_v4.py` + `work/feature_upgrade_v4_results.json` +
+   `mvp/benchmark/user_case/feature_upgrade/FINDINGS_FEATURE_UPGRADE_V4.md`（9 探针 / 1294 s / CPU 前向）。
+   可信度基础：**v3 旧口径行逐位复现原存档**（p08b −0.1379/−0.2808、p26 −0.0361/−0.0086、t3r10 patch +0.0279/+0.0202 等），
+   且索引 `features.npy`/`times.npy` 与 `.idx.stale` 逐字节相同、`2.mkv` sha256 与索引记录一致。
+   **结果**：原「ViT-B 更差」的最强证据（p08b −0.138→−0.281）确认为 **GT 假象**（修正后 S −0.014 / B −0.017，两者都≈0）；
+   在真正的失败族（p08/p08b 兄弟机位）上 **两基座都不可分**（margin ≈0、ViT-S 全片 rank 5-6）→
+   「**基座升规模不解决失败族**」在修正 GT 上**复现**；「不建议 bump feature_version 全量重建」建议**维持**。
+   同时：p26 这一「最硬案例」随 GT 修正消失（正确位置 1768.2-1770.05 在 ViT-S 全片索引 **rank=1**）。
+   **该探针的残留问题（ViT-B 侧仅为局部窗口嵌入）已于同日补做产品级回归** → 见 `feature_upgrade/FINDINGS_VITB_FULL_INDEX.md`：
+   四片全量 ViT-B 索引 + 生产管线 = **严格 116/139（基线 117）· 场景 134（基线 137）** → 无增益 → **基座路线关闭（产品级，有据）**。
+2. ✅ **已执行（2026-09-25）— 重跑 `phase24_1` 三探针**（`research_phase24_1_v4.py` + `research_phase24_1_data_v4.py` →
+   `phase24_1/FINDINGS_V4.md`）。**结果**：探针①几何的两条核心证据（p08b「兄弟压倒」、p26「几何假阳性」）**作废**
+   （1109 本就是真值）；修正后 HOM 把真值帧排 rank 1（4/4 硬例），但 INL 判据相反 + 帧间跳变极大 →
+   「既非已证伪也非已可用」，列为待复验方向。探针②（运动签名）、③（硬负例盘点）**维持**。
+3. ✅ **已执行（2026-09-25）— 重跑 M5**（`research_patch_recall_v4.py` → `semantic_signal/FINDINGS_M5_V4.md`）。
+   **结果**：原核心卖点「patch 把兄弟机位捞回池（p08b 32→2）」**作废** —— 修正后 p08b 正确位置 CLS rank 5 / patch rank 9；
+   p26 修正后 CLS/patch 均 rank 1；patch 作为独立召回通道**无信号**（与 M6 v4 0/39 一致）。
+4. 🟡 **部分落地 — 防复发机制**：
+   - ✅ 三份受影响结论文档已加 **「GT 版本」标注头**（`feature_upgrade/FINDINGS.md`、`phase24_1/FINDINGS.md`、`semantic_signal/FINDINGS_M5.md`），
+     格式：`> ⚠️ **GT 版本 = v3（未重验/已作废）** …` + 指向本审计的引用；
+   - ✅ 新增 §八「GT 版本登记表」作为清单入口；
+   - ✅ 自动化半边已建（2026-09-26 续9）：`mvp/scripts/gt_impact_scan.py` —— GT 文件哈希快照（`work/gt_version_manifest.json`，
+     8 个 GT）+ `--check` 变更检测自动列出受影响文档（映射表内置于脚本 `AFFECTED_MAP`，与 §八 同步维护）+ 未登记文档扫描；
+     变更路径已注入式验证（伪哈希 → 10 份受影响文档清单 → 恢复）。**人工半边仍需人**：脚本只列清单，重验/标注由执行者做。
 
 ---
 
@@ -105,3 +121,34 @@
 4. **修复路径不是继续推理，而是重做证伪**：先重跑 `feature_upgrade` 配 v4 GT，再谈基座路线。
 
 > 审计者：AI 助手（2026-09-22）｜ 依据：`.agent/STATE.md` + `FINDINGS_REVIEW_M1M8.md` + 各 FINDINGS 原文 + 实验脚本探针集
+
+---
+
+## 八、GT 版本登记表（防复发机制入口，2026-09-22 建）
+
+> 引用任何研究结论前，先查本表 + 该结论文档头部新增的 GT 版本标注。
+
+| 结论文档 | 基于哪版 GT | 修正 GT 后的状态 |
+|---|---|---|
+| `feature_upgrade/FINDINGS.md`（Phase 23-0 ViT-S vs ViT-B） | v3（9 探针中 3 个污染：p26 / p08b / t4r01） | ✅ **已用 v4 重跑** → 以同目录 `FINDINGS_FEATURE_UPGRADE_V4.md` 为准（原「ViT-B 一处恶化」作废；实践结论复现） |
+| `phase24_1/FINDINGS.md`（视觉几何 / 时序运动签名 / 投影头） | v3（5 探针中 3 个污染） | ✅ **已用 v4 重跑** → 以同目录 `FINDINGS_V4.md` 为准（几何「兄弟反超」证据作废；运动/盘点维持） |
+| `semantic_signal/FINDINGS_M5.md`（patch 级召回） | v3（p08b 真值窗已作废） | ✅ **已用 v4 重跑** → 以同目录 `FINDINGS_M5_V4.md` 为准（「p08b 32→2」作废；patch 召回无信号） |
+| `semantic_signal/FINDINGS_M6_REVISED.md` | v4（39 条） | ✅ 已重算 |
+| `semantic_signal/FINDINGS_M4.md` / `FINDINGS_M8.md` | v4 重跑 | ✅ |
+| `semantic_signal/FINDINGS_M7.md` | v2 重跑（最新失败族 12 案例） | ✅ |
+| `semantic_signal/FINDINGS_M1.md` / `FINDINGS_M2.md` | v2 复审（14 失败案例逐帧画面） | ✅ |
+| `FINDINGS_SUBSHOT_QUERY.md`（蒙太奇子镜头查询） | `ground_truth_corrected.json`（7 段视觉确认） | ✅ |
+| `FINDINGS_REVIEW_M1M8.md`（M1-M8 数据级重判） | 探针存档 JSON + 修正 GT 推导 | 🟡 部分（其自述「未重跑昂贵探针」的项 = 本表第 1~3 行） |
+| `feature_upgrade/FINDINGS_VITB_FULL_INDEX.md`（ViT-B 全量索引 + 四片 runtime 回归） | 修正 GT（v4 + verified-139） | ✅ 已执行（产品级无增益 → 基座路线关闭） |
+| T1 训练可行性探针（`probe_training_t1a/t1b.py`） | verified-139（立项即用） | ✅ |
+| `FINDINGS_IFRAME_CUT.md`（I 帧锚定切分探针） | verified-139（仅回归护栏） | ✅ 已核（2026-09-26）：切分方向结论不依赖 GT 窗，头部已标注 |
+| `FINDINGS_LOWINFO_STRIP.md`（低信息降权） | verified-139（v4 口径，负例 + 2mkv v4 窗） | ✅ 已核（2026-09-26）：「负例零改善」不依赖窗口精度，头部已标注 |
+| `FINDINGS_SEMANTIC_SEPARABILITY.md`（语义可分性） | verified-139（仅负例 4 条身份定义） | ✅ 已核（2026-09-26）：不依赖窗口精度，头部已标注 |
+| `FINDINGS_TIMELINE_V4_QUANT.md`（时序重排 v4 量化） | `ground_truth_v4.json`（脚本 L16 直读） | ✅ 已核（2026-09-26）：v4 执行，头部已标注 |
+| `FINDINGS_EVENT_IDENTITY_P1_P2.md`（方向 A P1/P2） | `ground_truth_v4.json`（p08 窗 1108.15-1109.1）+ verified test3 | ✅ 已核（2026-09-26）：v4 执行，头部已标注 |
+| `FINDINGS_P36_FINESEG.md`（p36 细切分取证） | `ground_truth_v4.json`（p36 窗 2042-2043.4） | ✅ 已核（2026-09-26）：v4 执行；p36 已由两级切分救回，头部已标注 |
+| `FINDINGS_AMBIGUITY_PROTOTYPE.md`（Ambiguity 原型） | `ground_truth_v4.json`（`work/_amb_proto_run.py` L22 直读） | ✅ 已核（2026-09-26）：v4 执行，头部已标注 |
+
+**登记规则**：① 新建研究结论文档时，标题下第一行写 `> **GT 版本**：<文件>（<条数>，<是否逐帧确认>）`；
+② GT 被修正后，执行者更新本表并在受影响文档头部加 ⚠️ 标注；
+③ 引用结论前先查本表——**本项目已因缺此机制亏三次**（见 §一）。

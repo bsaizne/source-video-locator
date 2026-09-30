@@ -1,5 +1,12 @@
 # Phase 23-0 特征升级预研 FINDINGS(2026-08-30 晚)
 
+> ⚠️ **GT 版本 = v3(已部分作废)** — 本文件 9 个探针中 3 个建立在已证伪数据上(p26 真值窗 2808-2811 标错 /
+> p08b「真值窗」1048-1050 = p38 旧错误 GT 区 / t4r01·t4r13 = test4 数据无效)。
+> **2026-09-25 已用 v4 修正 GT 重跑 → 同目录 `FINDINGS_FEATURE_UPGRADE_V4.md`(引用时以 V4 版为准)**:
+> 下方结论 1 的「零增益、一处明确恶化(p08b −0.138→−0.281)」**证据基础被推翻**(该恶化是 GT 假象);
+> 「基座升规模不解决失败族」在修正数据上**复现**(依据换成 p08「兄弟机位」族:两基座 margin 均 ≈0、全片 rank 5-6);
+> 「不建议 bump feature_version 全量重建」建议**维持**。起因见 `semantic_signal/FINDINGS_GT_CONTAMINATION_AUDIT.md`。
+
 **结论:ViT-B/14(更强 backbone)在实锤失败探针上无增益,部分探针反而恶化;不建议 bump feature_version 全量重建索引。**
 
 ## 背景

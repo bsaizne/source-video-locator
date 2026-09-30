@@ -1,0 +1,817 @@
+{
+  "pattern": "work/vitb_{case}.results.json",
+  "rows": [
+    {
+      "label": "2mkv",
+      "n_pos": 39,
+      "n_neg": 4,
+      "strict_hit": 36,
+      "verified_hit": 33,
+      "loose_hit": 3,
+      "scene_hit": 39,
+      "fp": 3,
+      "sup": 199,
+      "tot": 332,
+      "per_pos": [
+        {
+          "id": "p01",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "p02",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "p03",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "p04",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "p05",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "p06",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "p07",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "p08",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "p09",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "p10",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "p11",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "p12",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "p13",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "p14",
+          "tier": "verified",
+          "mark": "part"
+        },
+        {
+          "id": "p15",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "p16",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "p17",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "p18",
+          "tier": "verified",
+          "mark": "part"
+        },
+        {
+          "id": "p19",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "p20",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "p21",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "p22",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "p23",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "p24",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "p25",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "p26",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "p27",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "p28",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "p29",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "p30",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "p31",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "p32",
+          "tier": "loose",
+          "mark": "HIT"
+        },
+        {
+          "id": "p33",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "p34",
+          "tier": "loose",
+          "mark": "HIT"
+        },
+        {
+          "id": "p35",
+          "tier": "loose",
+          "mark": "HIT"
+        },
+        {
+          "id": "p36",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "p39",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "p40",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "p41",
+          "tier": "verified",
+          "mark": "part"
+        }
+      ],
+      "offenders": [
+        {
+          "id": "n01",
+          "fp": true
+        },
+        {
+          "id": "n02",
+          "fp": true
+        },
+        {
+          "id": "n03",
+          "fp": true
+        },
+        {
+          "id": "n04",
+          "fp": false
+        }
+      ],
+      "gt": "D:\\claudework\\benchmark\\datasets\\real\\ground_truth_v4.json",
+      "results": "D:\\claudework\\benchmark\\work\\vitb_2mkv.results.json"
+    },
+    {
+      "label": "test1",
+      "n_pos": 43,
+      "n_neg": 1,
+      "strict_hit": 35,
+      "verified_hit": 35,
+      "loose_hit": 0,
+      "scene_hit": 40,
+      "fp": 0,
+      "sup": 101,
+      "tot": 203,
+      "per_pos": [
+        {
+          "id": "t1r00",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t1r01",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t1r02",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t1r03",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t1r04",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t1r05",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t1r06",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t1r07a",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t1r07b",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t1r08a",
+          "tier": "verified",
+          "mark": "part"
+        },
+        {
+          "id": "t1r08b",
+          "tier": "verified",
+          "mark": "part"
+        },
+        {
+          "id": "t1r08c",
+          "tier": "verified",
+          "mark": "MISS"
+        },
+        {
+          "id": "t1r09",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t1r10a",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t1r10b",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t1r11",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t1r12a",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t1r12b",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t1r13a",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t1r13b",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t1r14a",
+          "tier": "verified",
+          "mark": "part"
+        },
+        {
+          "id": "t1r14c",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t1r14d",
+          "tier": "verified",
+          "mark": "part"
+        },
+        {
+          "id": "t1r14e",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t1r14b",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t1r15",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t1r16",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t1r17",
+          "tier": "verified",
+          "mark": "MISS"
+        },
+        {
+          "id": "t1r18",
+          "tier": "verified",
+          "mark": "MISS"
+        },
+        {
+          "id": "t1r19",
+          "tier": "verified",
+          "mark": "part"
+        },
+        {
+          "id": "t1r20",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t1r21",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t1r22",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t1r23",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t1r24",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t1r25",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t1r26",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t1r27",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t1r28",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t1r29",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t1r30a",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t1r30b",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t1r31",
+          "tier": "verified",
+          "mark": "HIT"
+        }
+      ],
+      "offenders": [
+        {
+          "id": "t1r32",
+          "fp": false
+        }
+      ],
+      "gt": "D:\\claudework\\benchmark\\datasets\\real\\ground_truth_test1.json",
+      "results": "D:\\claudework\\benchmark\\work\\vitb_test1.results.json"
+    },
+    {
+      "label": "test2",
+      "n_pos": 20,
+      "n_neg": 1,
+      "strict_hit": 14,
+      "verified_hit": 14,
+      "loose_hit": 0,
+      "scene_hit": 19,
+      "fp": 0,
+      "sup": 77,
+      "tot": 233,
+      "per_pos": [
+        {
+          "id": "t2r00",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t2r01a",
+          "tier": "verified",
+          "mark": "part"
+        },
+        {
+          "id": "t2r01b",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t2r01c",
+          "tier": "verified",
+          "mark": "part"
+        },
+        {
+          "id": "t2r02a",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t2r02b",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t2r02c",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t2r03a",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t2r03b",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t2r03c",
+          "tier": "verified",
+          "mark": "part"
+        },
+        {
+          "id": "t2r04a",
+          "tier": "verified",
+          "mark": "part"
+        },
+        {
+          "id": "t2r04b",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t2r05a",
+          "tier": "verified",
+          "mark": "MISS"
+        },
+        {
+          "id": "t2r05b",
+          "tier": "verified",
+          "mark": "part"
+        },
+        {
+          "id": "t2r06a",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t2r06b",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t2r06c",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t2r07a",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t2r07b",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t2r07c",
+          "tier": "verified",
+          "mark": "HIT"
+        }
+      ],
+      "offenders": [
+        {
+          "id": "t2r08",
+          "fp": false
+        }
+      ],
+      "gt": "D:\\claudework\\benchmark\\datasets\\real\\ground_truth_test2.json",
+      "results": "D:\\claudework\\benchmark\\work\\vitb_test2.results.json"
+    },
+    {
+      "label": "test3",
+      "n_pos": 37,
+      "n_neg": 3,
+      "strict_hit": 31,
+      "verified_hit": 31,
+      "loose_hit": 0,
+      "scene_hit": 36,
+      "fp": 1,
+      "sup": 220,
+      "tot": 309,
+      "per_pos": [
+        {
+          "id": "t3r00",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t3r01",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t3r02a",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t3r02b",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t3r02c",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t3r03a",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t3r03b",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t3r04a",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t3r04b",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t3r04c",
+          "tier": "verified",
+          "mark": "part"
+        },
+        {
+          "id": "t3r05",
+          "tier": "verified",
+          "mark": "part"
+        },
+        {
+          "id": "t3r06a",
+          "tier": "verified",
+          "mark": "part"
+        },
+        {
+          "id": "t3r06b",
+          "tier": "verified",
+          "mark": "MISS"
+        },
+        {
+          "id": "t3r07",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t3r08",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t3r09",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t3r10",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t3r11",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t3r12",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t3r13",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t3r16",
+          "tier": "verified",
+          "mark": "part"
+        },
+        {
+          "id": "t3r17",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t3r18",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t3r19",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t3r20",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t3r21",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t3r22",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t3r23",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t3r24",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t3r25",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t3r26",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t3r27",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t3r28",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t3r29",
+          "tier": "verified",
+          "mark": "part"
+        },
+        {
+          "id": "t3r30",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t3r31",
+          "tier": "verified",
+          "mark": "HIT"
+        },
+        {
+          "id": "t3r32",
+          "tier": "verified",
+          "mark": "HIT"
+        }
+      ],
+      "offenders": [
+        {
+          "id": "t3r14",
+          "fp": false
+        },
+        {
+          "id": "t3r15",
+          "fp": true
+        },
+        {
+          "id": "t3r33",
+          "fp": false
+        }
+      ],
+      "gt": "D:\\claudework\\benchmark\\datasets\\real\\ground_truth_test3.json",
+      "results": "D:\\claudework\\benchmark\\work\\vitb_test3.results.json"
+    }
+  ],
+  "total": {
+    "strict": 116,
+    "n_pos": 139,
+    "scene": 134,
+    "fp": 4,
+    "n_neg": 9,
+    "sup": 597,
+    "tot": 1077
+  }
+}

@@ -46,7 +46,7 @@ def main() -> int:
 
     t0 = time.perf_counter()
     model = DinoV2Small()
-    model.load_state_dict(torch.load(str(weights), map_location="cpu"))
+    model.load_state_dict(torch.load(str(weights), map_location="cpu", weights_only=True))
     model.eval()
     print(f"[export] model loaded in {time.perf_counter() - t0:.2f}s")
 
@@ -70,6 +70,18 @@ def main() -> int:
     print(f"[export] checker: OK  opset={m.opset_import[0].version}")
 
     # 资产元数据（§4：model name/version/opset/input/output shape/backend compatibility）
+    # + 完整性摘要（对齐竞品 202 文件 {path,sha256} 清单的做法；DirectMLBackend.verify_asset 消费）
+    import hashlib
+
+    def _sha256(fp: Path) -> str:
+        h = hashlib.sha256()
+        with open(fp, "rb") as f:
+            for chunk in iter(lambda: f.read(1 << 20), b""):
+                h.update(chunk)
+        return h.hexdigest()
+
+    digests = {fp.name: _sha256(fp) for fp in sorted(out_dir.glob(f"{out_path.name}*"))
+               if fp.is_file() and fp.name != "asset.json"}
     meta = {
         "name": "dinov2_cls_384",
         "model": "dinov2_vits14_cls_384",
@@ -81,6 +93,9 @@ def main() -> int:
         "backend_compatibility": ["directml", "cpu"],
         "normalization": "L2 applied at DirectMLBackend.embed_frames (matches CPUBackend)",
         "source": "frozen DinoV2Small (tanh-GELU, final LayerNorm, CLS token)",
+        "sha256": digests,
+        "size_bytes": {fp.name: (out_dir / fp.name).stat().st_size for fp in
+                       [Path(n) for n in digests]},
         "exported_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
     (out_dir / "asset.json").write_text(json.dumps(meta, indent=2, ensure_ascii=False), encoding="utf-8")

@@ -47,22 +47,26 @@ def _union_covers(spans: list[tuple[float, float]], o0: float, o1: float,
 def evaluate(gt: dict, res: list[dict], *, label: str = "") -> dict:
     """评估一个 GT↔结果批对,返回结构化指标(CLI 打印与 measure_baseline 共用同一口径)。
 
-    返回 dict: {label, n_pos, n_neg, strict_hit, verified_hit, loose_hit, scene_hit,
+    返回 dict: {label, n_pos, n_neg, strict_hit, main_hit, verified_hit, loose_hit, scene_hit,
                 fp, sup, tot, per_pos, offenders}
+    ``main_hit`` = 只认**主 span** 的并列口径（= 导出工程实际拿到的素材，见 export_project
+    的 ``include_subs=False``）；per_pos 每行带 ``main_hit`` 布尔。
     """
     if label:
         print(f"=== 镜头级评估: {label} ===")
     print(f"=== {len(res)} 段结果 vs GT "
           f"({len(gt['positives'])} 正例 / {len(gt['negatives'])} 负例) ===\n")
 
-    hit = verified_hit = loose_hit = scene_hit = 0
+    hit = verified_hit = loose_hit = scene_hit = main_hit = 0
     per_pos = []
     for p in gt["positives"]:
         e0, e1 = p["edited"]
         o0, o1 = p["original"]
         covering = []  # (a, b) 原片侧与 GT 有交集的 span(联合覆盖用)
+        covering_main = []   # 同上, 但只收**主 span**（= 导出工程实际用到的那个）
         ed_intervals = []  # 编辑侧与 GT 有交集的区间(联合编辑覆盖用)
         best = None
+        best_main = None
         best_scene = None
         for i, r in enumerate(res):
             re0, re1 = r["edited_segment"]["start"], r["edited_segment"]["end"]
@@ -77,8 +81,12 @@ def evaluate(gt: dict, res: list[dict], *, label: str = "") -> dict:
                 cov = overlap_frac(o0, o1, a, b) >= 0.4
                 if best is None and (within or mid_in or cov):
                     best = (i, kind, a, b, conf)
+                if kind == "main" and best_main is None and (within or mid_in or cov):
+                    best_main = (i, kind, a, b, conf)
                 if a <= o1 and b >= o0:
                     covering.append((a, b))
+                    if kind == "main":
+                        covering_main.append((a, b))
                 # 场景级口径:结果中点落在 GT span ±15s 内
                 m = (a + b) / 2
                 if o0 - 15.0 <= m <= o1 + 15.0 and best_scene is None:
@@ -87,14 +95,20 @@ def evaluate(gt: dict, res: list[dict], *, label: str = "") -> dict:
         ed_union = _union_covers(ed_intervals, e0, e1, 0.5) if ed_intervals else False
         if best is None and covering and ed_union and _union_covers(covering, o0, o1):
             best = ("union", "joint", covering[0][0], covering[-1][1], "joint")
+        if best_main is None and covering_main and ed_union and \
+                _union_covers(covering_main, o0, o1):
+            best_main = ("union", "joint_main", covering_main[0][0], covering_main[-1][1],
+                         "joint_main")
         if p["tier"] == "verified":
             verified_hit += best is not None
         elif p["tier"] == "loose":
             loose_hit += best is not None
         hit += best is not None
+        main_hit += best_main is not None
         scene_hit += best_scene is not None
         mark = "HIT " if best else ("part" if best_scene else "MISS")
-        per_pos.append({"id": p["id"], "tier": p["tier"], "mark": mark.strip()})
+        per_pos.append({"id": p["id"], "tier": p["tier"], "mark": mark.strip(),
+                        "main_hit": best_main is not None})
         det = (f"s{best[0]}({best[1]} {best[2]:.0f}-{best[3]:.0f} {best[4]})" if best else
               (f"s{best_scene[0]}({best_scene[1]} {best_scene[2]:.0f}-{best_scene[3]:.0f} ~场景级)" if best_scene else "-"))
         print(f"[{mark}] {p['id']} ed{e0:6.1f}-{e1:6.1f} -> og{o0:6.1f}-{o1:6.1f} "
@@ -105,6 +119,10 @@ def evaluate(gt: dict, res: list[dict], *, label: str = "") -> dict:
     print(f"\n正例召回: 严格 {hit}/{len(gt['positives'])} "
           f"(verified {verified_hit}/{n_ver}, loose {loose_hit}/{n_loo}) | "
           f"场景级(±15s) {scene_hit}/{len(gt['positives'])}")
+    # 并列口径(2026-09-29 续31 补三): 导出工程只用主 span(build_export_plan include_subs=False),
+    # 故「仅主 span」= 用户在 NLE 里实际拿到的素材是否覆盖 GT。两者差额 = 靠子 span/事件宽 span 兜住的行数。
+    print(f"导出实得(仅主 span): {main_hit}/{len(gt['positives'])} "
+          f"| 与严格差 {main_hit - hit}")
 
     print("\n=== 负例误报(编辑侧非源片内容被定位;not_in_source 结果=正确拒绝,不计) ===")
     fp = 0
@@ -146,6 +164,7 @@ def evaluate(gt: dict, res: list[dict], *, label: str = "") -> dict:
         "n_pos": len(gt["positives"]),
         "n_neg": len(gt["negatives"]),
         "strict_hit": hit,
+        "main_hit": main_hit,
         "verified_hit": verified_hit,
         "loose_hit": loose_hit,
         "scene_hit": scene_hit,

@@ -31,7 +31,10 @@ hiddenimports = [
     "pyJianYingDraft",
     "pymediainfo",
     *collect_submodules("rapidocr_onnxruntime")
-    + collect_submodules("mvp.api")
+    # 桥 = **顶层包 api**（pathex 含 mvp/）；不要用 collect_submodules("mvp.api")——
+    # "mvp" 命名空间只在 benchmark 根为 cwd 的构建环境可解析，frozen 运行时不存在，
+    # 2026-09-28 打包验收曾因该 cwd 依赖静默漏收整个桥层（PYZ 无 api.* → 启动即崩）。
+    + collect_submodules("api")
     + collect_submodules("app")
     + collect_submodules("domain")
     + collect_submodules("engine")

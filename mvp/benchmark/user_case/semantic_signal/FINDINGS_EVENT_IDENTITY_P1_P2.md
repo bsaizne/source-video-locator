@@ -1,5 +1,7 @@
 # 方向 A 探针 FINDINGS —— 场景实例身份建模（P1 事件级聚类 + P2 事件身份排序）= POSITIVE
 
+> **GT 版本**：`ground_truth_v4.json`（p08 真值窗 1108.15-1109.1，v4 修正后）+ verified test3（t3r12）｜2026-09-26 登记
+
 > 日期：2026-09-05（本会话执行） | 性质：**研究侧探针，零 runtime 改动**
 > 立项：RESEARCH_PROPOSAL_SECOND_SIGNAL.md §6（2026-09-05 用户拍板重启研究侧）
 > 脚本：mvp/scripts/research_event_identity.py | 数据：work/event_identity_P1_P2_results.json

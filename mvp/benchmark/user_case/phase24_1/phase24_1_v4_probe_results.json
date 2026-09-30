@@ -1,0 +1,3634 @@
+{
+  "started": "2026-09-25 15:50:31",
+  "gt": "ground_truth_v4.json + ground_truth_test3.json (verified)",
+  "device": "CPU torch (ViT-S/14 冻结 backbone, 与生产前向同口径)",
+  "probes": [
+    {
+      "kind": "geometry",
+      "id": "p08",
+      "pair": "2mkv",
+      "query_t": 13.5,
+      "true_win": [
+        1108.15,
+        1109.1
+      ],
+      "brother": [
+        1048.0,
+        1050.0
+      ],
+      "ranks": {
+        "cls_sim": [
+          6,
+          40
+        ],
+        "patch_max": [
+          5,
+          40
+        ],
+        "geom_inlier": [
+          31,
+          40
+        ],
+        "geom_homog": [
+          1,
+          40
+        ]
+      },
+      "true_frames": [
+        {
+          "t": 1108.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.806,
+          "patch_max": 0.8172,
+          "geom_inlier": 0.2858,
+          "geom_homog": 0.3308,
+          "n_match": 75
+        },
+        {
+          "t": 1109.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.8109,
+          "patch_max": 0.9353,
+          "geom_inlier": 0.4066,
+          "geom_homog": 0.8494,
+          "n_match": 329
+        }
+      ],
+      "brother_frames": [
+        {
+          "t": 1048.0,
+          "in_true": false,
+          "in_brother": true,
+          "cls_sim": 0.4084,
+          "patch_max": 0.8324,
+          "geom_inlier": 0.4109,
+          "geom_homog": 0.5058,
+          "n_match": 78
+        },
+        {
+          "t": 1049.0,
+          "in_true": false,
+          "in_brother": true,
+          "cls_sim": 0.4202,
+          "patch_max": 0.8564,
+          "geom_inlier": 0.3778,
+          "geom_homog": 0.375,
+          "n_match": 97
+        },
+        {
+          "t": 1050.0,
+          "in_true": false,
+          "in_brother": true,
+          "cls_sim": 0.2383,
+          "patch_max": 0.8308,
+          "geom_inlier": 0.3711,
+          "geom_homog": 0.4471,
+          "n_match": 67
+        }
+      ],
+      "frames": [
+        {
+          "t": 1027.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.7086,
+          "patch_max": 0.8344,
+          "geom_inlier": 0.3619,
+          "geom_homog": 0.4149,
+          "n_match": 93
+        },
+        {
+          "t": 1028.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6841,
+          "patch_max": 0.9105,
+          "geom_inlier": 0.535,
+          "geom_homog": 0.6012,
+          "n_match": 225
+        },
+        {
+          "t": 1029.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.673,
+          "patch_max": 0.9088,
+          "geom_inlier": 0.5241,
+          "geom_homog": 0.5804,
+          "n_match": 222
+        },
+        {
+          "t": 1030.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.7341,
+          "patch_max": 0.9089,
+          "geom_inlier": 0.5247,
+          "geom_homog": 0.5986,
+          "n_match": 236
+        },
+        {
+          "t": 1031.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.7378,
+          "patch_max": 0.9191,
+          "geom_inlier": 0.5245,
+          "geom_homog": 0.6638,
+          "n_match": 238
+        },
+        {
+          "t": 1032.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.7514,
+          "patch_max": 0.9224,
+          "geom_inlier": 0.4996,
+          "geom_homog": 0.7145,
+          "n_match": 255
+        },
+        {
+          "t": 1033.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.7785,
+          "patch_max": 0.9247,
+          "geom_inlier": 0.4374,
+          "geom_homog": 0.738,
+          "n_match": 276
+        },
+        {
+          "t": 1034.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.8313,
+          "patch_max": 0.9325,
+          "geom_inlier": 0.3994,
+          "geom_homog": 0.7602,
+          "n_match": 309
+        },
+        {
+          "t": 1035.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.8339,
+          "patch_max": 0.9409,
+          "geom_inlier": 0.4316,
+          "geom_homog": 0.8442,
+          "n_match": 344
+        },
+        {
+          "t": 1036.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.8226,
+          "patch_max": 0.9385,
+          "geom_inlier": 0.429,
+          "geom_homog": 0.8386,
+          "n_match": 341
+        },
+        {
+          "t": 1037.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.825,
+          "patch_max": 0.9411,
+          "geom_inlier": 0.4168,
+          "geom_homog": 0.8043,
+          "n_match": 341
+        },
+        {
+          "t": 1038.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.8212,
+          "patch_max": 0.9387,
+          "geom_inlier": 0.4235,
+          "geom_homog": 0.8354,
+          "n_match": 336
+        },
+        {
+          "t": 1048.0,
+          "in_true": false,
+          "in_brother": true,
+          "cls_sim": 0.4084,
+          "patch_max": 0.8324,
+          "geom_inlier": 0.4109,
+          "geom_homog": 0.5058,
+          "n_match": 78
+        },
+        {
+          "t": 1049.0,
+          "in_true": false,
+          "in_brother": true,
+          "cls_sim": 0.4202,
+          "patch_max": 0.8564,
+          "geom_inlier": 0.3778,
+          "geom_homog": 0.375,
+          "n_match": 97
+        },
+        {
+          "t": 1050.0,
+          "in_true": false,
+          "in_brother": true,
+          "cls_sim": 0.2383,
+          "patch_max": 0.8308,
+          "geom_inlier": 0.3711,
+          "geom_homog": 0.4471,
+          "n_match": 67
+        },
+        {
+          "t": 1108.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.806,
+          "patch_max": 0.8172,
+          "geom_inlier": 0.2858,
+          "geom_homog": 0.3308,
+          "n_match": 75
+        },
+        {
+          "t": 1109.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.8109,
+          "patch_max": 0.9353,
+          "geom_inlier": 0.4066,
+          "geom_homog": 0.8494,
+          "n_match": 329
+        },
+        {
+          "t": 1166.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6835,
+          "patch_max": 0.909,
+          "geom_inlier": 0.3973,
+          "geom_homog": 0.6496,
+          "n_match": 256
+        },
+        {
+          "t": 1167.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6868,
+          "patch_max": 0.909,
+          "geom_inlier": 0.4392,
+          "geom_homog": 0.5946,
+          "n_match": 254
+        },
+        {
+          "t": 1168.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6866,
+          "patch_max": 0.9072,
+          "geom_inlier": 0.3957,
+          "geom_homog": 0.6027,
+          "n_match": 258
+        },
+        {
+          "t": 1169.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6829,
+          "patch_max": 0.9092,
+          "geom_inlier": 0.4223,
+          "geom_homog": 0.6107,
+          "n_match": 249
+        },
+        {
+          "t": 1170.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.7009,
+          "patch_max": 0.911,
+          "geom_inlier": 0.4196,
+          "geom_homog": 0.6315,
+          "n_match": 251
+        },
+        {
+          "t": 1171.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.7025,
+          "patch_max": 0.9103,
+          "geom_inlier": 0.4382,
+          "geom_homog": 0.6144,
+          "n_match": 246
+        },
+        {
+          "t": 1905.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5918,
+          "patch_max": 0.875,
+          "geom_inlier": 0.3682,
+          "geom_homog": 0.4562,
+          "n_match": 201
+        },
+        {
+          "t": 1906.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5821,
+          "patch_max": 0.8788,
+          "geom_inlier": 0.3499,
+          "geom_homog": 0.4506,
+          "n_match": 195
+        },
+        {
+          "t": 1933.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5665,
+          "patch_max": 0.8949,
+          "geom_inlier": 0.4784,
+          "geom_homog": 0.5613,
+          "n_match": 180
+        },
+        {
+          "t": 1939.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6027,
+          "patch_max": 0.8889,
+          "geom_inlier": 0.3887,
+          "geom_homog": 0.4851,
+          "n_match": 182
+        },
+        {
+          "t": 2706.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.59,
+          "patch_max": 0.8898,
+          "geom_inlier": 0.4007,
+          "geom_homog": 0.5455,
+          "n_match": 222
+        },
+        {
+          "t": 2723.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5809,
+          "patch_max": 0.8806,
+          "geom_inlier": 0.4072,
+          "geom_homog": 0.6359,
+          "n_match": 178
+        },
+        {
+          "t": 2732.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6079,
+          "patch_max": 0.8731,
+          "geom_inlier": 0.4967,
+          "geom_homog": 0.5822,
+          "n_match": 165
+        },
+        {
+          "t": 2733.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5961,
+          "patch_max": 0.8734,
+          "geom_inlier": 0.4746,
+          "geom_homog": 0.5023,
+          "n_match": 174
+        },
+        {
+          "t": 2735.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5627,
+          "patch_max": 0.8713,
+          "geom_inlier": 0.529,
+          "geom_homog": 0.5601,
+          "n_match": 167
+        },
+        {
+          "t": 3230.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6889,
+          "patch_max": 0.8274,
+          "geom_inlier": 0.5022,
+          "geom_homog": 0.6277,
+          "n_match": 61
+        },
+        {
+          "t": 3231.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6983,
+          "patch_max": 0.9013,
+          "geom_inlier": 0.5048,
+          "geom_homog": 0.6123,
+          "n_match": 219
+        },
+        {
+          "t": 3232.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.7062,
+          "patch_max": 0.9061,
+          "geom_inlier": 0.515,
+          "geom_homog": 0.5817,
+          "n_match": 219
+        },
+        {
+          "t": 3233.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.7028,
+          "patch_max": 0.9053,
+          "geom_inlier": 0.5557,
+          "geom_homog": 0.6162,
+          "n_match": 229
+        },
+        {
+          "t": 3234.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.7117,
+          "patch_max": 0.9071,
+          "geom_inlier": 0.5462,
+          "geom_homog": 0.6351,
+          "n_match": 234
+        },
+        {
+          "t": 3235.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.7082,
+          "patch_max": 0.9082,
+          "geom_inlier": 0.55,
+          "geom_homog": 0.6115,
+          "n_match": 232
+        },
+        {
+          "t": 3236.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.7096,
+          "patch_max": 0.9095,
+          "geom_inlier": 0.5211,
+          "geom_homog": 0.6009,
+          "n_match": 238
+        },
+        {
+          "t": 3336.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6168,
+          "patch_max": 0.825,
+          "geom_inlier": 0.5074,
+          "geom_homog": 0.4931,
+          "n_match": 77
+        },
+        {
+          "t": 3337.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6133,
+          "patch_max": 0.907,
+          "geom_inlier": 0.4417,
+          "geom_homog": 0.6785,
+          "n_match": 202
+        },
+        {
+          "t": 3338.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6063,
+          "patch_max": 0.9068,
+          "geom_inlier": 0.4949,
+          "geom_homog": 0.6587,
+          "n_match": 200
+        },
+        {
+          "t": 3339.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6106,
+          "patch_max": 0.9069,
+          "geom_inlier": 0.49,
+          "geom_homog": 0.6741,
+          "n_match": 204
+        }
+      ],
+      "note": "瞭望塔机位(真值) vs 兄弟机位 1048-1050 [v3 原窗 1108-1110 基本一致]"
+    },
+    {
+      "kind": "motion",
+      "id": "p08",
+      "query_t": 13.5,
+      "true_win": [
+        1108.15,
+        1109.1
+      ],
+      "true_sig": {
+        "win": [
+          1108.15,
+          1109.1
+        ],
+        "in_true": true,
+        "corr": -0.243,
+        "l2": 1.6424
+      },
+      "distract": [
+        {
+          "win": [
+            1034.0,
+            1036.0
+          ],
+          "in_true": false,
+          "corr": -0.4314,
+          "l2": 1.538
+        },
+        {
+          "win": [
+            3233.0,
+            3235.0
+          ],
+          "in_true": false,
+          "corr": 0.5197,
+          "l2": 0.8162
+        },
+        {
+          "win": [
+            1170.0,
+            1172.0
+          ],
+          "in_true": false,
+          "corr": -0.6131,
+          "l2": 1.5081
+        },
+        {
+          "win": [
+            3335.0,
+            3337.0
+          ],
+          "in_true": false,
+          "corr": -0.2754,
+          "l2": 1.6077
+        },
+        {
+          "win": [
+            2731.0,
+            2733.0
+          ],
+          "in_true": false,
+          "corr": -0.0625,
+          "l2": 1.3187
+        }
+      ],
+      "corr_margin_true": -0.7627,
+      "l2_margin_true": -0.0347,
+      "pair": "2mkv",
+      "note": "瞭望塔机位(真值) vs 兄弟机位 1048-1050 [v3 原窗 1108-1110 基本一致]"
+    },
+    {
+      "kind": "geometry",
+      "id": "p08b",
+      "pair": "2mkv",
+      "query_t": 13.9,
+      "true_win": [
+        1108.15,
+        1109.1
+      ],
+      "brother": [
+        1048.0,
+        1050.0
+      ],
+      "ranks": {
+        "cls_sim": [
+          5,
+          38
+        ],
+        "patch_max": [
+          8,
+          38
+        ],
+        "geom_inlier": [
+          29,
+          38
+        ],
+        "geom_homog": [
+          1,
+          38
+        ]
+      },
+      "true_frames": [
+        {
+          "t": 1108.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.7509,
+          "patch_max": 0.8136,
+          "geom_inlier": 0.375,
+          "geom_homog": 0.4184,
+          "n_match": 75
+        },
+        {
+          "t": 1109.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.7548,
+          "patch_max": 0.9296,
+          "geom_inlier": 0.4053,
+          "geom_homog": 0.7516,
+          "n_match": 329
+        }
+      ],
+      "brother_frames": [
+        {
+          "t": 1048.0,
+          "in_true": false,
+          "in_brother": true,
+          "cls_sim": 0.6309,
+          "patch_max": 0.8353,
+          "geom_inlier": 0.3983,
+          "geom_homog": 0.4875,
+          "n_match": 78
+        },
+        {
+          "t": 1049.0,
+          "in_true": false,
+          "in_brother": true,
+          "cls_sim": 0.6199,
+          "patch_max": 0.935,
+          "geom_inlier": 0.4307,
+          "geom_homog": 0.5343,
+          "n_match": 267
+        },
+        {
+          "t": 1050.0,
+          "in_true": false,
+          "in_brother": true,
+          "cls_sim": 0.2881,
+          "patch_max": 0.8428,
+          "geom_inlier": 0.3268,
+          "geom_homog": 0.4749,
+          "n_match": 130
+        }
+      ],
+      "frames": [
+        {
+          "t": 1027.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.641,
+          "patch_max": 0.8779,
+          "geom_inlier": 0.3727,
+          "geom_homog": 0.45,
+          "n_match": 125
+        },
+        {
+          "t": 1028.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6188,
+          "patch_max": 0.9005,
+          "geom_inlier": 0.4791,
+          "geom_homog": 0.536,
+          "n_match": 225
+        },
+        {
+          "t": 1030.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6638,
+          "patch_max": 0.8991,
+          "geom_inlier": 0.4906,
+          "geom_homog": 0.5578,
+          "n_match": 236
+        },
+        {
+          "t": 1031.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6723,
+          "patch_max": 0.9104,
+          "geom_inlier": 0.5,
+          "geom_homog": 0.5775,
+          "n_match": 238
+        },
+        {
+          "t": 1032.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6792,
+          "patch_max": 0.9151,
+          "geom_inlier": 0.4921,
+          "geom_homog": 0.6362,
+          "n_match": 255
+        },
+        {
+          "t": 1033.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.7043,
+          "patch_max": 0.918,
+          "geom_inlier": 0.4283,
+          "geom_homog": 0.6425,
+          "n_match": 274
+        },
+        {
+          "t": 1034.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.7484,
+          "patch_max": 0.9252,
+          "geom_inlier": 0.4223,
+          "geom_homog": 0.6967,
+          "n_match": 305
+        },
+        {
+          "t": 1035.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.7687,
+          "patch_max": 0.9341,
+          "geom_inlier": 0.4389,
+          "geom_homog": 0.7501,
+          "n_match": 315
+        },
+        {
+          "t": 1036.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.7653,
+          "patch_max": 0.9324,
+          "geom_inlier": 0.4329,
+          "geom_homog": 0.7198,
+          "n_match": 341
+        },
+        {
+          "t": 1037.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.7666,
+          "patch_max": 0.9353,
+          "geom_inlier": 0.4191,
+          "geom_homog": 0.6772,
+          "n_match": 341
+        },
+        {
+          "t": 1038.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.7674,
+          "patch_max": 0.9335,
+          "geom_inlier": 0.4203,
+          "geom_homog": 0.7072,
+          "n_match": 336
+        },
+        {
+          "t": 1039.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6225,
+          "patch_max": 0.9339,
+          "geom_inlier": 0.4293,
+          "geom_homog": 0.7299,
+          "n_match": 346
+        },
+        {
+          "t": 1048.0,
+          "in_true": false,
+          "in_brother": true,
+          "cls_sim": 0.6309,
+          "patch_max": 0.8353,
+          "geom_inlier": 0.3983,
+          "geom_homog": 0.4875,
+          "n_match": 78
+        },
+        {
+          "t": 1049.0,
+          "in_true": false,
+          "in_brother": true,
+          "cls_sim": 0.6199,
+          "patch_max": 0.935,
+          "geom_inlier": 0.4307,
+          "geom_homog": 0.5343,
+          "n_match": 267
+        },
+        {
+          "t": 1050.0,
+          "in_true": false,
+          "in_brother": true,
+          "cls_sim": 0.2881,
+          "patch_max": 0.8428,
+          "geom_inlier": 0.3268,
+          "geom_homog": 0.4749,
+          "n_match": 130
+        },
+        {
+          "t": 1061.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.642,
+          "patch_max": 0.9345,
+          "geom_inlier": 0.4127,
+          "geom_homog": 0.5387,
+          "n_match": 267
+        },
+        {
+          "t": 1062.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6349,
+          "patch_max": 0.9317,
+          "geom_inlier": 0.3714,
+          "geom_homog": 0.4385,
+          "n_match": 217
+        },
+        {
+          "t": 1070.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6195,
+          "patch_max": 0.923,
+          "geom_inlier": 0.4022,
+          "geom_homog": 0.4924,
+          "n_match": 195
+        },
+        {
+          "t": 1077.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6638,
+          "patch_max": 0.9215,
+          "geom_inlier": 0.4234,
+          "geom_homog": 0.5327,
+          "n_match": 221
+        },
+        {
+          "t": 1078.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6474,
+          "patch_max": 0.917,
+          "geom_inlier": 0.3676,
+          "geom_homog": 0.4974,
+          "n_match": 216
+        },
+        {
+          "t": 1079.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.67,
+          "patch_max": 0.9192,
+          "geom_inlier": 0.3895,
+          "geom_homog": 0.4822,
+          "n_match": 197
+        },
+        {
+          "t": 1080.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6652,
+          "patch_max": 0.9183,
+          "geom_inlier": 0.409,
+          "geom_homog": 0.4939,
+          "n_match": 212
+        },
+        {
+          "t": 1082.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6321,
+          "patch_max": 0.9206,
+          "geom_inlier": 0.3932,
+          "geom_homog": 0.4916,
+          "n_match": 218
+        },
+        {
+          "t": 1083.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6391,
+          "patch_max": 0.9197,
+          "geom_inlier": 0.4058,
+          "geom_homog": 0.5002,
+          "n_match": 219
+        },
+        {
+          "t": 1084.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6298,
+          "patch_max": 0.9193,
+          "geom_inlier": 0.3612,
+          "geom_homog": 0.4847,
+          "n_match": 211
+        },
+        {
+          "t": 1088.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6207,
+          "patch_max": 0.9202,
+          "geom_inlier": 0.4232,
+          "geom_homog": 0.4891,
+          "n_match": 205
+        },
+        {
+          "t": 1108.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.7509,
+          "patch_max": 0.8136,
+          "geom_inlier": 0.375,
+          "geom_homog": 0.4184,
+          "n_match": 75
+        },
+        {
+          "t": 1109.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.7548,
+          "patch_max": 0.9296,
+          "geom_inlier": 0.4053,
+          "geom_homog": 0.7516,
+          "n_match": 329
+        },
+        {
+          "t": 1166.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6577,
+          "patch_max": 0.9007,
+          "geom_inlier": 0.4052,
+          "geom_homog": 0.5828,
+          "n_match": 256
+        },
+        {
+          "t": 1167.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6599,
+          "patch_max": 0.9004,
+          "geom_inlier": 0.4446,
+          "geom_homog": 0.543,
+          "n_match": 254
+        },
+        {
+          "t": 1168.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6567,
+          "patch_max": 0.8983,
+          "geom_inlier": 0.4083,
+          "geom_homog": 0.5596,
+          "n_match": 254
+        },
+        {
+          "t": 1169.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6556,
+          "patch_max": 0.9004,
+          "geom_inlier": 0.4395,
+          "geom_homog": 0.5741,
+          "n_match": 249
+        },
+        {
+          "t": 1170.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6733,
+          "patch_max": 0.9017,
+          "geom_inlier": 0.4428,
+          "geom_homog": 0.5861,
+          "n_match": 251
+        },
+        {
+          "t": 1171.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6744,
+          "patch_max": 0.9012,
+          "geom_inlier": 0.4474,
+          "geom_homog": 0.5692,
+          "n_match": 243
+        },
+        {
+          "t": 3230.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6248,
+          "patch_max": 0.826,
+          "geom_inlier": 0.4891,
+          "geom_homog": 0.5689,
+          "n_match": 63
+        },
+        {
+          "t": 3231.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6303,
+          "patch_max": 0.8948,
+          "geom_inlier": 0.5232,
+          "geom_homog": 0.5941,
+          "n_match": 219
+        },
+        {
+          "t": 3232.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6392,
+          "patch_max": 0.8988,
+          "geom_inlier": 0.5041,
+          "geom_homog": 0.5616,
+          "n_match": 219
+        },
+        {
+          "t": 3233.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6322,
+          "patch_max": 0.8978,
+          "geom_inlier": 0.5601,
+          "geom_homog": 0.6111,
+          "n_match": 229
+        },
+        {
+          "t": 3234.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.641,
+          "patch_max": 0.8996,
+          "geom_inlier": 0.5494,
+          "geom_homog": 0.6254,
+          "n_match": 234
+        },
+        {
+          "t": 3235.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6389,
+          "patch_max": 0.9007,
+          "geom_inlier": 0.5611,
+          "geom_homog": 0.6033,
+          "n_match": 232
+        },
+        {
+          "t": 3236.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6397,
+          "patch_max": 0.901,
+          "geom_inlier": 0.5801,
+          "geom_homog": 0.6254,
+          "n_match": 238
+        }
+      ],
+      "note": "同一编辑段另一点; v3 把 1048-1050 当真值(=p38 旧错误 GT) 已作废"
+    },
+    {
+      "kind": "motion",
+      "id": "p08b",
+      "query_t": 13.9,
+      "true_win": [
+        1108.15,
+        1109.1
+      ],
+      "true_sig": {
+        "win": [
+          1108.15,
+          1109.1
+        ],
+        "in_true": true,
+        "corr": -0.0996,
+        "l2": 1.3234
+      },
+      "distract": [
+        {
+          "win": [
+            1034.0,
+            1036.0
+          ],
+          "in_true": false,
+          "corr": 0.3807,
+          "l2": 1.7794
+        },
+        {
+          "win": [
+            1170.0,
+            1172.0
+          ],
+          "in_true": false,
+          "corr": 0.5122,
+          "l2": 1.5242
+        },
+        {
+          "win": [
+            1078.0,
+            1080.0
+          ],
+          "in_true": false,
+          "corr": 0.8544,
+          "l2": 1.0158
+        },
+        {
+          "win": [
+            1060.0,
+            1062.0
+          ],
+          "in_true": false,
+          "corr": -0.0714,
+          "l2": 1.1931
+        },
+        {
+          "win": [
+            3233.0,
+            3235.0
+          ],
+          "in_true": false,
+          "corr": -0.2374,
+          "l2": 1.2884
+        }
+      ],
+      "corr_margin_true": -0.954,
+      "l2_margin_true": 0.456,
+      "pair": "2mkv",
+      "note": "同一编辑段另一点; v3 把 1048-1050 当真值(=p38 旧错误 GT) 已作废"
+    },
+    {
+      "kind": "geometry",
+      "id": "p26",
+      "pair": "2mkv",
+      "query_t": 76.8,
+      "true_win": [
+        1768.2,
+        1770.05
+      ],
+      "brother": null,
+      "ranks": {
+        "cls_sim": [
+          1,
+          41
+        ],
+        "patch_max": [
+          1,
+          41
+        ],
+        "geom_inlier": [
+          9,
+          41
+        ],
+        "geom_homog": [
+          1,
+          41
+        ]
+      },
+      "true_frames": [
+        {
+          "t": 1768.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.8261,
+          "patch_max": 0.9516,
+          "geom_inlier": 0.5397,
+          "geom_homog": 0.8376,
+          "n_match": 347
+        },
+        {
+          "t": 1769.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.8536,
+          "patch_max": 0.9527,
+          "geom_inlier": 0.5377,
+          "geom_homog": 0.8604,
+          "n_match": 355
+        },
+        {
+          "t": 1770.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.2682,
+          "patch_max": 0.9527,
+          "geom_inlier": 0.5237,
+          "geom_homog": 0.84,
+          "n_match": 366
+        }
+      ],
+      "brother_frames": [],
+      "frames": [
+        {
+          "t": 1247.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6261,
+          "patch_max": 0.9062,
+          "geom_inlier": 0.4778,
+          "geom_homog": 0.5766,
+          "n_match": 165
+        },
+        {
+          "t": 1248.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6305,
+          "patch_max": 0.9081,
+          "geom_inlier": 0.4353,
+          "geom_homog": 0.5451,
+          "n_match": 177
+        },
+        {
+          "t": 1249.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6279,
+          "patch_max": 0.9089,
+          "geom_inlier": 0.4533,
+          "geom_homog": 0.5268,
+          "n_match": 173
+        },
+        {
+          "t": 1250.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6238,
+          "patch_max": 0.9064,
+          "geom_inlier": 0.47,
+          "geom_homog": 0.5219,
+          "n_match": 175
+        },
+        {
+          "t": 1251.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6335,
+          "patch_max": 0.9085,
+          "geom_inlier": 0.4233,
+          "geom_homog": 0.5572,
+          "n_match": 179
+        },
+        {
+          "t": 1254.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5396,
+          "patch_max": 0.9045,
+          "geom_inlier": 0.5239,
+          "geom_homog": 0.666,
+          "n_match": 174
+        },
+        {
+          "t": 1692.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5554,
+          "patch_max": 0.8962,
+          "geom_inlier": 0.5906,
+          "geom_homog": 0.6852,
+          "n_match": 154
+        },
+        {
+          "t": 1693.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5612,
+          "patch_max": 0.9075,
+          "geom_inlier": 0.5528,
+          "geom_homog": 0.6939,
+          "n_match": 161
+        },
+        {
+          "t": 1740.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6927,
+          "patch_max": 0.9365,
+          "geom_inlier": 0.5182,
+          "geom_homog": 0.8274,
+          "n_match": 240
+        },
+        {
+          "t": 1741.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6892,
+          "patch_max": 0.9381,
+          "geom_inlier": 0.5525,
+          "geom_homog": 0.8244,
+          "n_match": 239
+        },
+        {
+          "t": 1742.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6807,
+          "patch_max": 0.939,
+          "geom_inlier": 0.5362,
+          "geom_homog": 0.8056,
+          "n_match": 227
+        },
+        {
+          "t": 1743.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.699,
+          "patch_max": 0.9374,
+          "geom_inlier": 0.5515,
+          "geom_homog": 0.7767,
+          "n_match": 237
+        },
+        {
+          "t": 1744.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6488,
+          "patch_max": 0.9299,
+          "geom_inlier": 0.4671,
+          "geom_homog": 0.79,
+          "n_match": 224
+        },
+        {
+          "t": 1745.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6697,
+          "patch_max": 0.9329,
+          "geom_inlier": 0.4837,
+          "geom_homog": 0.7918,
+          "n_match": 216
+        },
+        {
+          "t": 1766.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.8272,
+          "patch_max": 0.851,
+          "geom_inlier": 0.5236,
+          "geom_homog": 0.5273,
+          "n_match": 66
+        },
+        {
+          "t": 1767.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.8499,
+          "patch_max": 0.9487,
+          "geom_inlier": 0.518,
+          "geom_homog": 0.854,
+          "n_match": 335
+        },
+        {
+          "t": 1768.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.8261,
+          "patch_max": 0.9516,
+          "geom_inlier": 0.5397,
+          "geom_homog": 0.8376,
+          "n_match": 347
+        },
+        {
+          "t": 1769.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.8536,
+          "patch_max": 0.9527,
+          "geom_inlier": 0.5377,
+          "geom_homog": 0.8604,
+          "n_match": 355
+        },
+        {
+          "t": 1770.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.2682,
+          "patch_max": 0.9527,
+          "geom_inlier": 0.5237,
+          "geom_homog": 0.84,
+          "n_match": 366
+        },
+        {
+          "t": 1788.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5846,
+          "patch_max": 0.9152,
+          "geom_inlier": 0.4539,
+          "geom_homog": 0.5308,
+          "n_match": 174
+        },
+        {
+          "t": 1789.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5688,
+          "patch_max": 0.9149,
+          "geom_inlier": 0.4279,
+          "geom_homog": 0.5096,
+          "n_match": 180
+        },
+        {
+          "t": 1790.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.569,
+          "patch_max": 0.9154,
+          "geom_inlier": 0.4543,
+          "geom_homog": 0.5185,
+          "n_match": 158
+        },
+        {
+          "t": 1791.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5651,
+          "patch_max": 0.9142,
+          "geom_inlier": 0.4496,
+          "geom_homog": 0.5263,
+          "n_match": 177
+        },
+        {
+          "t": 1792.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5782,
+          "patch_max": 0.9215,
+          "geom_inlier": 0.5012,
+          "geom_homog": 0.5321,
+          "n_match": 183
+        },
+        {
+          "t": 1793.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5648,
+          "patch_max": 0.9104,
+          "geom_inlier": 0.4088,
+          "geom_homog": 0.4639,
+          "n_match": 177
+        },
+        {
+          "t": 1794.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.568,
+          "patch_max": 0.9076,
+          "geom_inlier": 0.4254,
+          "geom_homog": 0.5352,
+          "n_match": 165
+        },
+        {
+          "t": 1795.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5439,
+          "patch_max": 0.9098,
+          "geom_inlier": 0.4754,
+          "geom_homog": 0.4942,
+          "n_match": 143
+        },
+        {
+          "t": 1796.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5822,
+          "patch_max": 0.9134,
+          "geom_inlier": 0.3858,
+          "geom_homog": 0.4897,
+          "n_match": 153
+        },
+        {
+          "t": 1797.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6318,
+          "patch_max": 0.9125,
+          "geom_inlier": 0.4827,
+          "geom_homog": 0.5394,
+          "n_match": 156
+        },
+        {
+          "t": 1831.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5563,
+          "patch_max": 0.8956,
+          "geom_inlier": 0.472,
+          "geom_homog": 0.5782,
+          "n_match": 154
+        },
+        {
+          "t": 1832.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5447,
+          "patch_max": 0.904,
+          "geom_inlier": 0.4444,
+          "geom_homog": 0.5357,
+          "n_match": 141
+        },
+        {
+          "t": 1945.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5487,
+          "patch_max": 0.8778,
+          "geom_inlier": 0.3969,
+          "geom_homog": 0.4748,
+          "n_match": 168
+        },
+        {
+          "t": 2016.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5758,
+          "patch_max": 0.9007,
+          "geom_inlier": 0.4218,
+          "geom_homog": 0.496,
+          "n_match": 135
+        },
+        {
+          "t": 2017.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5653,
+          "patch_max": 0.9023,
+          "geom_inlier": 0.5386,
+          "geom_homog": 0.5932,
+          "n_match": 140
+        },
+        {
+          "t": 2073.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5445,
+          "patch_max": 0.9133,
+          "geom_inlier": 0.563,
+          "geom_homog": 0.618,
+          "n_match": 150
+        },
+        {
+          "t": 2074.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5483,
+          "patch_max": 0.9153,
+          "geom_inlier": 0.5423,
+          "geom_homog": 0.5866,
+          "n_match": 140
+        },
+        {
+          "t": 2094.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5369,
+          "patch_max": 0.9068,
+          "geom_inlier": 0.4948,
+          "geom_homog": 0.5724,
+          "n_match": 134
+        },
+        {
+          "t": 2620.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5662,
+          "patch_max": 0.8943,
+          "geom_inlier": 0.5501,
+          "geom_homog": 0.7208,
+          "n_match": 193
+        },
+        {
+          "t": 2809.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5973,
+          "patch_max": 0.9121,
+          "geom_inlier": 0.576,
+          "geom_homog": 0.6755,
+          "n_match": 202
+        },
+        {
+          "t": 2823.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5378,
+          "patch_max": 0.9054,
+          "geom_inlier": 0.5157,
+          "geom_homog": 0.6415,
+          "n_match": 181
+        },
+        {
+          "t": 5741.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6517,
+          "patch_max": 0.8797,
+          "geom_inlier": 0.3968,
+          "geom_homog": 0.5436,
+          "n_match": 108
+        }
+      ],
+      "note": "夜读; v3 原窗 2808-2811 系 GT 标错"
+    },
+    {
+      "kind": "motion",
+      "id": "p26",
+      "query_t": 76.8,
+      "true_win": [
+        1768.2,
+        1770.05
+      ],
+      "true_sig": {
+        "win": [
+          1768.2,
+          1770.05
+        ],
+        "in_true": true,
+        "corr": 0.351,
+        "l2": 0.6855
+      },
+      "distract": [
+        {
+          "win": [
+            1742.0,
+            1744.0
+          ],
+          "in_true": false,
+          "corr": 0.033,
+          "l2": 0.941
+        },
+        {
+          "win": [
+            5740.0,
+            5742.0
+          ],
+          "in_true": false,
+          "corr": 0.0607,
+          "l2": 1.1431
+        },
+        {
+          "win": [
+            1250.0,
+            1252.0
+          ],
+          "in_true": false,
+          "corr": 0.769,
+          "l2": 0.3415
+        },
+        {
+          "win": [
+            1796.0,
+            1798.0
+          ],
+          "in_true": false,
+          "corr": 0.1072,
+          "l2": 1.0449
+        },
+        {
+          "win": [
+            2808.0,
+            2810.0
+          ],
+          "in_true": false,
+          "corr": -0.4206,
+          "l2": 1.6059
+        }
+      ],
+      "corr_margin_true": -0.418,
+      "l2_margin_true": 0.9204,
+      "pair": "2mkv",
+      "note": "夜读; v3 原窗 2808-2811 系 GT 标错"
+    },
+    {
+      "kind": "geometry",
+      "id": "p01",
+      "pair": "2mkv",
+      "query_t": 0.8,
+      "true_win": [
+        2417.5,
+        2418.1
+      ],
+      "brother": null,
+      "ranks": {
+        "cls_sim": [
+          1,
+          40
+        ],
+        "patch_max": [
+          1,
+          40
+        ],
+        "geom_inlier": [
+          1,
+          40
+        ],
+        "geom_homog": [
+          1,
+          40
+        ]
+      },
+      "true_frames": [
+        {
+          "t": 2417.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.7869,
+          "patch_max": 0.815,
+          "geom_inlier": 0.535,
+          "geom_homog": 0.5653,
+          "n_match": 77
+        },
+        {
+          "t": 2418.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.7401,
+          "patch_max": 0.9662,
+          "geom_inlier": 0.4255,
+          "geom_homog": 0.7119,
+          "n_match": 345
+        }
+      ],
+      "brother_frames": [],
+      "frames": [
+        {
+          "t": 2411.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.4296,
+          "patch_max": 0.8384,
+          "geom_inlier": 0.4479,
+          "geom_homog": 0.4969,
+          "n_match": 104
+        },
+        {
+          "t": 2412.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.4729,
+          "patch_max": 0.8681,
+          "geom_inlier": 0.3564,
+          "geom_homog": 0.4174,
+          "n_match": 117
+        },
+        {
+          "t": 2413.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.4434,
+          "patch_max": 0.8745,
+          "geom_inlier": 0.4012,
+          "geom_homog": 0.4986,
+          "n_match": 129
+        },
+        {
+          "t": 2414.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.4278,
+          "patch_max": 0.8822,
+          "geom_inlier": 0.4653,
+          "geom_homog": 0.552,
+          "n_match": 107
+        },
+        {
+          "t": 2417.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.7869,
+          "patch_max": 0.815,
+          "geom_inlier": 0.535,
+          "geom_homog": 0.5653,
+          "n_match": 77
+        },
+        {
+          "t": 2418.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.7401,
+          "patch_max": 0.9662,
+          "geom_inlier": 0.4255,
+          "geom_homog": 0.7119,
+          "n_match": 345
+        },
+        {
+          "t": 2419.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.577,
+          "patch_max": 0.8731,
+          "geom_inlier": 0.3648,
+          "geom_homog": 0.4762,
+          "n_match": 123
+        },
+        {
+          "t": 2420.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.637,
+          "patch_max": 0.8675,
+          "geom_inlier": 0.34,
+          "geom_homog": 0.4614,
+          "n_match": 124
+        },
+        {
+          "t": 2421.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6016,
+          "patch_max": 0.9367,
+          "geom_inlier": 0.5205,
+          "geom_homog": 0.5314,
+          "n_match": 245
+        },
+        {
+          "t": 2422.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5035,
+          "patch_max": 0.9363,
+          "geom_inlier": 0.3949,
+          "geom_homog": 0.5159,
+          "n_match": 237
+        },
+        {
+          "t": 2423.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.4935,
+          "patch_max": 0.8446,
+          "geom_inlier": 0.403,
+          "geom_homog": 0.4842,
+          "n_match": 108
+        },
+        {
+          "t": 2424.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5156,
+          "patch_max": 0.8609,
+          "geom_inlier": 0.4307,
+          "geom_homog": 0.4698,
+          "n_match": 120
+        },
+        {
+          "t": 2425.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5222,
+          "patch_max": 0.8678,
+          "geom_inlier": 0.4479,
+          "geom_homog": 0.5186,
+          "n_match": 123
+        },
+        {
+          "t": 2426.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5316,
+          "patch_max": 0.9088,
+          "geom_inlier": 0.3605,
+          "geom_homog": 0.4819,
+          "n_match": 153
+        },
+        {
+          "t": 2427.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.4183,
+          "patch_max": 0.9012,
+          "geom_inlier": 0.3728,
+          "geom_homog": 0.4282,
+          "n_match": 97
+        },
+        {
+          "t": 2430.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.4514,
+          "patch_max": 0.7803,
+          "geom_inlier": 0.4644,
+          "geom_homog": 0.4885,
+          "n_match": 75
+        },
+        {
+          "t": 2431.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.4893,
+          "patch_max": 0.9188,
+          "geom_inlier": 0.3934,
+          "geom_homog": 0.6218,
+          "n_match": 191
+        },
+        {
+          "t": 2432.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5202,
+          "patch_max": 0.922,
+          "geom_inlier": 0.4532,
+          "geom_homog": 0.6552,
+          "n_match": 193
+        },
+        {
+          "t": 2439.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.4089,
+          "patch_max": 0.8158,
+          "geom_inlier": 0.4081,
+          "geom_homog": 0.5152,
+          "n_match": 61
+        },
+        {
+          "t": 2440.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.4701,
+          "patch_max": 0.8631,
+          "geom_inlier": 0.415,
+          "geom_homog": 0.5354,
+          "n_match": 114
+        },
+        {
+          "t": 2441.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.4634,
+          "patch_max": 0.8584,
+          "geom_inlier": 0.4436,
+          "geom_homog": 0.5126,
+          "n_match": 107
+        },
+        {
+          "t": 2442.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6257,
+          "patch_max": 0.8673,
+          "geom_inlier": 0.4134,
+          "geom_homog": 0.55,
+          "n_match": 117
+        },
+        {
+          "t": 2443.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6074,
+          "patch_max": 0.9577,
+          "geom_inlier": 0.4482,
+          "geom_homog": 0.616,
+          "n_match": 248
+        },
+        {
+          "t": 2444.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.483,
+          "patch_max": 0.9549,
+          "geom_inlier": 0.4673,
+          "geom_homog": 0.6704,
+          "n_match": 254
+        },
+        {
+          "t": 2445.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.4828,
+          "patch_max": 0.9191,
+          "geom_inlier": 0.4181,
+          "geom_homog": 0.6143,
+          "n_match": 169
+        },
+        {
+          "t": 2448.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.4568,
+          "patch_max": 0.8305,
+          "geom_inlier": 0.4677,
+          "geom_homog": 0.5064,
+          "n_match": 57
+        },
+        {
+          "t": 2449.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.4364,
+          "patch_max": 0.9071,
+          "geom_inlier": 0.4202,
+          "geom_homog": 0.5979,
+          "n_match": 173
+        },
+        {
+          "t": 2450.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.4266,
+          "patch_max": 0.9119,
+          "geom_inlier": 0.3648,
+          "geom_homog": 0.6073,
+          "n_match": 167
+        },
+        {
+          "t": 2458.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.4914,
+          "patch_max": 0.9315,
+          "geom_inlier": 0.4383,
+          "geom_homog": 0.6012,
+          "n_match": 236
+        },
+        {
+          "t": 2465.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.493,
+          "patch_max": 0.8363,
+          "geom_inlier": 0.3247,
+          "geom_homog": 0.4225,
+          "n_match": 59
+        },
+        {
+          "t": 2472.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5211,
+          "patch_max": 0.9133,
+          "geom_inlier": 0.4236,
+          "geom_homog": 0.5211,
+          "n_match": 164
+        },
+        {
+          "t": 2473.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.4882,
+          "patch_max": 0.9242,
+          "geom_inlier": 0.4339,
+          "geom_homog": 0.5397,
+          "n_match": 185
+        },
+        {
+          "t": 2768.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.4087,
+          "patch_max": 0.8952,
+          "geom_inlier": 0.472,
+          "geom_homog": 0.4922,
+          "n_match": 106
+        },
+        {
+          "t": 3074.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.4326,
+          "patch_max": 0.8712,
+          "geom_inlier": 0.2973,
+          "geom_homog": 0.3822,
+          "n_match": 88
+        },
+        {
+          "t": 3989.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.4456,
+          "patch_max": 0.916,
+          "geom_inlier": 0.4083,
+          "geom_homog": 0.5399,
+          "n_match": 147
+        },
+        {
+          "t": 3997.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.4442,
+          "patch_max": 0.9319,
+          "geom_inlier": 0.5016,
+          "geom_homog": 0.6456,
+          "n_match": 167
+        },
+        {
+          "t": 3998.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.4332,
+          "patch_max": 0.9185,
+          "geom_inlier": 0.5348,
+          "geom_homog": 0.626,
+          "n_match": 164
+        },
+        {
+          "t": 4000.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.4846,
+          "patch_max": 0.8723,
+          "geom_inlier": 0.3705,
+          "geom_homog": 0.5049,
+          "n_match": 118
+        },
+        {
+          "t": 4058.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.4186,
+          "patch_max": 0.8655,
+          "geom_inlier": 0.3743,
+          "geom_homog": 0.4577,
+          "n_match": 76
+        },
+        {
+          "t": 5850.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.3991,
+          "patch_max": 0.8816,
+          "geom_inlier": 0.4782,
+          "geom_homog": 0.5344,
+          "n_match": 150
+        }
+      ],
+      "note": "金属球准备(sanity 易例)"
+    },
+    {
+      "kind": "motion",
+      "id": "p01",
+      "query_t": 0.8,
+      "true_win": [
+        2417.5,
+        2418.1
+      ],
+      "true_sig": {
+        "win": [
+          2417.5,
+          2418.1
+        ],
+        "in_true": true,
+        "corr": -0.4627,
+        "l2": 1.1926
+      },
+      "distract": [
+        {
+          "win": [
+            2441.0,
+            2443.0
+          ],
+          "in_true": false,
+          "corr": 0.6997,
+          "l2": 0.8568
+        },
+        {
+          "win": [
+            2425.0,
+            2427.0
+          ],
+          "in_true": false,
+          "corr": 0.206,
+          "l2": 0.9906
+        },
+        {
+          "win": [
+            2471.0,
+            2473.0
+          ],
+          "in_true": false,
+          "corr": 0.053,
+          "l2": 1.1486
+        },
+        {
+          "win": [
+            2457.0,
+            2459.0
+          ],
+          "in_true": false,
+          "corr": -0.1897,
+          "l2": 1.3415
+        },
+        {
+          "win": [
+            3999.0,
+            4001.0
+          ],
+          "in_true": false,
+          "corr": 0.8946,
+          "l2": 0.4181
+        }
+      ],
+      "corr_margin_true": -1.3573,
+      "l2_margin_true": 0.1489,
+      "pair": "2mkv",
+      "note": "金属球准备(sanity 易例)"
+    },
+    {
+      "kind": "geometry",
+      "id": "p04",
+      "pair": "2mkv",
+      "query_t": 4.6,
+      "true_win": [
+        839.0,
+        844.0
+      ],
+      "brother": null,
+      "ranks": {
+        "cls_sim": [
+          1,
+          40
+        ],
+        "patch_max": [
+          1,
+          40
+        ],
+        "geom_inlier": [
+          10,
+          40
+        ],
+        "geom_homog": [
+          1,
+          40
+        ]
+      },
+      "true_frames": [
+        {
+          "t": 839.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.84,
+          "patch_max": 0.9229,
+          "geom_inlier": 0.5784,
+          "geom_homog": 0.8017,
+          "n_match": 289
+        },
+        {
+          "t": 840.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.8164,
+          "patch_max": 0.9242,
+          "geom_inlier": 0.5333,
+          "geom_homog": 0.7927,
+          "n_match": 297
+        },
+        {
+          "t": 841.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.8312,
+          "patch_max": 0.9304,
+          "geom_inlier": 0.5144,
+          "geom_homog": 0.781,
+          "n_match": 314
+        },
+        {
+          "t": 842.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.8261,
+          "patch_max": 0.9291,
+          "geom_inlier": 0.5299,
+          "geom_homog": 0.7971,
+          "n_match": 316
+        },
+        {
+          "t": 843.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.8247,
+          "patch_max": 0.9298,
+          "geom_inlier": 0.5519,
+          "geom_homog": 0.8373,
+          "n_match": 305
+        },
+        {
+          "t": 844.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.815,
+          "patch_max": 0.9295,
+          "geom_inlier": 0.4856,
+          "geom_homog": 0.8092,
+          "n_match": 295
+        }
+      ],
+      "brother_frames": [],
+      "frames": [
+        {
+          "t": 834.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5287,
+          "patch_max": 0.8763,
+          "geom_inlier": 0.507,
+          "geom_homog": 0.567,
+          "n_match": 143
+        },
+        {
+          "t": 835.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5649,
+          "patch_max": 0.867,
+          "geom_inlier": 0.5333,
+          "geom_homog": 0.622,
+          "n_match": 123
+        },
+        {
+          "t": 836.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5374,
+          "patch_max": 0.8757,
+          "geom_inlier": 0.478,
+          "geom_homog": 0.5098,
+          "n_match": 139
+        },
+        {
+          "t": 837.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5278,
+          "patch_max": 0.8703,
+          "geom_inlier": 0.464,
+          "geom_homog": 0.5757,
+          "n_match": 129
+        },
+        {
+          "t": 838.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.8349,
+          "patch_max": 0.873,
+          "geom_inlier": 0.4529,
+          "geom_homog": 0.4854,
+          "n_match": 131
+        },
+        {
+          "t": 839.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.84,
+          "patch_max": 0.9229,
+          "geom_inlier": 0.5784,
+          "geom_homog": 0.8017,
+          "n_match": 289
+        },
+        {
+          "t": 840.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.8164,
+          "patch_max": 0.9242,
+          "geom_inlier": 0.5333,
+          "geom_homog": 0.7927,
+          "n_match": 297
+        },
+        {
+          "t": 841.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.8312,
+          "patch_max": 0.9304,
+          "geom_inlier": 0.5144,
+          "geom_homog": 0.781,
+          "n_match": 314
+        },
+        {
+          "t": 842.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.8261,
+          "patch_max": 0.9291,
+          "geom_inlier": 0.5299,
+          "geom_homog": 0.7971,
+          "n_match": 316
+        },
+        {
+          "t": 843.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.8247,
+          "patch_max": 0.9298,
+          "geom_inlier": 0.5519,
+          "geom_homog": 0.8373,
+          "n_match": 305
+        },
+        {
+          "t": 844.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.815,
+          "patch_max": 0.9295,
+          "geom_inlier": 0.4856,
+          "geom_homog": 0.8092,
+          "n_match": 295
+        },
+        {
+          "t": 1369.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5778,
+          "patch_max": 0.8883,
+          "geom_inlier": 0.6098,
+          "geom_homog": 0.6928,
+          "n_match": 171
+        },
+        {
+          "t": 1370.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5776,
+          "patch_max": 0.8903,
+          "geom_inlier": 0.5873,
+          "geom_homog": 0.6953,
+          "n_match": 181
+        },
+        {
+          "t": 1371.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5821,
+          "patch_max": 0.8921,
+          "geom_inlier": 0.6114,
+          "geom_homog": 0.6907,
+          "n_match": 170
+        },
+        {
+          "t": 1372.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5773,
+          "patch_max": 0.8892,
+          "geom_inlier": 0.6308,
+          "geom_homog": 0.6687,
+          "n_match": 170
+        },
+        {
+          "t": 2328.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6169,
+          "patch_max": 0.891,
+          "geom_inlier": 0.5624,
+          "geom_homog": 0.5506,
+          "n_match": 138
+        },
+        {
+          "t": 2329.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6472,
+          "patch_max": 0.9007,
+          "geom_inlier": 0.4921,
+          "geom_homog": 0.5963,
+          "n_match": 160
+        },
+        {
+          "t": 2330.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6195,
+          "patch_max": 0.9063,
+          "geom_inlier": 0.4489,
+          "geom_homog": 0.5658,
+          "n_match": 158
+        },
+        {
+          "t": 2331.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6685,
+          "patch_max": 0.9043,
+          "geom_inlier": 0.3929,
+          "geom_homog": 0.542,
+          "n_match": 151
+        },
+        {
+          "t": 2332.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.6776,
+          "patch_max": 0.8943,
+          "geom_inlier": 0.3891,
+          "geom_homog": 0.5223,
+          "n_match": 154
+        },
+        {
+          "t": 2333.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5329,
+          "patch_max": 0.8901,
+          "geom_inlier": 0.3645,
+          "geom_homog": 0.5232,
+          "n_match": 134
+        },
+        {
+          "t": 2669.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5515,
+          "patch_max": 0.8396,
+          "geom_inlier": 0.5106,
+          "geom_homog": 0.6103,
+          "n_match": 162
+        },
+        {
+          "t": 2670.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5301,
+          "patch_max": 0.8388,
+          "geom_inlier": 0.5022,
+          "geom_homog": 0.6025,
+          "n_match": 146
+        },
+        {
+          "t": 2838.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5376,
+          "patch_max": 0.8836,
+          "geom_inlier": 0.5928,
+          "geom_homog": 0.6712,
+          "n_match": 152
+        },
+        {
+          "t": 2839.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.556,
+          "patch_max": 0.8812,
+          "geom_inlier": 0.6761,
+          "geom_homog": 0.7099,
+          "n_match": 150
+        },
+        {
+          "t": 3028.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5739,
+          "patch_max": 0.8499,
+          "geom_inlier": 0.4531,
+          "geom_homog": 0.5472,
+          "n_match": 82
+        },
+        {
+          "t": 3031.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5456,
+          "patch_max": 0.8788,
+          "geom_inlier": 0.5751,
+          "geom_homog": 0.6108,
+          "n_match": 179
+        },
+        {
+          "t": 3032.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5506,
+          "patch_max": 0.8841,
+          "geom_inlier": 0.5872,
+          "geom_homog": 0.6106,
+          "n_match": 175
+        },
+        {
+          "t": 3033.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5353,
+          "patch_max": 0.8806,
+          "geom_inlier": 0.6291,
+          "geom_homog": 0.6404,
+          "n_match": 169
+        },
+        {
+          "t": 3034.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5747,
+          "patch_max": 0.9025,
+          "geom_inlier": 0.5274,
+          "geom_homog": 0.6257,
+          "n_match": 157
+        },
+        {
+          "t": 3035.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5498,
+          "patch_max": 0.8934,
+          "geom_inlier": 0.541,
+          "geom_homog": 0.6497,
+          "n_match": 150
+        },
+        {
+          "t": 3038.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5819,
+          "patch_max": 0.8811,
+          "geom_inlier": 0.5989,
+          "geom_homog": 0.7471,
+          "n_match": 159
+        },
+        {
+          "t": 3227.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5741,
+          "patch_max": 0.8809,
+          "geom_inlier": 0.4727,
+          "geom_homog": 0.5441,
+          "n_match": 172
+        },
+        {
+          "t": 3228.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5455,
+          "patch_max": 0.8832,
+          "geom_inlier": 0.5148,
+          "geom_homog": 0.6006,
+          "n_match": 173
+        },
+        {
+          "t": 3784.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5407,
+          "patch_max": 0.875,
+          "geom_inlier": 0.5388,
+          "geom_homog": 0.7209,
+          "n_match": 201
+        },
+        {
+          "t": 6661.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5471,
+          "patch_max": 0.8817,
+          "geom_inlier": 0.5208,
+          "geom_homog": 0.5453,
+          "n_match": 139
+        },
+        {
+          "t": 6662.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5321,
+          "patch_max": 0.8794,
+          "geom_inlier": 0.471,
+          "geom_homog": 0.5565,
+          "n_match": 142
+        },
+        {
+          "t": 6663.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5499,
+          "patch_max": 0.8765,
+          "geom_inlier": 0.4798,
+          "geom_homog": 0.612,
+          "n_match": 146
+        },
+        {
+          "t": 6667.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5402,
+          "patch_max": 0.8618,
+          "geom_inlier": 0.4369,
+          "geom_homog": 0.5924,
+          "n_match": 147
+        },
+        {
+          "t": 6668.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5336,
+          "patch_max": 0.8631,
+          "geom_inlier": 0.4911,
+          "geom_homog": 0.5978,
+          "n_match": 154
+        }
+      ],
+      "note": "峡谷航拍(sanity 易例)"
+    },
+    {
+      "kind": "motion",
+      "id": "p04",
+      "query_t": 4.6,
+      "true_win": [
+        839.0,
+        844.0
+      ],
+      "true_sig": {
+        "win": [
+          839.0,
+          844.0
+        ],
+        "in_true": true,
+        "corr": 0.7375,
+        "l2": 1.6165
+      },
+      "distract": [
+        {
+          "win": [
+            2331.0,
+            2333.0
+          ],
+          "in_true": false,
+          "corr": -0.6505,
+          "l2": 1.6962
+        },
+        {
+          "win": [
+            1370.0,
+            1372.0
+          ],
+          "in_true": false,
+          "corr": -0.9487,
+          "l2": 1.9257
+        },
+        {
+          "win": [
+            3037.0,
+            3039.0
+          ],
+          "in_true": false,
+          "corr": -0.1451,
+          "l2": 1.1729
+        },
+        {
+          "win": [
+            3226.0,
+            3228.0
+          ],
+          "in_true": false,
+          "corr": -0.257,
+          "l2": 1.2484
+        },
+        {
+          "win": [
+            3027.0,
+            3029.0
+          ],
+          "in_true": false,
+          "corr": 0.7812,
+          "l2": 0.7186
+        }
+      ],
+      "corr_margin_true": -0.0437,
+      "l2_margin_true": 0.3092,
+      "pair": "2mkv",
+      "note": "峡谷航拍(sanity 易例)"
+    },
+    {
+      "kind": "geometry",
+      "id": "t3r12",
+      "pair": "test3",
+      "query_t": 64.75,
+      "true_win": [
+        466.0,
+        478.0
+      ],
+      "brother": [
+        481.0,
+        488.0
+      ],
+      "ranks": {
+        "cls_sim": [
+          1,
+          44
+        ],
+        "patch_max": [
+          1,
+          44
+        ],
+        "geom_inlier": [
+          2,
+          44
+        ],
+        "geom_homog": [
+          1,
+          44
+        ]
+      },
+      "true_frames": [
+        {
+          "t": 466.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.824,
+          "patch_max": 0.9653,
+          "geom_inlier": 0.7392,
+          "geom_homog": 0.9307,
+          "n_match": 488
+        },
+        {
+          "t": 467.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.8256,
+          "patch_max": 0.9622,
+          "geom_inlier": 0.6771,
+          "geom_homog": 0.9049,
+          "n_match": 468
+        },
+        {
+          "t": 468.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.7944,
+          "patch_max": 0.9609,
+          "geom_inlier": 0.6885,
+          "geom_homog": 0.8878,
+          "n_match": 443
+        },
+        {
+          "t": 469.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.2341,
+          "patch_max": 0.818,
+          "geom_inlier": 0.551,
+          "geom_homog": 0.6405,
+          "n_match": 114
+        },
+        {
+          "t": 470.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.2297,
+          "patch_max": 0.8129,
+          "geom_inlier": 0.5723,
+          "geom_homog": 0.6341,
+          "n_match": 119
+        },
+        {
+          "t": 471.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.2073,
+          "patch_max": 0.8272,
+          "geom_inlier": 0.5576,
+          "geom_homog": 0.629,
+          "n_match": 115
+        },
+        {
+          "t": 472.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.2108,
+          "patch_max": 0.8163,
+          "geom_inlier": 0.5081,
+          "geom_homog": 0.5651,
+          "n_match": 112
+        },
+        {
+          "t": 473.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.7065,
+          "patch_max": 0.9545,
+          "geom_inlier": 0.705,
+          "geom_homog": 0.847,
+          "n_match": 385
+        },
+        {
+          "t": 474.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.7213,
+          "patch_max": 0.953,
+          "geom_inlier": 0.6996,
+          "geom_homog": 0.8374,
+          "n_match": 372
+        },
+        {
+          "t": 475.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.7125,
+          "patch_max": 0.9482,
+          "geom_inlier": 0.628,
+          "geom_homog": 0.8463,
+          "n_match": 377
+        },
+        {
+          "t": 476.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.7324,
+          "patch_max": 0.9462,
+          "geom_inlier": 0.6979,
+          "geom_homog": 0.8592,
+          "n_match": 377
+        },
+        {
+          "t": 477.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.7875,
+          "patch_max": 0.9488,
+          "geom_inlier": 0.6942,
+          "geom_homog": 0.8453,
+          "n_match": 394
+        },
+        {
+          "t": 478.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.6026,
+          "patch_max": 0.9435,
+          "geom_inlier": 0.744,
+          "geom_homog": 0.8334,
+          "n_match": 366
+        }
+      ],
+      "brother_frames": [
+        {
+          "t": 481.0,
+          "in_true": false,
+          "in_brother": true,
+          "cls_sim": 0.2159,
+          "patch_max": 0.8537,
+          "geom_inlier": 0.5546,
+          "geom_homog": 0.5601,
+          "n_match": 77
+        },
+        {
+          "t": 482.0,
+          "in_true": false,
+          "in_brother": true,
+          "cls_sim": 0.1897,
+          "patch_max": 0.8559,
+          "geom_inlier": 0.6211,
+          "geom_homog": 0.6335,
+          "n_match": 66
+        },
+        {
+          "t": 483.0,
+          "in_true": false,
+          "in_brother": true,
+          "cls_sim": 0.2103,
+          "patch_max": 0.8591,
+          "geom_inlier": 0.5351,
+          "geom_homog": 0.5577,
+          "n_match": 66
+        },
+        {
+          "t": 484.0,
+          "in_true": false,
+          "in_brother": true,
+          "cls_sim": 0.2291,
+          "patch_max": 0.8495,
+          "geom_inlier": 0.5157,
+          "geom_homog": 0.5424,
+          "n_match": 63
+        },
+        {
+          "t": 485.0,
+          "in_true": false,
+          "in_brother": true,
+          "cls_sim": 0.237,
+          "patch_max": 0.8185,
+          "geom_inlier": 0.4664,
+          "geom_homog": 0.5238,
+          "n_match": 102
+        },
+        {
+          "t": 486.0,
+          "in_true": false,
+          "in_brother": true,
+          "cls_sim": 0.2322,
+          "patch_max": 0.8031,
+          "geom_inlier": 0.4107,
+          "geom_homog": 0.4775,
+          "n_match": 100
+        },
+        {
+          "t": 487.0,
+          "in_true": false,
+          "in_brother": true,
+          "cls_sim": 0.2082,
+          "patch_max": 0.8029,
+          "geom_inlier": 0.3678,
+          "geom_homog": 0.4228,
+          "n_match": 99
+        },
+        {
+          "t": 488.0,
+          "in_true": false,
+          "in_brother": true,
+          "cls_sim": 0.1145,
+          "patch_max": 0.8069,
+          "geom_inlier": 0.3158,
+          "geom_homog": 0.4305,
+          "n_match": 99
+        }
+      ],
+      "frames": [
+        {
+          "t": 454.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.4808,
+          "patch_max": 0.9309,
+          "geom_inlier": 0.5365,
+          "geom_homog": 0.6531,
+          "n_match": 222
+        },
+        {
+          "t": 455.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.5974,
+          "patch_max": 0.9338,
+          "geom_inlier": 0.5682,
+          "geom_homog": 0.7376,
+          "n_match": 264
+        },
+        {
+          "t": 456.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.7455,
+          "patch_max": 0.9336,
+          "geom_inlier": 0.6348,
+          "geom_homog": 0.7896,
+          "n_match": 306
+        },
+        {
+          "t": 466.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.824,
+          "patch_max": 0.9653,
+          "geom_inlier": 0.7392,
+          "geom_homog": 0.9307,
+          "n_match": 488
+        },
+        {
+          "t": 467.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.8256,
+          "patch_max": 0.9622,
+          "geom_inlier": 0.6771,
+          "geom_homog": 0.9049,
+          "n_match": 468
+        },
+        {
+          "t": 468.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.7944,
+          "patch_max": 0.9609,
+          "geom_inlier": 0.6885,
+          "geom_homog": 0.8878,
+          "n_match": 443
+        },
+        {
+          "t": 469.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.2341,
+          "patch_max": 0.818,
+          "geom_inlier": 0.551,
+          "geom_homog": 0.6405,
+          "n_match": 114
+        },
+        {
+          "t": 470.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.2297,
+          "patch_max": 0.8129,
+          "geom_inlier": 0.5723,
+          "geom_homog": 0.6341,
+          "n_match": 119
+        },
+        {
+          "t": 471.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.2073,
+          "patch_max": 0.8272,
+          "geom_inlier": 0.5576,
+          "geom_homog": 0.629,
+          "n_match": 115
+        },
+        {
+          "t": 472.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.2108,
+          "patch_max": 0.8163,
+          "geom_inlier": 0.5081,
+          "geom_homog": 0.5651,
+          "n_match": 112
+        },
+        {
+          "t": 473.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.7065,
+          "patch_max": 0.9545,
+          "geom_inlier": 0.705,
+          "geom_homog": 0.847,
+          "n_match": 385
+        },
+        {
+          "t": 474.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.7213,
+          "patch_max": 0.953,
+          "geom_inlier": 0.6996,
+          "geom_homog": 0.8374,
+          "n_match": 372
+        },
+        {
+          "t": 475.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.7125,
+          "patch_max": 0.9482,
+          "geom_inlier": 0.628,
+          "geom_homog": 0.8463,
+          "n_match": 377
+        },
+        {
+          "t": 476.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.7324,
+          "patch_max": 0.9462,
+          "geom_inlier": 0.6979,
+          "geom_homog": 0.8592,
+          "n_match": 377
+        },
+        {
+          "t": 477.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.7875,
+          "patch_max": 0.9488,
+          "geom_inlier": 0.6942,
+          "geom_homog": 0.8453,
+          "n_match": 394
+        },
+        {
+          "t": 478.0,
+          "in_true": true,
+          "in_brother": false,
+          "cls_sim": 0.6026,
+          "patch_max": 0.9435,
+          "geom_inlier": 0.744,
+          "geom_homog": 0.8334,
+          "n_match": 366
+        },
+        {
+          "t": 479.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.4894,
+          "patch_max": 0.9325,
+          "geom_inlier": 0.8018,
+          "geom_homog": 0.8277,
+          "n_match": 316
+        },
+        {
+          "t": 480.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.451,
+          "patch_max": 0.9197,
+          "geom_inlier": 0.6369,
+          "geom_homog": 0.7221,
+          "n_match": 268
+        },
+        {
+          "t": 481.0,
+          "in_true": false,
+          "in_brother": true,
+          "cls_sim": 0.2159,
+          "patch_max": 0.8537,
+          "geom_inlier": 0.5546,
+          "geom_homog": 0.5601,
+          "n_match": 77
+        },
+        {
+          "t": 482.0,
+          "in_true": false,
+          "in_brother": true,
+          "cls_sim": 0.1897,
+          "patch_max": 0.8559,
+          "geom_inlier": 0.6211,
+          "geom_homog": 0.6335,
+          "n_match": 66
+        },
+        {
+          "t": 483.0,
+          "in_true": false,
+          "in_brother": true,
+          "cls_sim": 0.2103,
+          "patch_max": 0.8591,
+          "geom_inlier": 0.5351,
+          "geom_homog": 0.5577,
+          "n_match": 66
+        },
+        {
+          "t": 484.0,
+          "in_true": false,
+          "in_brother": true,
+          "cls_sim": 0.2291,
+          "patch_max": 0.8495,
+          "geom_inlier": 0.5157,
+          "geom_homog": 0.5424,
+          "n_match": 63
+        },
+        {
+          "t": 485.0,
+          "in_true": false,
+          "in_brother": true,
+          "cls_sim": 0.237,
+          "patch_max": 0.8185,
+          "geom_inlier": 0.4664,
+          "geom_homog": 0.5238,
+          "n_match": 102
+        },
+        {
+          "t": 486.0,
+          "in_true": false,
+          "in_brother": true,
+          "cls_sim": 0.2322,
+          "patch_max": 0.8031,
+          "geom_inlier": 0.4107,
+          "geom_homog": 0.4775,
+          "n_match": 100
+        },
+        {
+          "t": 487.0,
+          "in_true": false,
+          "in_brother": true,
+          "cls_sim": 0.2082,
+          "patch_max": 0.8029,
+          "geom_inlier": 0.3678,
+          "geom_homog": 0.4228,
+          "n_match": 99
+        },
+        {
+          "t": 488.0,
+          "in_true": false,
+          "in_brother": true,
+          "cls_sim": 0.1145,
+          "patch_max": 0.8069,
+          "geom_inlier": 0.3158,
+          "geom_homog": 0.4305,
+          "n_match": 99
+        },
+        {
+          "t": 2470.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.4612,
+          "patch_max": 0.8655,
+          "geom_inlier": 0.5968,
+          "geom_homog": 0.7593,
+          "n_match": 144
+        },
+        {
+          "t": 2476.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.447,
+          "patch_max": 0.8588,
+          "geom_inlier": 0.4551,
+          "geom_homog": 0.5188,
+          "n_match": 130
+        },
+        {
+          "t": 2581.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.4087,
+          "patch_max": 0.8084,
+          "geom_inlier": 0.403,
+          "geom_homog": 0.4652,
+          "n_match": 100
+        },
+        {
+          "t": 2659.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.4293,
+          "patch_max": 0.8283,
+          "geom_inlier": 0.2435,
+          "geom_homog": 0.5692,
+          "n_match": 136
+        },
+        {
+          "t": 2660.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.4152,
+          "patch_max": 0.827,
+          "geom_inlier": 0.2658,
+          "geom_homog": 0.432,
+          "n_match": 111
+        },
+        {
+          "t": 2661.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.4084,
+          "patch_max": 0.8372,
+          "geom_inlier": 0.2751,
+          "geom_homog": 0.5007,
+          "n_match": 120
+        },
+        {
+          "t": 2662.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.4246,
+          "patch_max": 0.8392,
+          "geom_inlier": 0.2648,
+          "geom_homog": 0.5731,
+          "n_match": 144
+        },
+        {
+          "t": 3412.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.3993,
+          "patch_max": 0.8473,
+          "geom_inlier": 0.2125,
+          "geom_homog": 0.3246,
+          "n_match": 110
+        },
+        {
+          "t": 3423.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.3964,
+          "patch_max": 0.8289,
+          "geom_inlier": 0.2645,
+          "geom_homog": 0.348,
+          "n_match": 103
+        },
+        {
+          "t": 3683.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.4007,
+          "patch_max": 0.8258,
+          "geom_inlier": 0.662,
+          "geom_homog": 0.6832,
+          "n_match": 98
+        },
+        {
+          "t": 4584.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.4055,
+          "patch_max": 0.7768,
+          "geom_inlier": 0.4209,
+          "geom_homog": 0.438,
+          "n_match": 48
+        },
+        {
+          "t": 4750.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.4154,
+          "patch_max": 0.8649,
+          "geom_inlier": 0.4084,
+          "geom_homog": 0.4057,
+          "n_match": 105
+        },
+        {
+          "t": 4817.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.3946,
+          "patch_max": 0.8222,
+          "geom_inlier": 0.6161,
+          "geom_homog": 0.6684,
+          "n_match": 120
+        },
+        {
+          "t": 5141.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.432,
+          "patch_max": 0.8429,
+          "geom_inlier": 0.4439,
+          "geom_homog": 0.5657,
+          "n_match": 79
+        },
+        {
+          "t": 5549.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.39,
+          "patch_max": 0.8471,
+          "geom_inlier": 0.3986,
+          "geom_homog": 0.4494,
+          "n_match": 85
+        },
+        {
+          "t": 5550.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.3949,
+          "patch_max": 0.8624,
+          "geom_inlier": 0.3423,
+          "geom_homog": 0.4538,
+          "n_match": 84
+        },
+        {
+          "t": 6538.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.4783,
+          "patch_max": 0.8192,
+          "geom_inlier": 0.3916,
+          "geom_homog": 0.5315,
+          "n_match": 96
+        },
+        {
+          "t": 6539.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.4088,
+          "patch_max": 0.8625,
+          "geom_inlier": 0.4408,
+          "geom_homog": 0.566,
+          "n_match": 116
+        },
+        {
+          "t": 6540.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.4371,
+          "patch_max": 0.8782,
+          "geom_inlier": 0.5651,
+          "geom_homog": 0.6588,
+          "n_match": 108
+        },
+        {
+          "t": 6541.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.4014,
+          "patch_max": 0.874,
+          "geom_inlier": 0.4683,
+          "geom_homog": 0.5982,
+          "n_match": 106
+        },
+        {
+          "t": 6914.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.4257,
+          "patch_max": 0.823,
+          "geom_inlier": 0.4202,
+          "geom_homog": 0.5338,
+          "n_match": 140
+        },
+        {
+          "t": 7003.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.3923,
+          "patch_max": 0.8084,
+          "geom_inlier": 0.3952,
+          "geom_homog": 0.5405,
+          "n_match": 72
+        },
+        {
+          "t": 7839.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.4476,
+          "patch_max": 0.836,
+          "geom_inlier": 0.4045,
+          "geom_homog": 0.555,
+          "n_match": 115
+        },
+        {
+          "t": 7921.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.4021,
+          "patch_max": 0.8237,
+          "geom_inlier": 0.4291,
+          "geom_homog": 0.518,
+          "n_match": 104
+        },
+        {
+          "t": 8725.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.4075,
+          "patch_max": 0.8586,
+          "geom_inlier": 0.4222,
+          "geom_homog": 0.643,
+          "n_match": 109
+        },
+        {
+          "t": 8727.0,
+          "in_true": false,
+          "in_brother": false,
+          "cls_sim": 0.4017,
+          "patch_max": 0.858,
+          "geom_inlier": 0.47,
+          "geom_homog": 0.486,
+          "n_match": 107
+        }
+      ],
+      "note": "精灵王重复镜头(v3 原窗 454-480, 用户 09-02 人工定位修正为 466-478)"
+    },
+    {
+      "kind": "motion",
+      "id": "t3r12",
+      "query_t": 64.75,
+      "true_win": [
+        466.0,
+        478.0
+      ],
+      "true_sig": {
+        "win": [
+          466.0,
+          478.0
+        ],
+        "in_true": true,
+        "corr": -0.0882,
+        "l2": 1.2989
+      },
+      "distract": [
+        {
+          "win": [
+            455.0,
+            457.0
+          ],
+          "in_true": false,
+          "corr": -0.1293,
+          "l2": 1.2023
+        },
+        {
+          "win": [
+            6537.0,
+            6539.0
+          ],
+          "in_true": false,
+          "corr": 0.1922,
+          "l2": 1.1352
+        },
+        {
+          "win": [
+            2469.0,
+            2471.0
+          ],
+          "in_true": false,
+          "corr": -0.4586,
+          "l2": 1.3962
+        },
+        {
+          "win": [
+            7838.0,
+            7840.0
+          ],
+          "in_true": false,
+          "corr": -0.2474,
+          "l2": 1.8795
+        },
+        {
+          "win": [
+            5140.0,
+            5142.0
+          ],
+          "in_true": false,
+          "corr": -0.3457,
+          "l2": 1.4854
+        }
+      ],
+      "corr_margin_true": -0.2804,
+      "l2_margin_true": 0.5806,
+      "pair": "test3",
+      "note": "精灵王重复镜头(v3 原窗 454-480, 用户 09-02 人工定位修正为 466-478)"
+    }
+  ],
+  "elapsed_s": 393.4
+}

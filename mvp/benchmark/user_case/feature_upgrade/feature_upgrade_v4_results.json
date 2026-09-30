@@ -1,0 +1,1551 @@
+{
+  "started": "2026-09-25 15:20:16",
+  "purpose": "feature_upgrade 重跑(v4/verified 修正 GT)",
+  "device": {
+    "torch": "2.13.0+cpu",
+    "cuda": false,
+    "note": "CPU 前向(ViT-B 无 DML/ONNX 资产; 与原口径一致)"
+  },
+  "baseline_check": {
+    "features_shape": [
+      7668,
+      384
+    ],
+    "features_dtype": "float32",
+    "index_json": {
+      "index_version": 1,
+      "source_file": "D:\\video\\2.mkv",
+      "file_size": 1020168298,
+      "duration": 7667.535,
+      "file_hash": "sha256:cc70e6d3d00ca55d6c7a43ce1a8638aedaa928dbf45952ddf348b7f39dfe5f5f",
+      "feature_model": "dinov2_vits14",
+      "feature_version": "handwritten_vits14_cls_384d@1_l2+scn1+evt1",
+      "sampling_fps": 1.0,
+      "feature_dim": 384,
+      "num_frames": 7668,
+      "backend": "directml",
+      "created_at": "2026-09-04T15:34:07+00:00",
+      "device_machine_id": "",
+      "extractor": {
+        "normalize": "l2",
+        "resize": "518x518",
+        "mean_std": "imagenet",
+        "preprocess_sha": ""
+      }
+    },
+    "stale_same_shape": true,
+    "stale_max_abs_diff": 0.0
+  },
+  "probes": [
+    {
+      "id": "p26_hard",
+      "pair": "2mkv",
+      "query_t": 76.8,
+      "gt_note": "男主夜读(46:49) [v4修正 1768.2-1770.05: 用户精修 00:29:28.20-00:29:30.05(坐椅看书); 补充线索: ed 1:17.4 闪帧子镜头实际=原片 00:29:43.10(1783.1), 解说",
+      "probe_note": "夜读书+手: 原探针真值窗 2808-2811 = GT 标错",
+      "extra": false,
+      "frames_embedded": 63,
+      "labelings": [
+        {
+          "label": "v4",
+          "true_win": [
+            1768.2,
+            1770.05
+          ],
+          "source": "v4:p26",
+          "distract_wins": [
+            [
+              1237.0,
+              1264.0
+            ],
+            [
+              1682.0,
+              1703.0
+            ]
+          ],
+          "n_frames_true": 4,
+          "n_frames_distract": 50,
+          "cls_vit_s": {
+            "true_max": 0.8536,
+            "wrong_max": 0.6335,
+            "margin": 0.2201,
+            "wrong_win": [
+              1237.0,
+              1264.0
+            ],
+            "n_true": 4,
+            "argmax_t": 1769.0
+          },
+          "cls_vit_b": {
+            "true_max": 0.9235,
+            "wrong_max": 0.4697,
+            "margin": 0.4538,
+            "wrong_win": [
+              1237.0,
+              1264.0
+            ],
+            "n_true": 4,
+            "argmax_t": 1768.0
+          },
+          "cls_vit_s_fullindex": {
+            "true_max": 0.8536,
+            "wrong_max": 0.6335,
+            "margin": 0.2201,
+            "wrong_win": [
+              1237.0,
+              1264.0
+            ],
+            "n_true": 4,
+            "argmax_t": 1769.0,
+            "true_best_rank": 1,
+            "true_best_t": 1769.0
+          },
+          "patch_vit_s": {
+            "true_max": 0.9381,
+            "wrong_max": 0.8467,
+            "margin": 0.0913,
+            "n_scored": 16
+          },
+          "patch_vit_b": {
+            "true_max": 0.9486,
+            "wrong_max": 0.8447,
+            "margin": 0.104,
+            "n_scored": 16
+          }
+        },
+        {
+          "label": "v4_coarse",
+          "true_win": [
+            1766.0,
+            1770.0
+          ],
+          "source": "STATE.md 2026-09-01 粗修正",
+          "distract_wins": [
+            [
+              1237.0,
+              1264.0
+            ],
+            [
+              1682.0,
+              1703.0
+            ]
+          ],
+          "n_frames_true": 7,
+          "n_frames_distract": 50,
+          "cls_vit_s": {
+            "true_max": 0.8536,
+            "wrong_max": 0.6335,
+            "margin": 0.2201,
+            "wrong_win": [
+              1237.0,
+              1264.0
+            ],
+            "n_true": 7,
+            "argmax_t": 1769.0
+          },
+          "cls_vit_b": {
+            "true_max": 0.9235,
+            "wrong_max": 0.4697,
+            "margin": 0.4538,
+            "wrong_win": [
+              1237.0,
+              1264.0
+            ],
+            "n_true": 7,
+            "argmax_t": 1768.0
+          },
+          "cls_vit_s_fullindex": {
+            "true_max": 0.8536,
+            "wrong_max": 0.6335,
+            "margin": 0.2201,
+            "wrong_win": [
+              1237.0,
+              1264.0
+            ],
+            "n_true": 7,
+            "argmax_t": 1769.0,
+            "true_best_rank": 1,
+            "true_best_t": 1769.0
+          },
+          "patch_vit_s": {
+            "true_max": 0.9381,
+            "wrong_max": 0.8467,
+            "margin": 0.0913,
+            "n_scored": 19
+          },
+          "patch_vit_b": {
+            "true_max": 0.9486,
+            "wrong_max": 0.8447,
+            "margin": 0.104,
+            "n_scored": 19
+          }
+        },
+        {
+          "label": "v3_legacy",
+          "true_win": [
+            2808.0,
+            2811.0
+          ],
+          "source": "work/feature_upgrade_probe1_results.json",
+          "distract_wins": [
+            [
+              1237.0,
+              1264.0
+            ],
+            [
+              1682.0,
+              1703.0
+            ]
+          ],
+          "n_frames_true": 6,
+          "n_frames_distract": 50,
+          "cls_vit_s": {
+            "true_max": 0.5973,
+            "wrong_max": 0.6335,
+            "margin": -0.0361,
+            "wrong_win": [
+              1237.0,
+              1264.0
+            ],
+            "n_true": 6,
+            "argmax_t": 1769.0
+          },
+          "cls_vit_b": {
+            "true_max": 0.4611,
+            "wrong_max": 0.4697,
+            "margin": -0.0086,
+            "wrong_win": [
+              1237.0,
+              1264.0
+            ],
+            "n_true": 6,
+            "argmax_t": 1768.0
+          },
+          "cls_vit_s_fullindex": {
+            "true_max": 0.5973,
+            "wrong_max": 0.6335,
+            "margin": -0.0361,
+            "wrong_win": [
+              1237.0,
+              1264.0
+            ],
+            "n_true": 6,
+            "argmax_t": 1769.0,
+            "true_best_rank": 18,
+            "true_best_t": 2809.0
+          },
+          "patch_vit_s": {
+            "true_max": 0.8355,
+            "wrong_max": 0.8467,
+            "margin": -0.0113,
+            "n_scored": 18
+          },
+          "patch_vit_b": {
+            "true_max": 0.8061,
+            "wrong_max": 0.8447,
+            "margin": -0.0385,
+            "n_scored": 18
+          }
+        }
+      ]
+    },
+    {
+      "id": "p08_brother",
+      "pair": "2mkv",
+      "query_t": 13.5,
+      "gt_note": "对话场景(了望塔空镜+桌边) [v4 保持 OK] [A段精修 1108.15-1109.1: A段裁决 00:18:28:15-00:18:29:10(精确毫秒); TRUE 正确]",
+      "probe_note": "瞭望塔机位: 兄弟机位 1048-1050 为干扰",
+      "extra": false,
+      "frames_embedded": 75,
+      "labelings": [
+        {
+          "label": "v4",
+          "true_win": [
+            1108.15,
+            1109.1
+          ],
+          "source": "v4:p08",
+          "distract_wins": [
+            [
+              1017.0,
+              1060.0
+            ],
+            [
+              1156.0,
+              1181.0
+            ]
+          ],
+          "n_frames_true": 3,
+          "n_frames_distract": 70,
+          "cls_vit_s": {
+            "true_max": 0.8109,
+            "wrong_max": 0.8339,
+            "margin": -0.023,
+            "wrong_win": [
+              1017.0,
+              1060.0
+            ],
+            "n_true": 3,
+            "argmax_t": 1035.0
+          },
+          "cls_vit_b": {
+            "true_max": 0.8253,
+            "wrong_max": 0.8259,
+            "margin": -0.0006,
+            "wrong_win": [
+              1017.0,
+              1060.0
+            ],
+            "n_true": 3,
+            "argmax_t": 1038.0
+          },
+          "cls_vit_s_fullindex": {
+            "true_max": 0.8109,
+            "wrong_max": 0.8339,
+            "margin": -0.023,
+            "wrong_win": [
+              1017.0,
+              1060.0
+            ],
+            "n_true": 3,
+            "argmax_t": 1035.0,
+            "true_best_rank": 6,
+            "true_best_t": 1109.0
+          },
+          "patch_vit_s": {
+            "true_max": 0.912,
+            "wrong_max": 0.9141,
+            "margin": -0.0021,
+            "n_scored": 15
+          },
+          "patch_vit_b": {
+            "true_max": 0.9209,
+            "wrong_max": 0.9285,
+            "margin": -0.0076,
+            "n_scored": 15
+          }
+        },
+        {
+          "label": "v3_legacy",
+          "true_win": [
+            1108.0,
+            1110.0
+          ],
+          "source": "work/feature_upgrade_probe1_results.json",
+          "distract_wins": [
+            [
+              1048.0,
+              1050.0
+            ],
+            [
+              1017.0,
+              1048.0
+            ],
+            [
+              1156.0,
+              1181.0
+            ]
+          ],
+          "n_frames_true": 5,
+          "n_frames_distract": 60,
+          "cls_vit_s": {
+            "true_max": 0.8109,
+            "wrong_max": 0.8339,
+            "margin": -0.023,
+            "wrong_win": [
+              1017.0,
+              1048.0
+            ],
+            "n_true": 5,
+            "argmax_t": 1035.0
+          },
+          "cls_vit_b": {
+            "true_max": 0.8253,
+            "wrong_max": 0.8259,
+            "margin": -0.0006,
+            "wrong_win": [
+              1017.0,
+              1048.0
+            ],
+            "n_true": 5,
+            "argmax_t": 1038.0
+          },
+          "cls_vit_s_fullindex": {
+            "true_max": 0.8109,
+            "wrong_max": 0.8339,
+            "margin": -0.023,
+            "wrong_win": [
+              1017.0,
+              1048.0
+            ],
+            "n_true": 5,
+            "argmax_t": 1035.0,
+            "true_best_rank": 6,
+            "true_best_t": 1109.0
+          },
+          "patch_vit_s": {
+            "true_max": 0.912,
+            "wrong_max": 0.916,
+            "margin": -0.004,
+            "n_scored": 17
+          },
+          "patch_vit_b": {
+            "true_max": 0.9209,
+            "wrong_max": 0.9253,
+            "margin": -0.0044,
+            "n_scored": 17
+          }
+        }
+      ]
+    },
+    {
+      "id": "p08b_brother",
+      "pair": "2mkv",
+      "query_t": 13.9,
+      "gt_note": "对话场景(了望塔空镜+桌边) [v4 保持 OK] [A段精修 1108.15-1109.1: A段裁决 00:18:28:15-00:18:29:10(精确毫秒); TRUE 正确]",
+      "probe_note": "士兵特写: 原探针把 p38 旧错误 GT 区 1048-1050 当真值窗(已作废)",
+      "extra": false,
+      "frames_embedded": 59,
+      "labelings": [
+        {
+          "label": "v4",
+          "true_win": [
+            1108.15,
+            1109.1
+          ],
+          "source": "v4:p08",
+          "distract_wins": [
+            [
+              1017.0,
+              1060.0
+            ]
+          ],
+          "n_frames_true": 3,
+          "n_frames_distract": 44,
+          "cls_vit_s": {
+            "true_max": 0.7548,
+            "wrong_max": 0.7687,
+            "margin": -0.0139,
+            "wrong_win": [
+              1017.0,
+              1060.0
+            ],
+            "n_true": 3,
+            "argmax_t": 1035.0
+          },
+          "cls_vit_b": {
+            "true_max": 0.7874,
+            "wrong_max": 0.8045,
+            "margin": -0.0171,
+            "wrong_win": [
+              1017.0,
+              1060.0
+            ],
+            "n_true": 3,
+            "argmax_t": 1038.0
+          },
+          "cls_vit_s_fullindex": {
+            "true_max": 0.7548,
+            "wrong_max": 0.7687,
+            "margin": -0.0139,
+            "wrong_win": [
+              1017.0,
+              1060.0
+            ],
+            "n_true": 3,
+            "argmax_t": 1035.0,
+            "true_best_rank": 5,
+            "true_best_t": 1109.0
+          },
+          "patch_vit_s": {
+            "true_max": 0.9104,
+            "wrong_max": 0.9161,
+            "margin": -0.0056,
+            "n_scored": 15
+          },
+          "patch_vit_b": {
+            "true_max": 0.9171,
+            "wrong_max": 0.9224,
+            "margin": -0.0053,
+            "n_scored": 15
+          }
+        },
+        {
+          "label": "v3_legacy",
+          "true_win": [
+            1048.0,
+            1050.0
+          ],
+          "source": "work/feature_upgrade_probe1_results.json",
+          "distract_wins": [
+            [
+              1108.0,
+              1110.0
+            ],
+            [
+              1017.0,
+              1047.0
+            ],
+            [
+              1051.0,
+              1072.0
+            ]
+          ],
+          "n_frames_true": 5,
+          "n_frames_distract": 56,
+          "cls_vit_s": {
+            "true_max": 0.6309,
+            "wrong_max": 0.7687,
+            "margin": -0.1379,
+            "wrong_win": [
+              1017.0,
+              1047.0
+            ],
+            "n_true": 5,
+            "argmax_t": 1035.0
+          },
+          "cls_vit_b": {
+            "true_max": 0.5238,
+            "wrong_max": 0.8045,
+            "margin": -0.2808,
+            "wrong_win": [
+              1017.0,
+              1047.0
+            ],
+            "n_true": 5,
+            "argmax_t": 1038.0
+          },
+          "cls_vit_s_fullindex": {
+            "true_max": 0.6309,
+            "wrong_max": 0.7687,
+            "margin": -0.1379,
+            "wrong_win": [
+              1017.0,
+              1047.0
+            ],
+            "n_true": 5,
+            "argmax_t": 1035.0,
+            "true_best_rank": 32,
+            "true_best_t": 1048.0
+          },
+          "patch_vit_s": {
+            "true_max": 0.9218,
+            "wrong_max": 0.9161,
+            "margin": 0.0057,
+            "n_scored": 17
+          },
+          "patch_vit_b": {
+            "true_max": 0.9198,
+            "wrong_max": 0.9224,
+            "margin": -0.0027,
+            "n_scored": 17
+          }
+        }
+      ]
+    },
+    {
+      "id": "p27_sign",
+      "pair": "2mkv",
+      "query_t": 85.5,
+      "gt_note": "WHAT IS YOUR NAME? 问句字牌(女士,30:11=1811s)。初版精修 [1859,1869] 为答案字牌区间,系错误;OCR(rapidocr)读出 1811 帧文字=WHAT is YOUR NAME,sign_tim",
+      "probe_note": "WHAT 字牌",
+      "extra": false,
+      "frames_embedded": 46,
+      "labelings": [
+        {
+          "label": "v4",
+          "true_win": [
+            1810.0,
+            1813.0
+          ],
+          "source": "v4:p27",
+          "distract_wins": [
+            [
+              1823.0,
+              1858.0
+            ]
+          ],
+          "n_frames_true": 6,
+          "n_frames_distract": 36,
+          "cls_vit_s": {
+            "true_max": 0.9126,
+            "wrong_max": 0.7109,
+            "margin": 0.2016,
+            "wrong_win": [
+              1823.0,
+              1858.0
+            ],
+            "n_true": 6,
+            "argmax_t": 1811.0
+          },
+          "cls_vit_b": {
+            "true_max": 0.9251,
+            "wrong_max": 0.8029,
+            "margin": 0.1222,
+            "wrong_win": [
+              1823.0,
+              1858.0
+            ],
+            "n_true": 6,
+            "argmax_t": 1812.0
+          },
+          "cls_vit_s_fullindex": {
+            "true_max": 0.9126,
+            "wrong_max": 0.7109,
+            "margin": 0.2016,
+            "wrong_win": [
+              1823.0,
+              1858.0
+            ],
+            "n_true": 6,
+            "argmax_t": 1811.0,
+            "true_best_rank": 1,
+            "true_best_t": 1811.0
+          },
+          "patch_vit_s": {
+            "true_max": 0.961,
+            "wrong_max": 0.8982,
+            "margin": 0.0628,
+            "n_scored": 18
+          },
+          "patch_vit_b": {
+            "true_max": 0.9583,
+            "wrong_max": 0.896,
+            "margin": 0.0624,
+            "n_scored": 18
+          }
+        },
+        {
+          "label": "v3_legacy",
+          "true_win": [
+            1808.0,
+            1815.0
+          ],
+          "source": "work/feature_upgrade_probe1_results.json",
+          "distract_wins": [
+            [
+              1823.0,
+              1845.0
+            ],
+            [
+              1838.0,
+              1858.0
+            ]
+          ],
+          "n_frames_true": 10,
+          "n_frames_distract": 36,
+          "cls_vit_s": {
+            "true_max": 0.9126,
+            "wrong_max": 0.7109,
+            "margin": 0.2016,
+            "wrong_win": [
+              1823.0,
+              1845.0
+            ],
+            "n_true": 10,
+            "argmax_t": 1811.0
+          },
+          "cls_vit_b": {
+            "true_max": 0.9251,
+            "wrong_max": 0.8029,
+            "margin": 0.1222,
+            "wrong_win": [
+              1823.0,
+              1845.0
+            ],
+            "n_true": 10,
+            "argmax_t": 1812.0
+          },
+          "cls_vit_s_fullindex": {
+            "true_max": 0.9126,
+            "wrong_max": 0.7109,
+            "margin": 0.2016,
+            "wrong_win": [
+              1823.0,
+              1845.0
+            ],
+            "n_true": 10,
+            "argmax_t": 1811.0,
+            "true_best_rank": 1,
+            "true_best_t": 1811.0
+          },
+          "patch_vit_s": {
+            "true_max": 0.961,
+            "wrong_max": 0.8982,
+            "margin": 0.0628,
+            "n_scored": 22
+          },
+          "patch_vit_b": {
+            "true_max": 0.9583,
+            "wrong_max": 0.896,
+            "margin": 0.0624,
+            "n_scored": 22
+          }
+        }
+      ]
+    },
+    {
+      "id": "p01_easy",
+      "pair": "2mkv",
+      "query_t": 0.8,
+      "gt_note": "金属球装置准备戏(Teller 特写+球特写) [v4修正 2417.5-2418.1: 用户裁决 40:17.5-40:18.1]",
+      "probe_note": "金属球准备(易例)",
+      "extra": false,
+      "frames_embedded": 53,
+      "labelings": [
+        {
+          "label": "v4",
+          "true_win": [
+            2417.5,
+            2418.1
+          ],
+          "source": "v4:p01",
+          "distract_wins": [
+            [
+              2420.0,
+              2460.0
+            ]
+          ],
+          "n_frames_true": 3,
+          "n_frames_distract": 41,
+          "cls_vit_s": {
+            "true_max": 0.7869,
+            "wrong_max": 0.637,
+            "margin": 0.1499,
+            "wrong_win": [
+              2420.0,
+              2460.0
+            ],
+            "n_true": 3,
+            "argmax_t": 2417.0
+          },
+          "cls_vit_b": {
+            "true_max": 0.7676,
+            "wrong_max": 0.6085,
+            "margin": 0.159,
+            "wrong_win": [
+              2420.0,
+              2460.0
+            ],
+            "n_true": 3,
+            "argmax_t": 2418.0
+          },
+          "cls_vit_s_fullindex": {
+            "true_max": 0.7869,
+            "wrong_max": 0.637,
+            "margin": 0.1499,
+            "wrong_win": [
+              2420.0,
+              2460.0
+            ],
+            "n_true": 3,
+            "argmax_t": 2417.0,
+            "true_best_rank": 1,
+            "true_best_t": 2417.0
+          },
+          "patch_vit_s": {
+            "true_max": 0.9606,
+            "wrong_max": 0.8933,
+            "margin": 0.0673,
+            "n_scored": 15
+          },
+          "patch_vit_b": {
+            "true_max": 0.9589,
+            "wrong_max": 0.8701,
+            "margin": 0.0889,
+            "n_scored": 15
+          }
+        },
+        {
+          "label": "v3_legacy",
+          "true_win": [
+            2417.0,
+            2428.0
+          ],
+          "source": "work/feature_upgrade_probe1_results.json",
+          "distract_wins": [
+            [
+              2429.0,
+              2460.0
+            ],
+            [
+              2448.0,
+              2468.0
+            ]
+          ],
+          "n_frames_true": 14,
+          "n_frames_distract": 40,
+          "cls_vit_s": {
+            "true_max": 0.7869,
+            "wrong_max": 0.6257,
+            "margin": 0.1613,
+            "wrong_win": [
+              2429.0,
+              2460.0
+            ],
+            "n_true": 14,
+            "argmax_t": 2417.0
+          },
+          "cls_vit_b": {
+            "true_max": 0.7676,
+            "wrong_max": 0.6085,
+            "margin": 0.159,
+            "wrong_win": [
+              2429.0,
+              2460.0
+            ],
+            "n_true": 14,
+            "argmax_t": 2418.0
+          },
+          "cls_vit_s_fullindex": {
+            "true_max": 0.7869,
+            "wrong_max": 0.6257,
+            "margin": 0.1613,
+            "wrong_win": [
+              2429.0,
+              2460.0
+            ],
+            "n_true": 14,
+            "argmax_t": 2417.0,
+            "true_best_rank": 1,
+            "true_best_t": 2417.0
+          },
+          "patch_vit_s": {
+            "true_max": 0.9606,
+            "wrong_max": 0.9449,
+            "margin": 0.0157,
+            "n_scored": 24
+          },
+          "patch_vit_b": {
+            "true_max": 0.9589,
+            "wrong_max": 0.9397,
+            "margin": 0.0192,
+            "n_scored": 24
+          }
+        }
+      ]
+    },
+    {
+      "id": "p04_easy",
+      "pair": "2mkv",
+      "query_t": 4.6,
+      "gt_note": "峡谷雾河航拍;加固复核帧对帧吻合,精修 [833,845],覆盖12s/均值0.713 [v4修正 839-844: 用户裁决 13:59.0-14:04 峡谷航拍真源（弃 VLM W3）]",
+      "probe_note": "峡谷航拍(易例)",
+      "extra": false,
+      "frames_embedded": 65,
+      "labelings": [
+        {
+          "label": "v4",
+          "true_win": [
+            839.0,
+            844.0
+          ],
+          "source": "v4:p04",
+          "distract_wins": [
+            [
+              1359.0,
+              1382.0
+            ],
+            [
+              2318.0,
+              2343.0
+            ]
+          ],
+          "n_frames_true": 8,
+          "n_frames_distract": 50,
+          "cls_vit_s": {
+            "true_max": 0.84,
+            "wrong_max": 0.6776,
+            "margin": 0.1624,
+            "wrong_win": [
+              2318.0,
+              2343.0
+            ],
+            "n_true": 8,
+            "argmax_t": 839.0
+          },
+          "cls_vit_b": {
+            "true_max": 0.8233,
+            "wrong_max": 0.7215,
+            "margin": 0.1018,
+            "wrong_win": [
+              2318.0,
+              2343.0
+            ],
+            "n_true": 8,
+            "argmax_t": 840.0
+          },
+          "cls_vit_s_fullindex": {
+            "true_max": 0.84,
+            "wrong_max": 0.6776,
+            "margin": 0.1624,
+            "wrong_win": [
+              2318.0,
+              2343.0
+            ],
+            "n_true": 8,
+            "argmax_t": 839.0,
+            "true_best_rank": 1,
+            "true_best_t": 839.0
+          },
+          "patch_vit_s": {
+            "true_max": 0.9197,
+            "wrong_max": 0.868,
+            "margin": 0.0516,
+            "n_scored": 20
+          },
+          "patch_vit_b": {
+            "true_max": 0.9266,
+            "wrong_max": 0.878,
+            "margin": 0.0486,
+            "n_scored": 20
+          }
+        },
+        {
+          "label": "v3_legacy",
+          "true_win": [
+            833.0,
+            845.0
+          ],
+          "source": "work/feature_upgrade_probe1_results.json",
+          "distract_wins": [
+            [
+              1359.0,
+              1382.0
+            ],
+            [
+              2318.0,
+              2343.0
+            ]
+          ],
+          "n_frames_true": 15,
+          "n_frames_distract": 50,
+          "cls_vit_s": {
+            "true_max": 0.84,
+            "wrong_max": 0.6776,
+            "margin": 0.1624,
+            "wrong_win": [
+              2318.0,
+              2343.0
+            ],
+            "n_true": 15,
+            "argmax_t": 839.0
+          },
+          "cls_vit_b": {
+            "true_max": 0.8233,
+            "wrong_max": 0.7215,
+            "margin": 0.1018,
+            "wrong_win": [
+              2318.0,
+              2343.0
+            ],
+            "n_true": 15,
+            "argmax_t": 840.0
+          },
+          "cls_vit_s_fullindex": {
+            "true_max": 0.84,
+            "wrong_max": 0.6776,
+            "margin": 0.1624,
+            "wrong_win": [
+              2318.0,
+              2343.0
+            ],
+            "n_true": 15,
+            "argmax_t": 839.0,
+            "true_best_rank": 1,
+            "true_best_t": 839.0
+          },
+          "patch_vit_s": {
+            "true_max": 0.9197,
+            "wrong_max": 0.868,
+            "margin": 0.0516,
+            "n_scored": 24
+          },
+          "patch_vit_b": {
+            "true_max": 0.9266,
+            "wrong_max": 0.878,
+            "margin": 0.0486,
+            "n_scored": 24
+          }
+        }
+      ]
+    },
+    {
+      "id": "p17_easy",
+      "pair": "2mkv",
+      "query_t": 38.0,
+      "gt_note": "武器站枪塔 [v4 保持 OK]",
+      "probe_note": "武器站枪塔(易例)",
+      "extra": false,
+      "frames_embedded": 62,
+      "labelings": [
+        {
+          "label": "v4",
+          "true_win": [
+            1415.0,
+            1419.0
+          ],
+          "source": "v4:p17",
+          "distract_wins": [
+            [
+              1373.0,
+              1393.0
+            ],
+            [
+              2163.0,
+              2196.0
+            ]
+          ],
+          "n_frames_true": 7,
+          "n_frames_distract": 55,
+          "cls_vit_s": {
+            "true_max": 0.8576,
+            "wrong_max": 0.5869,
+            "margin": 0.2707,
+            "wrong_win": [
+              2163.0,
+              2196.0
+            ],
+            "n_true": 7,
+            "argmax_t": 1418.0
+          },
+          "cls_vit_b": {
+            "true_max": 0.8767,
+            "wrong_max": 0.5707,
+            "margin": 0.306,
+            "wrong_win": [
+              2163.0,
+              2196.0
+            ],
+            "n_true": 7,
+            "argmax_t": 1417.0
+          },
+          "cls_vit_s_fullindex": {
+            "true_max": 0.8576,
+            "wrong_max": 0.5869,
+            "margin": 0.2707,
+            "wrong_win": [
+              2163.0,
+              2196.0
+            ],
+            "n_true": 7,
+            "argmax_t": 1418.0,
+            "true_best_rank": 1,
+            "true_best_t": 1418.0
+          },
+          "patch_vit_s": {
+            "true_max": 0.9224,
+            "wrong_max": 0.8693,
+            "margin": 0.0531,
+            "n_scored": 19
+          },
+          "patch_vit_b": {
+            "true_max": 0.9326,
+            "wrong_max": 0.8618,
+            "margin": 0.0707,
+            "n_scored": 19
+          }
+        }
+      ]
+    },
+    {
+      "id": "t3r10_adj",
+      "pair": "test3",
+      "query_t": 56.25,
+      "gt_note": "【用户人工定位 2026-09-02】r10→7:22-7:24（与 conflict_rerank 修复一致 ✅）",
+      "probe_note": "逃亡奔跑边界",
+      "extra": false,
+      "frames_embedded": 38,
+      "labelings": [
+        {
+          "label": "v4",
+          "true_win": [
+            442.0,
+            444.0
+          ],
+          "source": "t3:t3r10",
+          "distract_wins": [
+            [
+              302.0,
+              329.0
+            ]
+          ],
+          "n_frames_true": 5,
+          "n_frames_distract": 28,
+          "cls_vit_s": {
+            "true_max": 0.736,
+            "wrong_max": 0.7172,
+            "margin": 0.0189,
+            "wrong_win": [
+              302.0,
+              329.0
+            ],
+            "n_true": 5,
+            "argmax_t": 447.0
+          },
+          "cls_vit_b": {
+            "true_max": 0.7234,
+            "wrong_max": 0.7055,
+            "margin": 0.0179,
+            "wrong_win": [
+              302.0,
+              329.0
+            ],
+            "n_true": 5,
+            "argmax_t": 448.0
+          },
+          "cls_vit_s_fullindex": {
+            "true_max": 0.736,
+            "wrong_max": 0.7172,
+            "margin": 0.0189,
+            "wrong_win": [
+              302.0,
+              329.0
+            ],
+            "n_true": 5,
+            "argmax_t": 447.0,
+            "true_best_rank": 3,
+            "true_best_t": 442.0
+          },
+          "patch_vit_s": {
+            "true_max": 0.8583,
+            "wrong_max": 0.8042,
+            "margin": 0.0541,
+            "n_scored": 17
+          },
+          "patch_vit_b": {
+            "true_max": 0.8509,
+            "wrong_max": 0.7903,
+            "margin": 0.0605,
+            "n_scored": 17
+          }
+        },
+        {
+          "label": "v3_legacy",
+          "true_win": [
+            441.5,
+            447.0
+          ],
+          "source": "work/feature_upgrade_probe1_results.json",
+          "distract_wins": [
+            [
+              447.0,
+              450.0
+            ],
+            [
+              302.0,
+              322.0
+            ],
+            [
+              309.0,
+              329.0
+            ]
+          ],
+          "n_frames_true": 8,
+          "n_frames_distract": 32,
+          "cls_vit_s": {
+            "true_max": 0.854,
+            "wrong_max": 0.854,
+            "margin": 0.0,
+            "wrong_win": [
+              447.0,
+              450.0
+            ],
+            "n_true": 8,
+            "argmax_t": 447.0
+          },
+          "cls_vit_b": {
+            "true_max": 0.8884,
+            "wrong_max": 0.8884,
+            "margin": 0.0,
+            "wrong_win": [
+              447.0,
+              450.0
+            ],
+            "n_true": 8,
+            "argmax_t": 448.0
+          },
+          "cls_vit_s_fullindex": {
+            "true_max": 0.854,
+            "wrong_max": 0.854,
+            "margin": 0.0,
+            "wrong_win": [
+              447.0,
+              450.0
+            ],
+            "n_true": 8,
+            "argmax_t": 447.0,
+            "true_best_rank": 1,
+            "true_best_t": 447.0
+          },
+          "patch_vit_s": {
+            "true_max": 0.896,
+            "wrong_max": 0.868,
+            "margin": 0.0279,
+            "n_scored": 20
+          },
+          "patch_vit_b": {
+            "true_max": 0.8961,
+            "wrong_max": 0.8759,
+            "margin": 0.0202,
+            "n_scored": 20
+          }
+        }
+      ]
+    },
+    {
+      "id": "t3r12_hard",
+      "pair": "test3",
+      "query_t": 64.75,
+      "gt_note": "【用户人工定位 2026-09-02】r12 ed1:06→7:46-7:58",
+      "probe_note": "精灵王重复镜头(失败族, 本脚本新增)",
+      "extra": true,
+      "frames_embedded": 57,
+      "labelings": [
+        {
+          "label": "v4",
+          "true_win": [
+            466.0,
+            478.0
+          ],
+          "source": "t3:t3r12",
+          "distract_wins": [
+            [
+              444.0,
+              465.0
+            ],
+            [
+              2460.0,
+              2480.0
+            ]
+          ],
+          "n_frames_true": 15,
+          "n_frames_distract": 43,
+          "cls_vit_s": {
+            "true_max": 0.8256,
+            "wrong_max": 0.7455,
+            "margin": 0.0801,
+            "wrong_win": [
+              444.0,
+              465.0
+            ],
+            "n_true": 15,
+            "argmax_t": 467.0
+          },
+          "cls_vit_b": {
+            "true_max": 0.8137,
+            "wrong_max": 0.7265,
+            "margin": 0.0872,
+            "wrong_win": [
+              444.0,
+              465.0
+            ],
+            "n_true": 15,
+            "argmax_t": 467.0
+          },
+          "cls_vit_s_fullindex": {
+            "true_max": 0.8256,
+            "wrong_max": 0.7455,
+            "margin": 0.0801,
+            "wrong_win": [
+              444.0,
+              465.0
+            ],
+            "n_true": 15,
+            "argmax_t": 467.0,
+            "true_best_rank": 1,
+            "true_best_t": 467.0
+          },
+          "patch_vit_s": {
+            "true_max": 0.9587,
+            "wrong_max": 0.917,
+            "margin": 0.0417,
+            "n_scored": 24
+          },
+          "patch_vit_b": {
+            "true_max": 0.9599,
+            "wrong_max": 0.8919,
+            "margin": 0.0681,
+            "n_scored": 24
+          }
+        }
+      ]
+    }
+  ],
+  "summary": [
+    {
+      "probe": "p26_hard",
+      "extra": false,
+      "labeling": "v4",
+      "true_win": [
+        1768.2,
+        1770.05
+      ],
+      "s_margin": 0.2201,
+      "b_margin": 0.4538,
+      "s_arg": 1769.0,
+      "b_arg": 1768.0,
+      "ps_margin": 0.0913,
+      "pb_margin": 0.104,
+      "s_rank_full": 1
+    },
+    {
+      "probe": "p26_hard",
+      "extra": false,
+      "labeling": "v4_coarse",
+      "true_win": [
+        1766.0,
+        1770.0
+      ],
+      "s_margin": 0.2201,
+      "b_margin": 0.4538,
+      "s_arg": 1769.0,
+      "b_arg": 1768.0,
+      "ps_margin": 0.0913,
+      "pb_margin": 0.104,
+      "s_rank_full": 1
+    },
+    {
+      "probe": "p26_hard",
+      "extra": false,
+      "labeling": "v3_legacy",
+      "true_win": [
+        2808.0,
+        2811.0
+      ],
+      "s_margin": -0.0361,
+      "b_margin": -0.0086,
+      "s_arg": 1769.0,
+      "b_arg": 1768.0,
+      "ps_margin": -0.0113,
+      "pb_margin": -0.0385,
+      "s_rank_full": 18
+    },
+    {
+      "probe": "p08_brother",
+      "extra": false,
+      "labeling": "v4",
+      "true_win": [
+        1108.15,
+        1109.1
+      ],
+      "s_margin": -0.023,
+      "b_margin": -0.0006,
+      "s_arg": 1035.0,
+      "b_arg": 1038.0,
+      "ps_margin": -0.0021,
+      "pb_margin": -0.0076,
+      "s_rank_full": 6
+    },
+    {
+      "probe": "p08_brother",
+      "extra": false,
+      "labeling": "v3_legacy",
+      "true_win": [
+        1108.0,
+        1110.0
+      ],
+      "s_margin": -0.023,
+      "b_margin": -0.0006,
+      "s_arg": 1035.0,
+      "b_arg": 1038.0,
+      "ps_margin": -0.004,
+      "pb_margin": -0.0044,
+      "s_rank_full": 6
+    },
+    {
+      "probe": "p08b_brother",
+      "extra": false,
+      "labeling": "v4",
+      "true_win": [
+        1108.15,
+        1109.1
+      ],
+      "s_margin": -0.0139,
+      "b_margin": -0.0171,
+      "s_arg": 1035.0,
+      "b_arg": 1038.0,
+      "ps_margin": -0.0056,
+      "pb_margin": -0.0053,
+      "s_rank_full": 5
+    },
+    {
+      "probe": "p08b_brother",
+      "extra": false,
+      "labeling": "v3_legacy",
+      "true_win": [
+        1048.0,
+        1050.0
+      ],
+      "s_margin": -0.1379,
+      "b_margin": -0.2808,
+      "s_arg": 1035.0,
+      "b_arg": 1038.0,
+      "ps_margin": 0.0057,
+      "pb_margin": -0.0027,
+      "s_rank_full": 32
+    },
+    {
+      "probe": "p27_sign",
+      "extra": false,
+      "labeling": "v4",
+      "true_win": [
+        1810.0,
+        1813.0
+      ],
+      "s_margin": 0.2016,
+      "b_margin": 0.1222,
+      "s_arg": 1811.0,
+      "b_arg": 1812.0,
+      "ps_margin": 0.0628,
+      "pb_margin": 0.0624,
+      "s_rank_full": 1
+    },
+    {
+      "probe": "p27_sign",
+      "extra": false,
+      "labeling": "v3_legacy",
+      "true_win": [
+        1808.0,
+        1815.0
+      ],
+      "s_margin": 0.2016,
+      "b_margin": 0.1222,
+      "s_arg": 1811.0,
+      "b_arg": 1812.0,
+      "ps_margin": 0.0628,
+      "pb_margin": 0.0624,
+      "s_rank_full": 1
+    },
+    {
+      "probe": "p01_easy",
+      "extra": false,
+      "labeling": "v4",
+      "true_win": [
+        2417.5,
+        2418.1
+      ],
+      "s_margin": 0.1499,
+      "b_margin": 0.159,
+      "s_arg": 2417.0,
+      "b_arg": 2418.0,
+      "ps_margin": 0.0673,
+      "pb_margin": 0.0889,
+      "s_rank_full": 1
+    },
+    {
+      "probe": "p01_easy",
+      "extra": false,
+      "labeling": "v3_legacy",
+      "true_win": [
+        2417.0,
+        2428.0
+      ],
+      "s_margin": 0.1613,
+      "b_margin": 0.159,
+      "s_arg": 2417.0,
+      "b_arg": 2418.0,
+      "ps_margin": 0.0157,
+      "pb_margin": 0.0192,
+      "s_rank_full": 1
+    },
+    {
+      "probe": "p04_easy",
+      "extra": false,
+      "labeling": "v4",
+      "true_win": [
+        839.0,
+        844.0
+      ],
+      "s_margin": 0.1624,
+      "b_margin": 0.1018,
+      "s_arg": 839.0,
+      "b_arg": 840.0,
+      "ps_margin": 0.0516,
+      "pb_margin": 0.0486,
+      "s_rank_full": 1
+    },
+    {
+      "probe": "p04_easy",
+      "extra": false,
+      "labeling": "v3_legacy",
+      "true_win": [
+        833.0,
+        845.0
+      ],
+      "s_margin": 0.1624,
+      "b_margin": 0.1018,
+      "s_arg": 839.0,
+      "b_arg": 840.0,
+      "ps_margin": 0.0516,
+      "pb_margin": 0.0486,
+      "s_rank_full": 1
+    },
+    {
+      "probe": "p17_easy",
+      "extra": false,
+      "labeling": "v4",
+      "true_win": [
+        1415.0,
+        1419.0
+      ],
+      "s_margin": 0.2707,
+      "b_margin": 0.306,
+      "s_arg": 1418.0,
+      "b_arg": 1417.0,
+      "ps_margin": 0.0531,
+      "pb_margin": 0.0707,
+      "s_rank_full": 1
+    },
+    {
+      "probe": "t3r10_adj",
+      "extra": false,
+      "labeling": "v4",
+      "true_win": [
+        442.0,
+        444.0
+      ],
+      "s_margin": 0.0189,
+      "b_margin": 0.0179,
+      "s_arg": 447.0,
+      "b_arg": 448.0,
+      "ps_margin": 0.0541,
+      "pb_margin": 0.0605,
+      "s_rank_full": 3
+    },
+    {
+      "probe": "t3r10_adj",
+      "extra": false,
+      "labeling": "v3_legacy",
+      "true_win": [
+        441.5,
+        447.0
+      ],
+      "s_margin": 0.0,
+      "b_margin": 0.0,
+      "s_arg": 447.0,
+      "b_arg": 448.0,
+      "ps_margin": 0.0279,
+      "pb_margin": 0.0202,
+      "s_rank_full": 1
+    },
+    {
+      "probe": "t3r12_hard",
+      "extra": true,
+      "labeling": "v4",
+      "true_win": [
+        466.0,
+        478.0
+      ],
+      "s_margin": 0.0801,
+      "b_margin": 0.0872,
+      "s_arg": 467.0,
+      "b_arg": 467.0,
+      "ps_margin": 0.0417,
+      "pb_margin": 0.0681,
+      "s_rank_full": 1
+    }
+  ],
+  "finished": "2026-09-25 15:41:49",
+  "elapsed_s": 1294.1
+}

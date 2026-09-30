@@ -25,7 +25,7 @@ FFMPEG = BENCH / "tools" / "ffmpeg.exe"
 # ffprobe is NOT in tools/ on this machine; use the documented static_ffmpeg path.
 FFPROBE = (BENCH.parent / "video-dedup-tool" / ".venv" / "Lib" / "site-packages"
            / "static_ffmpeg" / "bin" / "win32" / "ffprobe.exe")
-ORIG = BENCH / "datasets" / "real" / "originals" / "2.mkv"
+ORIG = Path(r"D:/video/2.mkv")   # 2026-09-29 清理: 仓内副本已迁 benchmark_trash_20260928/tier2（与 D:/video/2.mkv sha256 一致）
 EDITED = BENCH / "datasets" / "real" / "edited" / "1.mp4"
 SYNTH = BENCH / "datasets" / "synthetic" / "edited" / "a1.mp4"
 

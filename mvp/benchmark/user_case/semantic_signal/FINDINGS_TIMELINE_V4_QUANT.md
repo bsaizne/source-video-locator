@@ -1,5 +1,7 @@
 # 时序重排 v4 量化（2026-09-01 拍板执行序 ④，研究侧快）
 
+> **GT 版本**：`datasets/real/ground_truth_v4.json`（2.mkv 39 正例 + 4 负例，逐帧确认；脚本 research_timeline_v4_quant.py L16 直读该文件）｜2026-09-26 登记
+
 > 起因: NEXT_STEPS ① ——「用 v4 GT 对 user_results 重跑 temporal_outlier_repair + seq_dp 的纠正判定,
 > 数『修正前 MISS/part → 修正后 HIT』几条」, 直接量化时间轴先验的存量价值, 顺带重估 P3 悲观结论。
 > 方法: ① 多版本结果批(v4 同口径)对比; ② 精确回滚实验(只还原带修复标记的段)。

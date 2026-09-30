@@ -1,0 +1,180 @@
+{
+  "started": "2026-09-25 15:49:13",
+  "gt": "ground_truth_v4.json + ground_truth_test3.json (verified)",
+  "note": "M5 协议逐条不变, 仅换修正 GT 窗口; t4r01 剔除(test4 数据无效)",
+  "cases": [
+    {
+      "id": "p08",
+      "pair": "2mkv",
+      "note": "兄弟机位: 瞭望塔(真值) vs 士兵特写(兄弟) — 与原口径同",
+      "edit_mid": 13.5,
+      "true_win": [
+        1108.15,
+        1109.1
+      ],
+      "dist_win": [
+        1048.0,
+        1050.0
+      ],
+      "n_total": 7668,
+      "cls_baseline": {
+        "true_best_rank_full": 6,
+        "true_in_cls_top50": true,
+        "true_in_cls_top200": true
+      },
+      "patch_channel": {
+        "pool_size": 453,
+        "pool_covered": {
+          "true_frames": 1,
+          "dist_frames": 3
+        },
+        "true_best_patch_rank": 5,
+        "true_patch_top5_hits": 1,
+        "true_patch_top10_hits": 1,
+        "true_patch_max_sim": 0.9353470802307129,
+        "dist_patch_max_sim": 0.8563357591629028,
+        "patch_margin": 0.079,
+        "true_cls_pool_rank": 6
+      },
+      "verdict": "PATCH_RERANK_IMPROVES (CLS 6 -> patch 5)"
+    },
+    {
+      "id": "p08b",
+      "pair": "2mkv",
+      "note": "同一编辑段另一点; v3 把 1048-1050 当真值(=p38 旧错误 GT) 已作废",
+      "edit_mid": 13.9,
+      "true_win": [
+        1108.15,
+        1109.1
+      ],
+      "dist_win": [
+        1048.0,
+        1050.0
+      ],
+      "n_total": 7668,
+      "cls_baseline": {
+        "true_best_rank_full": 5,
+        "true_in_cls_top50": true,
+        "true_in_cls_top200": true
+      },
+      "patch_channel": {
+        "pool_size": 452,
+        "pool_covered": {
+          "true_frames": 1,
+          "dist_frames": 3
+        },
+        "true_best_patch_rank": 9,
+        "true_patch_top5_hits": 0,
+        "true_patch_top10_hits": 1,
+        "true_patch_max_sim": 0.9296422004699707,
+        "dist_patch_max_sim": 0.9350008964538574,
+        "patch_margin": -0.0054,
+        "true_cls_pool_rank": 5
+      },
+      "verdict": "NO_RERANK_GAIN"
+    },
+    {
+      "id": "p26",
+      "pair": "2mkv",
+      "note": "夜读(修正真值) vs 夜阳台干扰区(CLS top-40 聚区); v3 原窗 2808-2811 系标错",
+      "edit_mid": 77.0,
+      "true_win": [
+        1768.2,
+        1770.05
+      ],
+      "dist_win": [
+        1237.0,
+        1264.0
+      ],
+      "n_total": 7668,
+      "cls_baseline": {
+        "true_best_rank_full": 1,
+        "true_in_cls_top50": true,
+        "true_in_cls_top200": true
+      },
+      "patch_channel": {
+        "pool_size": 468,
+        "pool_covered": {
+          "true_frames": 2,
+          "dist_frames": 28
+        },
+        "true_best_patch_rank": 1,
+        "true_patch_top5_hits": 2,
+        "true_patch_top10_hits": 2,
+        "true_patch_max_sim": 0.9506874084472656,
+        "dist_patch_max_sim": 0.8975163102149963,
+        "patch_margin": 0.0532,
+        "true_cls_pool_rank": 1
+      },
+      "verdict": "NO_RERANK_GAIN"
+    },
+    {
+      "id": "p01",
+      "pair": "2mkv",
+      "note": "金属球准备(sanity 易例, 防 patch 回退); v3 原窗 2412-2446 为宽窗",
+      "edit_mid": 0.8,
+      "true_win": [
+        2417.5,
+        2418.1
+      ],
+      "dist_win": null,
+      "n_total": 7668,
+      "cls_baseline": {
+        "true_best_rank_full": 2,
+        "true_in_cls_top50": true,
+        "true_in_cls_top200": true
+      },
+      "patch_channel": {
+        "pool_size": 451,
+        "pool_covered": {
+          "true_frames": 1,
+          "dist_frames": 0
+        },
+        "true_best_patch_rank": 1,
+        "true_patch_top5_hits": 1,
+        "true_patch_top10_hits": 1,
+        "true_patch_max_sim": 0.9661639928817749,
+        "dist_patch_max_sim": null,
+        "patch_margin": null,
+        "true_cls_pool_rank": 2
+      },
+      "verdict": "PATCH_RERANK_IMPROVES (CLS 2 -> patch 1)"
+    },
+    {
+      "id": "t3r12",
+      "pair": "test3",
+      "note": "精灵王重复镜头(用户 09-02 人工定位 466-478) vs 另一实例(干扰)",
+      "edit_mid": 64.75,
+      "true_win": [
+        466.0,
+        478.0
+      ],
+      "dist_win": [
+        481.0,
+        488.0
+      ],
+      "n_total": 10177,
+      "cls_baseline": {
+        "true_best_rank_full": 1,
+        "true_in_cls_top50": true,
+        "true_in_cls_top200": true
+      },
+      "patch_channel": {
+        "pool_size": 463,
+        "pool_covered": {
+          "true_frames": 13,
+          "dist_frames": 8
+        },
+        "true_best_patch_rank": 1,
+        "true_patch_top5_hits": 5,
+        "true_patch_top10_hits": 9,
+        "true_patch_max_sim": 0.9653048515319824,
+        "dist_patch_max_sim": 0.859171450138092,
+        "patch_margin": 0.1061,
+        "true_cls_pool_rank": 1
+      },
+      "verdict": "NO_RERANK_GAIN"
+    }
+  ],
+  "elapsed_s": 1209.9
+}

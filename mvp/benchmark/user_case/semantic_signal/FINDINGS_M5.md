@@ -1,4 +1,9 @@
 # Phase 24-2 · 局部 patch 级召回探针 M5 FINDINGS —— patch 特征作独立检索通道(召回层首次实测)
+> ⚠️ **GT 版本 = v3(已作废)** — 探针含 p08b,其「真值窗」1048-1050 即已作废的 p38 旧错误 GT 区。
+> **2026-09-25 已用修正 GT 重跑 → 见 `FINDINGS_M5_V4.md`(引用时以 V4 版为准)**:
+> 本文件的核心证据「**patch 把兄弟机位捞回池(p08b 32→2)**」**作废** —— 修正后 p08b 正确位置本就在 CLS top-5,
+> patch 池内 rank 9(比 CLS 差);p26 修正后 CLS/patch 均 rank 1;其余维持。patch 作为独立召回通道**无信号**
+> (与 M6 v4 重算 0/39 一致)。
 > ⚠️ **test4 数据错误(2026-09-01):** test4-ed.mp4 与 test4-om.mkv 为两部不同电影(81s竖屏 vs 71min横屏), 本文件中依赖 test4/t4r01 的结论全部作废(逻辑剔除, 详见 datasets/real/test4-INVALID.md)。
 
 > 日期:2026-09-01 | 性质:**研究侧探针(零 runtime 改动, DML 双输出 ONNX, 918s)**

@@ -1,5 +1,7 @@
 # Ambiguity Detection 原型 FINDINGS —— 现有置信信号无法分离「正确 HIGH」与「错配 HIGH」
 
+> **GT 版本**：`ground_truth_v4.json`（2.mkv 39 正例 + 4 负例，逐帧确认；work/_amb_proto_run.py L22 直读该文件）｜2026-09-26 登记
+
 > 日期:2026-09-01 GT 重建专会话 | 性质:**原型实验(零 runtime 改动, 重跑 29 段提取内部信号)**
 > 目标: 验证产品层假设「用现有 confidence 信号(margin/similar_band/multiple_similar_candidates)把 AMBIGUOUS 转人工」在当前特征/检索架构下是否可行。
 > 方法: 对 user_results.json 全部 29 段重跑 `EvidenceLocalizer`(产品主定位器), 提取 multi-evidence 内部信号
