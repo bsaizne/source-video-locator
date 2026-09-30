@@ -63,7 +63,7 @@ Only load the minimum information required to continue the project.
 - `TECHNOLOGY_SELECTION.md` — Phase 11 选型结论（VCSL 思路 6.00 > VDF 5.46 > TransVCL 2.63）
 - `benchmark_report.md` / `benchmark_report_phase12.md`（Phase 12 报告，生成中）— 实验数据
 - `ENGINE_LICENSE_MATRIX.md` — VDF=AGPLv3（传染风险）、TransVCL/VCSL=MIT
-- `datasets/real/ground_truth.json` — real GT 7 段（**不得修改**，见约束）
+- `datasets/real/ground_truth.json` — real GT 7 段（**v1，2026-08-28 已多模态证伪，留档不用于评估**；现行评估基准见下方「禁止误改的边界」= `ground_truth_v4.json` + `ground_truth_test1/2/3.json`）
 
 ### 运行 / 测试命令
 
@@ -75,12 +75,19 @@ Only load the minimum information required to continue the project.
   .venv/Scripts/python.exe src/benchmark.py --engine dinov2_ta --dataset real
   .venv/Scripts/python.exe src/benchmark.py --engine transvcl_official --dataset real
   ```
+  > ⚠️ **本节是研究时代（Phase 12）入口**，MVP 产品化后产品链路不在这里：MVP 现役实现树见
+  > `.agent/INDEX.md` 的「MVP 产品化实现树」段（`mvp/src` + `mvp/api` + `mvp/ui`），
+  > 生产回归用 `mvp/scripts/rerun_*.py`，三指标用 `mvp/scripts/measure_four_results.py` /
+  > `mvp/scripts/measure_shot_recall.py`。上面这些 `src/` 命令只用于历史三引擎对照。
 - 报告生成：`python src/report.py`（写 benchmark_report.md/.html + report_summary.json；**不写** benchmark_results.json）
 - 环境检测：`python src/env_check.py` → `environment.json`
 - 合成数据生成：`python src/dataset_a.py` → synthetic A1~A12
 - **Python 必须用绝对路径**：`D:\claudework\video-dedup-tool\.venv\Scripts\python.exe`（bash PATH 里没有 python/pip）
 - **ffmpeg**：`tools/ffmpeg.exe`；**ffprobe**：`..\video-dedup-tool\.venv\Lib\site-packages\static_ffmpeg\bin\win32\ffprobe.exe`
-- **无测试框架、无 CI**。验证靠真实数据复测（跑 benchmark 后看 results/<engine>/metrics.json 的 recall 等指标）。
+- **测试**：研究层（`src/`）无测试框架、无 CI，验证靠真实数据复测（`results/<engine>/metrics.json` 的 recall 等）。
+  **MVP 产品层有 unittest**：后端全套 `python -m unittest discover -s mvp/tests -p "test_*.py"`（须
+  `PYTHONPATH=mvp/src;mvp`，2026-09-28 实测 292 项全绿）+ API 测试 `mvp/api/tests/` + 前端 `mvp/ui` vitest。
+  任何 `mvp/src` 改动必须跑完后端全套，不接受只跑单文件。
 - **GPU 优先（2026-09-05 用户拍板，权威见 .agent/DECISIONS.md）**：算法/推理/特征提取/批量重跑任务一律优先 GPU（DirectML，本机 RX 6750 GRE）。要求：用 venv 绝对路径 python（onnxruntime-directml 在位）、DML 资产在位（%LOCALAPPDATA%\SourceVideoLocator\models\dinov2_cls_384 或 SVL_DML_MODEL）、启动时打印 BACKEND_SELECTED（=DirectMLBackend/amd 为生效）；DML 不可用才显式 fallback CPU 并留痕。纯 numpy 秒级探针无需 GPU。
 
 ### 重要目录

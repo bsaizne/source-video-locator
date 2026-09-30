@@ -88,15 +88,38 @@
 
 ## 7. 性能基准汇总表（3 平台）
 
-| 指标 | H1 Win CPU | H2 Win AMD | H3 macOS AS |
+> **2026-09-28 首次按本协议实测**（H2 列）：脚本 `mvp/scripts/bench_perf_tiers.py`，
+> 数据 `work/bench_perf_tiers.json`，素材 = 2.mkv 流复制截短（`-c copy`，不重编码），
+> 索引口径 `feature_version=handwritten_vits14_cls_384d@1_l2+scn1+evt1` @1fps，
+> 后端 **DirectMLBackend / directml / amd**（脚本内**硬断言**后端类型，不是 GPU 就中止——
+> 首版曾因隔离 `SVL_DATA_DIR` 连带隔离 ONNX 资产查找而静默 fallback CPU）。
+> 定位列只在 128min **真实配对**（2.mkv + 1.mp4，69 段）测；10/60min 无同内容编辑片 → 如实标 N/A。
+> CPU util 未测整机占用，改记**进程累计 CPU 秒**（`proc_cpu_s`，user+kernel）。
+
+| 指标 | H1 Win CPU | H2 Win AMD（DirectML，**实测**） | H3 macOS AS |
 |---|---|---|---|
-| Original 时长 | 10 / 60 / 120min | 同 | 同 |
-| Index Build Time | 实测 | 实测(若可用) | 实测(若可用) |
-| Feature Extraction Time | 实测 | 实测 | 实测 |
-| Localization Time | 实测 | 实测 | 实测 |
-| Total Time | 实测 | 实测 | 实测 |
-| RAM / Disk / CPU util | 实测 | 实测 | 实测 |
-| No hardware | NOT TESTED | NOT TESTED | NOT TESTED |
+| Original 时长 | 历史单点：2.mkv 128min | 10 / 60 / 128 min | 历史单点：6798 帧 |
+| Index Build Time | 3793.6s（2.mkv，非同协议） | **44.6s / 260.3s / 562.7s** | 553.8s（非同协议） |
+| 吞吐（帧/s） | ~2.0 fps | **13.47 / 13.83 / 13.63 fps** | 12.3 fps |
+| Feature Extraction Time | 同上（未分离） | 含在 Index Build 内（同一动作） | 同上 |
+| Localization Time | 未测 | **首跑 769.1s / 缓存复跑 483.3s**（128min 档 69 段） | 1017.5s（36 段，非同协议） |
+| Total Time（128min 全流程） | 未测 | **1331.8s = 22.2 min** | 未测 |
+| RAM（进程峰值工作集） | 未测 | **745 / 758 / 1812 MB** | 未测 |
+| Disk（索引目录） | 未测 | **1.08 / 6.34 / 13.21 MB** | 未测 |
+| 进程 CPU 秒 | 未测 | 120.9 / 733.5 / **5487.4s** | 未测 |
+| No hardware（无 GPU 兜底） | = H1 列 | NOT TESTED | NOT TESTED |
+
+**对外承诺核对（`PRODUCT_INTRO.md` §性能）**：
+- ✅「2 小时影片索引约 7~12 分钟」——**成立**：128min 实测 562.7s = **9.4 分钟**（GPU）。
+- ⚠️「同一成片重复定位约 2~4 分钟」——**不成立（口径缺前提）**：该数字源自 test1（**41 段**）热缓存 167s；
+  本次 128min 档 **69 段** 热缓存复跑实测 **483.3s = 8.1 分钟**。⇒ 复定位耗时随**编辑段数**线性变化，
+  文案必须补上段数前提（或改为"每分钟解说约 X 秒"），否则是宣传与证据倒挂。
+  **【2026-09-28 续19 已修】**`PRODUCT_INTRO.md` §三·快 改为按片段数表述（实测 4~7 秒/片段，附 41 段 167s /
+  69 段 483s 两个数据点），索引条目同步改为实测 9.4 分钟；§三·精准定位 的命中率同步更新为
+  现役口径 **117/139 严格 · 137/139 场景级 · 负例 5/9 正确拒绝**（原文 113/139·136/139 系 2026-09 初基线）。
+- 索引体积可作卖点：2 小时原片索引仅 **13.2 MB**（1fps × 384 维 float32 + 场景/事件表）。
+- 待补：H1/H3 列需按**同协议**重测才能横向比较（现列数字来自不同素材与口径，仅供量级参考）。
+
 
 ## 8. 当前已知限制（作为产品明示）
 

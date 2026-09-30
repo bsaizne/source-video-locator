@@ -1,5 +1,13 @@
 # Confidence Design — 工程化置信度（Source Video Locator）
 
+> **实现现状（2026-09-28 更新）**：本文 §2/§3 描述的 single-answer 链路（`Candidate.rank/n_reps/consistency`
+> → `ConfidenceEngine.assess()` → `localize_segment`）**已删除**——生产唯一入口是
+> `ConfidenceEngine.assess_evidence(EvidenceResult)`，其 6 软信号合成分与硬 flag 语义**沿用本文 §3 不变**，
+> 只是信号来源从"候选窗字段"换成"证据簇字段"（`primary/secondary/evidence_qcov/dispersion/finloc.*`）。
+> 另有一条竞品四项加权并行通道 `conf_v2_*`（默认关，实测结论见
+> `mvp/benchmark/user_case/competitor_cutmatch/FINDINGS_CONF_V2_PORT.md`）。
+> 下文 §2 表中的 `rank`/`n_reps`/`consistency` 等条目保留为设计史，不再对应 runtime 代码。
+
 > 阶段：MVP Design（Stage 0）。设计不依赖 GT、不把 cosine 当概率的**工程化 Confidence**：输入是检索/定位层真实信号，输出 HIGH/MEDIUM/LOW + score + reasons。**阈值/权重需在 H1 用真实数据标定**（本文给出初始公式与降级规则 + 标定计划）。禁止把 `score` 展示成具统计意义的模型概率。
 
 ## 1. 为什么不能只用 cosine（产品第一原则）
