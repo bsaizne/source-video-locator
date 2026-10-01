@@ -113,5 +113,51 @@ class PatchV2Test(unittest.TestCase):
         self.assertIsNone(out)
 
 
+class _StubBackend:
+    def __init__(self, dtype, dname):
+        self._dtype, self._dname = dtype, dname
+
+    def device_type(self):
+        return self._dtype
+
+    def device_name(self):
+        return self._dname
+
+
+class _CaptureLog:
+    def __init__(self):
+        self.lines = []
+
+    def info(self, fmt, *a):
+        self.lines.append(("info", fmt % a))
+
+    def warning(self, fmt, *a):
+        self.lines.append(("warning", fmt % a))
+
+
+class AnnouncePatchRerankerTest(unittest.TestCase):
+    """精排器设备落日志的分级（2026-10-01 打包态归因）。
+
+    GPU 特征后端 + CPU 精排 = 缺 DML patch ONNX 的**静默降级**形态，整条定位慢 2.6~3.9x；
+    这一组合必须是 warning，否则用户只会以为机器本身慢（打包态就是这么瞒了两周）。
+    """
+
+    def _run(self, backend_dtype, rr_device):
+        srv = SourceLocatorService(ffmpeg=_FakeFfmpeg(), backend=_StubBackend(backend_dtype,
+                                                                             "directml"))
+        srv._log = _CaptureLog()
+        srv._announce_patch_reranker(type("RR", (), {"device": rr_device})())
+        return srv._log.lines
+
+    def test_gpu_backend_with_cpu_reranker_warns(self):
+        self.assertEqual(self._run("amd", "cpu")[0][0], "warning")
+
+    def test_cpu_backend_with_cpu_reranker_is_info(self):
+        self.assertEqual(self._run("cpu", "cpu")[0][0], "info")
+
+    def test_gpu_backend_with_dml_reranker_is_info(self):
+        self.assertEqual(self._run("amd", "dml")[0][0], "info")
+
+
 if __name__ == "__main__":
     unittest.main()

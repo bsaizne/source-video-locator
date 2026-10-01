@@ -225,6 +225,10 @@ class SourceLocatorServiceTest(unittest.TestCase):
                 for i in range(q.shape[0]):
                     yield (i / fps, np.zeros((8, 8, 3), dtype=np.uint8))
 
+            def grab_frame(self, path, t):
+                # shot_split 默认开后 locate 会抓编辑窗帧做切镜探测（2026-10-01 续35）
+                return np.zeros((8, 8, 3), dtype=np.uint8)
+
         srv = SourceLocatorService(ffmpeg=_Ffmpeg(), backend=_Back())
         batch = srv.locate("edited.mp4", "dummy.mkv", index_bundle=bundle)
         self.assertGreaterEqual(len(batch.results), 1)   # 更细切分可能拆成多段

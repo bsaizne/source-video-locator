@@ -58,7 +58,12 @@ def startup_announce_lines(
 def make_server(app: Any, *, host: str, port: int,
                 announce: Iterable[str] = ()) -> "uvicorn.Server":
     """构造已挂好「绑定成功后公告 BACKEND_LISTEN」钩子的 uvicorn Server。"""
-    server = uvicorn.Server(uvicorn.Config(app, host=host, port=port, log_level="info"))
+    # access_log=False（2026-10-02 售后三件·脱敏）：uvicorn 访问行自带**原始 query**
+    # （如 /api/index/status?video_path=D%3A%5C...，百分号编码盘符路径），且走 uvicorn
+    # 自己的 logger 不过我们的 RedactingFilter ⇒ 会泄进 stdout/支持日志。我方在
+    # api/app.py 已有脱敏友好的请求日志（method+path，无 query），关掉不损失可诊断性。
+    server = uvicorn.Server(uvicorn.Config(app, host=host, port=port,
+                                           log_level="info", access_log=False))
     extra = list(announce)
     original_startup = server.startup
 

@@ -11,3 +11,4 @@ resources/backend/ffmpeg.exe
 resources/backend/ffprobe.exe
 resources/models/dinov2_cls_384/dinov2_cls_384.onnx
 resources/models/dinov2_cls_384/dinov2_cls_384.onnx.data
+resources/models/dinov2_cls_patch/dinov2_cls_patch.onnx.data

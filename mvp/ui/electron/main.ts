@@ -68,6 +68,10 @@ if (app.isPackaged) {
   // the packaged app (DirectML uses the ONNX above; CPU needs this .pth).
   backendConfig.spawnEnv.SVL_DINOV2_WEIGHTS = path.join(
     process.resourcesPath, 'models', 'dinov2_vits14', 'dinov2_vits14_pretrain.pth')
+  // patch 双输出 ONNX（高精度精排 PatchReranker）。缺它后端会**静默**回退 CPU torch，
+  // 整条定位慢 2.6~3.9x（2026-10-01 打包态归因：包内 device=cpu / 源码树 device=dml）。
+  backendConfig.spawnEnv.SVL_PATCH_ONNX = path.join(
+    process.resourcesPath, 'models', 'dinov2_cls_patch', 'dinov2_cls_patch.onnx')
 }
 
 const backend = new BackendManager({

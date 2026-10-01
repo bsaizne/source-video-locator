@@ -45,8 +45,8 @@ describe('HttpServiceAdapter', () => {
     expect(init.method).toBe('POST')
     expect(JSON.parse(init.body)).toEqual({ video_path: 'D:/movie/source.mkv' })
     expect(status.indexMeta?.num_frames).toBe(3834)
-    expect(status.backend.deviceType).toBe('cpu')
-    expect(status.backend.isAccelerator).toBe(false)
+    expect(status.backend?.deviceType).toBe('cpu')
+    expect(status.backend?.isAccelerator).toBe(false)
     expect(status.validation.status).toBe('VALID')
   })
 
@@ -190,7 +190,7 @@ describe('HttpServiceAdapter', () => {
     expect(JSON.parse(init.body)).toEqual({
       output_dir: 'D:/export',
       format: 'json',
-      min_confidence: 'MEDIUM',
+      min_confidence: 'LOW',   // 缺省=全部导出（2026-10-01 拍板，取代旧 'MEDIUM' 口径）
       low_policy: 'exclude',
       snap_scenes: true,
       material_width: 'scene',
@@ -230,6 +230,18 @@ describe('HttpServiceAdapter', () => {
     })
   })
 
+  it('exportResults defaults the confidence gate to LOW (全部导出)', async () => {
+    // 2026-10-01 拍板：导出默认「全部」，适配器兜底必须与 ResultsPage 初始值一致，
+    // 不得再退回旧的 'MEDIUM'（否则未显式传门槛的调用方会静默丢掉低置信段）。
+    const fetchMock = vi.fn().mockResolvedValue(res({ path: 'D:/export/x.json' }))
+    vi.stubGlobal('fetch', fetchMock)
+    await adapter.exportResults(
+      { schema_version: 1, original_video: null, edited_video: null, results: [] },
+      { outDir: 'D:/export' },
+    )
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body).min_confidence).toBe('LOW')
+  })
+
   it('loadResults POSTs /api/results/load with the batch path', async () => {
     // A3：读回已导出结果批（此前无端点，直接抛 BackendUnavailableError）。
     const batch: ResultBatchJson = {
@@ -261,6 +273,8 @@ describe('HttpServiceAdapter', () => {
     const status = await adapter.getIndexStatus('D:/movie/source.mkv')
     expect(status.validation.status).toBe('MISSING')
     expect(status.indexMeta).toBeNull()
+    // 徽标误标回归锁（2026-10-01 E2E）：未构建时设备未知 = null，不硬编码 cpu。
+    expect(status.backend).toBeNull()
   })
 
   it('non-2xx with {code,message} surfaces the user wording plus the stable code', async () => {

@@ -44,6 +44,25 @@ const sleep = (ms: number, token: CancelToken | null) =>
     }, ms)
   })
 
+const MOCK_EXPORT_WARNINGS_STORAGE_KEY = 'svl.mock.exportWarnings'
+
+/**
+ * dev 态导出告警展示开关（续31 登记尾巴：Mock 通道不产 warnings，结果页看不到 LOC-2001/2002）。
+ *
+ * 真实告警由后端导出守卫（engine/localization/degradation_gate）算出，Mock **不重算那套判据**
+ * ——两处实现同一判据必然漂移，比「看不到」更糟。要在 dev 验证展示链路时显式开：
+ *   localStorage.setItem('svl.mock.exportWarnings', '1')
+ * 文案与后端对外话术逐字一致（仅计数/段号是示例）。
+ */
+function mockExportWarnings(): string[] | undefined {
+  if (typeof localStorage === 'undefined'
+    || localStorage.getItem(MOCK_EXPORT_WARNINGS_STORAGE_KEY) !== '1') return undefined
+  return [
+    'LOC-2001 导出清单中有 2 个不足 0.15 秒的极短片段，导入剪辑软件后可能表现为闪烁或无效素材；建议在这些位置改用完整镜头边界。',
+    'LOC-2002 第 3、7 段都指向原片同一区间 120.0-125.0s，导出工程里会出现重复素材；若是刻意的画面复用可忽略，否则建议在剪辑软件中合并为一条。',
+  ]
+}
+
 export class MockServiceAdapter implements ServiceAPI {
   private listeners = new Set<Listener>()
   private token = createCancelToken()
@@ -181,7 +200,7 @@ export class MockServiceAdapter implements ServiceAPI {
       materialWidth?: 'scene' | 'core'
       cancelToken?: CancelToken
     },
-  ): Promise<{ path: string }> {
+  ): Promise<{ path: string; warnings?: string[] }> {
     const token = opts?.cancelToken ?? this.token
     token.raiseIfCancelled()
     this.emit({ stage: 'EXPORT', current: 0, total: 1, message: 'exporting selected clips' })
@@ -190,10 +209,11 @@ export class MockServiceAdapter implements ServiceAPI {
     const name = opts?.filename ?? 'results'
     const dir = opts?.outDir ?? 'C:/Users/Public/Videos/VideoLocator/exports'
     const fmt = opts?.format ?? 'json'
-    if (fmt === 'jianying') return { path: `${dir}/${name}.loc.jy_draft` }
-    if (fmt === 'edl') return { path: `${dir}/${name}.loc.edl` }
-    if (fmt === 'fcp7_xml') return { path: `${dir}/${name}.loc.xml` }
-    return { path: `${dir}/${name}.results.json` }
+    const path = fmt === 'jianying' ? `${dir}/${name}.loc.jy_draft`
+      : fmt === 'edl' ? `${dir}/${name}.loc.edl`
+      : fmt === 'fcp7_xml' ? `${dir}/${name}.loc.xml`
+      : `${dir}/${name}.results.json`
+    return { path, warnings: mockExportWarnings() }
   }
 
   async overrideResult(resultId: string, start: number, end: number): Promise<ResultJson> {

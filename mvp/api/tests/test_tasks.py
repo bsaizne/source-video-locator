@@ -171,7 +171,7 @@ class StageMappingTest(unittest.TestCase):
         # 无 current/total 的阶段事件取区间起点
         self.assertEqual(map_progress_stage(ProgressEvent(ProgressStage.INDEX_BUILD)), (TaskStage.INDEXING, 0))
         self.assertEqual(map_progress_stage(ProgressEvent(ProgressStage.SEGMENT_DETECTION)), (TaskStage.SEGMENTING, 30))
-        self.assertEqual(map_progress_stage(ProgressEvent(ProgressStage.EXPORT)), (TaskStage.EXPORTING, 92))
+        self.assertEqual(map_progress_stage(ProgressEvent(ProgressStage.EXPORT)), (TaskStage.EXPORTING, 98))
 
     def test_maps_progress_stage_interpolates(self):
         # 逐帧阶段（1-based current/total）：12 + 18*155/311 = 20.97 → 21
@@ -187,7 +187,16 @@ class StageMappingTest(unittest.TestCase):
             (TaskStage.RETRIEVAL, 92))
         self.assertEqual(
             map_progress_stage(ProgressEvent(ProgressStage.CONFIDENCE, 0, 34)),
-            (TaskStage.RETRIEVAL, round(38 + 54 / 34)))
+            (TaskStage.RETRIEVAL, 39.6))  # 一位小数（续40）：38 + 54/34 = 39.588 → 39.6
+
+    def test_maps_progress_stage_refine_range(self):
+        # 深度复核（续40 UX）：92→98 逐段推进，修复「92% 钳死」；仍映射到 RETRIEVAL 步骤。
+        self.assertEqual(
+            map_progress_stage(ProgressEvent(ProgressStage.REFINE, 0, 67)),
+            (TaskStage.RETRIEVAL, 92.1))
+        self.assertEqual(
+            map_progress_stage(ProgressEvent(ProgressStage.REFINE, 66, 67)),
+            (TaskStage.RETRIEVAL, 98))
 
     def test_maps_progress_stage_unknown(self):
         # str-Enum：未知阶段值走字典缺省回退 IDLE

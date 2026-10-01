@@ -65,11 +65,32 @@ def _clusters(q_cls_mean: np.ndarray, lib_times: np.ndarray, lib_feats: np.ndarr
 def apply_patch_refine(results: Sequence[Result], *, edited_path, source_path,
                        grab_frame: Callable, embed_dual: Callable,
                        lib_times: np.ndarray, lib_feats: np.ndarray,
-                       log: logging.Logger | None = None) -> list[Result]:
-    """对歧义段做 patch 局部精排；其余原样返回。不修改入参对象。"""
+                       log: logging.Logger | None = None,
+                       grab_frames: Callable | None = None,
+                       progress: Callable[[int, int], None] | None = None) -> list[Result]:
+    """对歧义段做 patch 局部精排；其余原样返回。不修改入参对象。
+
+    ``grab_frames(path, times) -> list[frame]``（可选）：批量抓帧（生产传并行+缓存版
+    ``_grab_frames_parallel``）。抓帧是纯 IO+解码、与 embed 顺序无关，故先并行批量抓、
+    再主线程串行 ``embed_dual``（DML session 非线程安全）——帧内容与顺序不变 ⇒ 输出逐位
+    一致。缺省 None 时回退逐帧 ``grab_frame``（单测/离线验证器同规格）。
+
+    ``progress(done, total)``（可选，2026-10-01 续35 E2E UX-P1）：逐段进度回调。精排是
+    定位链路最慢的后处理（每歧义段 ±5s 窗 × 多候选 × patch+global DML），此前全程静默
+    ⇒ UI 停在上一阶段百分比像卡死；生产传它把「第 i/n 段」报给任务进度。
+    """
+    def _grab_many(path, times):
+        times = list(times)
+        if grab_frames is not None:
+            return grab_frames(path, times)
+        return [grab_frame(path, t) for t in times]
+
     out: list[Result] = []
     n_refine = n_switch = 0
-    for r in results:
+    n_total = len(results)
+    for i_r, r in enumerate(results, start=1):
+        if progress is not None:
+            progress(i_r, n_total)
         if (r.not_in_source or r.manual_override or r.excluded
                 or r.original.width <= 0.01 or r.edited.width <= 0.01):
             out.append(r)
@@ -78,8 +99,8 @@ def apply_patch_refine(results: Sequence[Result], *, edited_path, source_path,
         w = rs1 - rs0
         q_ets = [rs0 + w * (i + 0.5) / N_QUERY for i in range(N_QUERY)]
         q_cls, q_patch = [], []
-        for et in q_ets:
-            c, pp = embed_dual(grab_frame(edited_path, et))
+        for frame in _grab_many(edited_path, q_ets):
+            c, pp = embed_dual(frame)
             q_cls.append(np.asarray(c, dtype=np.float64))
             q_patch.append(np.asarray(pp, dtype=np.float64))
         q_mean = np.mean(q_cls, axis=0)
@@ -108,9 +129,9 @@ def apply_patch_refine(results: Sequence[Result], *, edited_path, source_path,
             g0, g1 = max(0.0, mid - REFINE_WIN_S), mid + REFINE_WIN_S
             n = max(6, int((g1 - g0) * REFINE_FPS))
             grid = [g0 + (g1 - g0) * (i + 0.5) / n for i in range(n)]
+            frames = _grab_many(source_path, grid)
             peak_s = -1.0
-            for t in grid:
-                frame = grab_frame(source_path, t)
+            for frame in frames:
                 c, pp = embed_dual(frame)
                 c = np.asarray(c, dtype=np.float64)
                 pp = np.asarray(pp, dtype=np.float64)

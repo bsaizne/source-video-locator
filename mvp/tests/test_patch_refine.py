@@ -32,7 +32,7 @@ def _lib():
 
 
 class ApplyPatchRefineTest(unittest.TestCase):
-    def _run(self, results, q_region):
+    def _run(self, results, q_region, progress_cb=None):
         """q_region: 查询帧内容区域 id（0=E1,1=E2,2=E3）。grab 返回时间标记，
         embed_dual 按时间轴分支：编辑轴 [0,4] → 查询区域；源片轴按 lib 区域。"""
         lib_t, lib_f = _lib()
@@ -53,7 +53,19 @@ class ApplyPatchRefineTest(unittest.TestCase):
         return apply_patch_refine(results, edited_path="x", source_path="y",
                                   grab_frame=grab,
                                   embed_dual=embed_dual, lib_times=lib_t,
-                                  lib_feats=lib_f)
+                                  lib_feats=lib_f, progress=progress_cb)
+
+    def test_progress_reports_per_segment(self):
+        # UX-P1（2026-10-01 续35 E2E）：逐段进度回调 (done,total)，含跳过段也计数
+        seen: list[tuple[int, int]] = []
+        out = self._run([_mk_result(), _mk_result(not_in_source=True)],
+                        q_region=1, progress_cb=lambda d, t: seen.append((d, t)))
+        self.assertEqual(len(out), 2)
+        self.assertEqual(seen, [(1, 2), (2, 2)])
+
+    def test_progress_none_default_no_regression(self):
+        out = self._run([_mk_result()], q_region=1)
+        self.assertEqual(len(out), 1)
 
     def test_ambiguous_switch_carries_old_main_as_sub(self):
         # 查询=E2，现主在 E1 区(102) → 歧义；patch 峰在 E2 区(≈114) → 切换

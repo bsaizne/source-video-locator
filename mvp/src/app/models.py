@@ -22,6 +22,9 @@ class ProgressStage(str, Enum):
     CANDIDATE_RETRIEVAL = "CANDIDATE_RETRIEVAL"
     LOCALIZATION = "LOCALIZATION"
     CONFIDENCE = "CONFIDENCE"
+    # 深度复核（2026-10-02 续40 UX）：段循环之后的全局修复链（锚点/文本/时序/冲突/
+    # 拆分/精排）统一发该阶段 ⇒ worker 在 92→98 区间逐事件推进，进度条不再整段钳死 92。
+    REFINE = "REFINE"
     EXPORT = "EXPORT"
     # 成片渲染（2026-09-29 续30，竞品 video_renderer 移植）：只由显式渲染任务发出，
     # 定位/文本工程导出链路永不产生该阶段。

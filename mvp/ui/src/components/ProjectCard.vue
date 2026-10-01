@@ -35,6 +35,8 @@ const STATUS_LABEL: Record<string, string> = {
   ready: '就绪',
   indexing: '索引中',
   analyzing: '分析中',
+  // 2026-10-02 续40 真机反馈：'empty' 原样漏到界面上（用户读不懂的英文技术值）。
+  empty: '未分析',
 }
 </script>
 
@@ -75,14 +77,19 @@ const STATUS_LABEL: Record<string, string> = {
   border-color: var(--border-strong);
   transform: translateY(-1px);
 }
-.pcard__top { display: flex; align-items: center; justify-content: space-between; }
+/* 续40 真机反馈：徽标贴右缘与邻卡图标挤在一起 ⇒ 图标+徽标成组靠左。 */
+.pcard__top { display: flex; align-items: center; gap: 10px; }
 .pcard__icon {
   width: 36px; height: 36px; border-radius: var(--radius-m);
   background: var(--accent-soft); color: var(--accent-glow);
-  display: flex; align-items: center; justify-content: center;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
 }
 .pcard__name { font-size: var(--fs-lg); font-weight: 600; margin-top: 4px; }
-.pcard__meta { font-size: var(--fs-xs); color: var(--fg-muted); }
+/* 长文件名/多段合并说明会逐字换行「合 并 2 段」⇒ 单行省略号。 */
+.pcard__meta {
+  font-size: var(--fs-xs); color: var(--fg-muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .pcard__foot {
   display: flex; justify-content: space-between;
   margin-top: 8px; padding-top: 10px; border-top: 1px solid var(--divider);

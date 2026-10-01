@@ -255,19 +255,19 @@ class SourceLocatorService:
             v = self.store.validate_index(original)
             if v.status is IndexValidationStatus.VALID:
                 self._notify(on_progress, ProgressStage.INDEX_BUILD,
-                             message=f"reuse index: {original.name}")
+                             message=f"复用已有母片索引：{original.name}")
                 bundle = self.store.load_index(original)
             else:
                 if v.status is IndexValidationStatus.INVALID and v.reason:
                     self._log.info("rebuild index (%s): %s", original.name, v.reason)
                 self._notify(on_progress, ProgressStage.INDEX_BUILD,
-                             message=f"building index: {original.name}")
+                             message=f"正在建立母片索引：{original.name}")
                 meta = self.store.create_index(
                     original, self.backend,
                     progress=self._index_progress(on_progress, cancel_token))
                 self._notify(on_progress, ProgressStage.INDEX_BUILD,
                              current=meta.num_frames, total=max(meta.num_frames, 1),
-                             message=f"index ready: {meta.num_frames} frames")
+                             message=f"母片索引已完成（共 {meta.num_frames} 帧）")
                 bundle = self.store.load_index(original)
         except IndexError:
             raise
@@ -353,7 +353,7 @@ class SourceLocatorService:
     def _segment_legacy(self, edited: Path, cfg, on_progress, cancel_token) -> list[ShotSegment]:
         """旧路径: 2fps 全片 embed + detect_shots_two_level + card_guard（原 analyze 行为）。"""
         self._notify(on_progress, ProgressStage.EDITED_FEATURE_EXTRACTION,
-                     message="extracting edited frames")
+                     message="读取剪辑画面")
         frames = list(self.ffmpeg.iter_frames(edited, cfg.edited_segment_fps))
         self._check_cancel(cancel_token)
         if not frames:
@@ -370,14 +370,14 @@ class SourceLocatorService:
             embs.append(self.backend.embed_frames([f for _, f in batch]))
             done = min(i + len(batch), n)
             self._notify(on_progress, ProgressStage.EDITED_FEATURE_EXTRACTION,
-                         current=done, total=n, message=f"特征提取 {done}/{n} 帧")
+                         current=done, total=n, message=f"分析剪辑画面 {done}/{n} 帧")
         ed_feats = np.concatenate(embs, axis=0)
         self._notify(on_progress, ProgressStage.EDITED_FEATURE_EXTRACTION,
                      current=len(frames), total=max(len(frames), 1),
-                     message=f"特征提取 {len(frames)}/{len(frames)} 帧")
+                     message=f"分析剪辑画面 {len(frames)}/{len(frames)} 帧")
 
         self._check_cancel(cancel_token)
-        self._notify(on_progress, ProgressStage.SEGMENT_DETECTION, message="detecting shots")
+        self._notify(on_progress, ProgressStage.SEGMENT_DETECTION, message="识别镜头边界")
         shots = detect_shots_two_level(ed_feats, ed_times,
                                        cut_abs=cfg.seg_cut_abs, z_thresh=cfg.seg_z_thresh,
                                        min_shot_s=cfg.seg_min_shot_s, smooth=cfg.seg_smooth,
@@ -416,7 +416,7 @@ class SourceLocatorService:
 
         # --- ① 粗采样全片（一次 ffmpeg 遍历; 解码线程与 embed/统计流水重叠, 零语义）---
         self._notify(on_progress, ProgressStage.EDITED_FEATURE_EXTRACTION,
-                     message="twopass coarse sampling")
+                     message="镜头边界粗扫")
         emb_chunks: list[np.ndarray] = []
         ed_times_list: list[float] = []
         flash_list: list[bool] = []
@@ -452,7 +452,7 @@ class SourceLocatorService:
             ed_times_list.extend(ts)
             n_frames += len(item)
             self._notify(on_progress, ProgressStage.EDITED_FEATURE_EXTRACTION,
-                         current=n_frames, message=f"特征提取 {n_frames} 帧")
+                         current=n_frames, message=f"分析剪辑画面 {n_frames} 帧")
 
         pipeline_map(_coarse_batches(), _coarse_consume)
         if n_frames == 0:
@@ -468,12 +468,12 @@ class SourceLocatorService:
                        n_frames, len(flash_times))
         self._notify(on_progress, ProgressStage.EDITED_FEATURE_EXTRACTION,
                      current=n_frames, total=max(n_frames, 1),
-                     message=f"特征提取 {n_frames}/{n_frames} 帧")
+                     message=f"分析剪辑画面 {n_frames}/{n_frames} 帧")
 
         # --- ② 粗切分（语义 detect_shots, fps=coarse_fps 换算帧间隔）---
         self._check_cancel(cancel_token)
         self._notify(on_progress, ProgressStage.SEGMENT_DETECTION,
-                     message="twopass coarse segmentation")
+                     message="镜头边界精修")
         shots = detect_shots(ed_feats, ed_times,
                              cut_abs=cfg.seg_cut_abs, z_thresh=cfg.seg_z_thresh,
                              min_shot_s=cfg.seg_min_shot_s, smooth=cfg.seg_smooth,
@@ -573,7 +573,7 @@ class SourceLocatorService:
                      or getattr(s, "card_run_ratio", 0.0) >= cfg.card_run_ratio)
         self._notify(on_progress, ProgressStage.SEGMENT_DETECTION,
                      current=len(out_shots), total=max(len(out_shots), 1),
-                     message=f"{len(out_shots)} segments")
+                     message=f"共识别出 {len(out_shots)} 个镜头段")
         self._log.info("twopass+flash final segments=%d card_segments=%d edited=%s",
                        len(out_shots), n_card, edited.name)
         return out_shots
@@ -982,6 +982,10 @@ class SourceLocatorService:
                                         on_progress=on_progress,
                                         cancel_token=cancel_token,
                                         edited=edited)
+        # UX（2026-10-02 续40）：段循环结束 = 进入全局修复/拆分/精排链（实测可达数分钟），
+        # 统一发 REFINE 阶段事件；首条落在链入口（此前此处到导出之间零消息 ⇒ UI 卡感）。
+        self._notify(on_progress, ProgressStage.REFINE, current=0,
+                     total=max(len(results), 1), message="画面深度复核：整体一致性校验")
         if getattr(self.config.pipeline, "fast_global_enabled", False):
             # 快速全局锚定（立项 2026-09-28）: vote_prior 同内核超集(密帧/无帽/分散度门/保宽度),
             # 启用时**替换** vote_prior 应用点, 同一机制不叠加二次平移。
@@ -1097,17 +1101,23 @@ class SourceLocatorService:
                            len(gate.rejected), gate.subs_dropped, gate.subs_kept)
         self._last_gate_stats = gate
         # 段级拆分（2026-09-30 续32 形态4 runtime 化, engine/localization/shot_split.py;
-        # 默认关）。放在全部定位/门/重排之后 = 看到最终主 span；宽 span 保全 ⇒
+        # 2026-10-01 续35 默认开）。放在全部定位/门/重排之后 = 看到最终主 span；宽 span 保全 ⇒
         # 严格口径结构性零回退；导出/渲染契约不变（仍每条结果导主 span）。
         if getattr(self.config.pipeline, "shot_split_enabled", False):
+            # UX-P1（2026-10-01 续35 E2E）：后处理阶段此前零进度上报 ⇒ UI 停在段循环的
+            # 最后一帧百分比像卡死。切镜拆分较快，报一条阶段消息即可。
+            self._notify(on_progress, ProgressStage.REFINE,
+                         current=1, total=max(len(results), 1),
+                         message="画面深度复核：拆分多镜头段")
             results = apply_shot_split(
                 results, edited_path=edited,
-                grab_frame=self.ffmpeg.grab_frame,
+                grab_frame=self._grab_frame_cached,
+                grab_frames=self._grab_frames_parallel,
                 embed=lambda fr: self.backend.embed_frames([fr])[0],
                 lib_times=np.asarray(bundle.times, dtype=np.float64),
                 lib_feats=bundle.features, log=self._log)
         # patch 局部精排（2026-09-30 续32 形态6 runtime 化, engine/localization/patch_refine.py;
-        # 默认关）。歧义段 top-K 候选各自局部窗 patch+global 融合精排再择优；
+        # 2026-10-01 续35 默认开）。歧义段 top-K 候选各自局部窗 patch+global 融合精排再择优；
         # 老主降子 ⇒ 严格结构性零回退。
         if getattr(self.config.pipeline, "patch_refine_enabled", False):
             if self._patch_reranker is None:
@@ -1117,12 +1127,26 @@ class SourceLocatorService:
                         (self.config.pipeline.patch_onnx_model or "").strip() or None),
                     dml_device_id=self.config.device.dml_device_id)
             if self._patch_reranker.ensure():
+                n_refine_total = len(results)
+
+                def _refine_progress(done: int, total: int) -> None:
+                    # UX-P1：精排逐段进度（最慢后处理，E2E 实测 ~30+ 分钟全程静默）。
+                    # 2026-10-02 续40：改 REFINE 阶段（92→98 插值）+ 去技术术语话术。
+                    self._notify(on_progress, ProgressStage.REFINE,
+                                 current=done, total=total,
+                                 message=f"画面深度复核 {done}/{total}")
+
+                self._notify(on_progress, ProgressStage.REFINE,
+                             current=0, total=n_refine_total,
+                             message=f"画面深度复核 0/{n_refine_total}")
                 results = apply_patch_refine(
                     results, edited_path=edited, source_path=orig_path,
-                    grab_frame=self.ffmpeg.grab_frame,
+                    grab_frame=self._grab_frame_cached,
+                    grab_frames=self._grab_frames_parallel,
                     embed_dual=self._patch_reranker.frame_dual,
                     lib_times=np.asarray(bundle.times, dtype=np.float64),
-                    lib_feats=bundle.features, log=self._log)
+                    lib_feats=bundle.features, log=self._log,
+                    progress=_refine_progress)
             else:
                 self._log.warning("patch refine enabled but no patch backend; skipped")
         batch = ResultBatch(schema_version=1, original_video=str(orig_path),
@@ -1152,12 +1176,12 @@ class SourceLocatorService:
                 self._log.info("segment %d/%d text-card not_in_source ratio=%.2f",
                                idx + 1, n, shot.card_ratio)
                 self._notify(on_progress, ProgressStage.CANDIDATE_RETRIEVAL,
-                             current=idx, total=n, message=f"segment {idx + 1}/{n}: text card")
+                             current=idx, total=n, message=f"逐段定位 {idx + 1}/{n}")
                 results.append(self._card_not_in_source_result(shot))
                 continue
             try:
                 self._notify(on_progress, ProgressStage.CANDIDATE_RETRIEVAL,
-                             current=idx, total=n, message=f"segment {idx + 1}/{n}: retrieval")
+                             current=idx, total=n, message=f"逐段定位 {idx + 1}/{n}")
                 dense = None
                 if edited is not None and self._evidence_localizer.seq_align is not None:
                     dense = self._embed_dense_query(shot, edited)
@@ -1188,7 +1212,7 @@ class SourceLocatorService:
                 self._last_candidates += evidence.n_clusters
 
                 self._notify(on_progress, ProgressStage.LOCALIZATION,
-                             current=idx, total=n, message=f"segment {idx + 1}/{n}: localize")
+                             current=idx, total=n, message=f"逐段定位 {idx + 1}/{n}")
 
                 # 时序 DP 候选池:门控前全部簇(相似镜头挑错实例的全局修复素材)
                 seq_cands = []
@@ -1228,7 +1252,7 @@ class SourceLocatorService:
                             self._log.info("segment %d/%d subshot rescue (montage weak) sim %.2f > %.2f", idx + 1, n, sub_sim, cur_sim)
                             evidence = sub_ev
                 self._notify(on_progress, ProgressStage.CONFIDENCE,
-                             current=idx, total=n, message=f"segment {idx + 1}/{n}: confidence")
+                             current=idx, total=n, message=f"逐段定位 {idx + 1}/{n}")
                 # 单调弱先验进候选生成(NEXT_STEPS ②③, 2026-09-02):
                 # Ambiguous 型段(>=2 保留证据簇)用前序段定位中点做时间轴锚点, 对
                 # "离锚点更近且 cover 落差<=ta_max_cover_drop" 的候选簇弱倾向为 primary
@@ -1309,11 +1333,11 @@ class SourceLocatorService:
                        cancel_token: CancellationToken | None = None) -> Path:
         """落盘一个结果批到 JSON（RESULT schema）。返回写入路径。"""
         self._check_cancel(cancel_token)
-        self._notify(on_progress, ProgressStage.EXPORT, message="exporting results")
+        self._notify(on_progress, ProgressStage.EXPORT, message="整理定位结果")
         path = _save_results(batch, out_dir=out_dir or self.export_root, filename=filename)
         self._notify(on_progress, ProgressStage.EXPORT,
                      current=len(batch.results), total=max(len(batch.results), 1),
-                     message=f"exported {path.name}")
+                     message=f"已导出 {path.name}")
         return path
 
     def load_results(self, path: str | Path) -> ResultBatch:
@@ -1359,7 +1383,7 @@ class SourceLocatorService:
             raise ApplicationError("result batch has no original_video; cannot export project")
         orig_path = Path(batch.original_video)
 
-        self._notify(on_progress, ProgressStage.EXPORT, message=f"exporting {fmt}")
+        self._notify(on_progress, ProgressStage.EXPORT, message=f"正在导出 {fmt}")
         # 计划：门槛 + 不导规则 + 主 span 展平（候选子 span 不进剪辑软件——反馈二轮）
         plan = build_export_plan(batch, min_confidence=mc, low_policy=lp, include_subs=False)
         # 导出前碎片告警（竞品 segments.builder 语义）：只告警不裁剪，透传给 UI 由用户决定。
@@ -1465,7 +1489,7 @@ class SourceLocatorService:
                        fmt, len(plan), n_snapped, out_path)
         self._notify(on_progress, ProgressStage.EXPORT,
                      current=len(plan), total=max(len(plan), 1),
-                     message=f"exported {out_path.name}")
+                     message=f"已导出 {out_path.name}")
         return out_path
 
     def _probe_meta(self, video: Path) -> dict | None:
@@ -1720,6 +1744,21 @@ class SourceLocatorService:
             self._log.exception("patch rerank failed (non-fatal)")
             return None
 
+    def _announce_patch_reranker(self, rr) -> None:
+        """精排器实际设备落日志。
+
+        GPU 特征后端 + CPU 精排 = **静默降级**（缺 DML patch ONNX 时的形态），整条定位
+        慢 2.6~3.9x（2026-10-01 打包态归因：包内 device=cpu、源码树 device=dml）。
+        这种组合必须吵出来，不能只记一条 info 让用户以为是自己机器慢。
+        """
+        if rr.device == "cpu" and self.backend.device_type() != "cpu":
+            self._log.warning(
+                "patch reranker device=cpu 而特征后端=%s（缺 DML patch ONNX？"
+                "随包分发 dinov2_cls_patch.onnx 或设 SVL_PATCH_ONNX）——精排将慢数倍",
+                self.backend.device_name())
+        else:
+            self._log.info("patch reranker device=%s", rr.device)
+
     def _patch_rerank_span_impl(self, evidence, shot: ShotSegment, bundle: IndexBundle,
                                 edited: Path, cfg: PipelineConfig, *,
                                 cancel_token: CancellationToken | None = None) -> tuple[float, float] | None:
@@ -1730,7 +1769,7 @@ class SourceLocatorService:
                 dml_device_id=self.config.device.dml_device_id)
             rr = self._patch_reranker
             if rr.ensure():
-                self._log.info("patch reranker device=%s", rr.device)
+                self._announce_patch_reranker(rr)
         rr = self._patch_reranker
         if not rr.ensure():
             return None
@@ -2295,7 +2334,7 @@ class SourceLocatorService:
             if on_progress is not None:
                 on_progress(ProgressEvent(ProgressStage.INDEX_BUILD,
                                           current=p.done, total=p.total,
-                                          message=f"index {p.stage}"))
+                                          message=f"母片索引构建中 {p.done}/{p.total} 帧"))
         return cb
 
     @staticmethod

@@ -1,0 +1,45 @@
+{
+  "name": "dinov2_cls_patch",
+  "model": "dinov2_vits14_cls_384_with_patch_tokens",
+  "feature_model": "dinov2_vits14",
+  "feature_version": "handwritten_vits14_cls_384d@0.5_l2",
+  "opset": 17,
+  "input": {
+    "name": "input",
+    "shape": [
+      1,
+      3,
+      518,
+      518
+    ],
+    "dtype": "float32"
+  },
+  "output": {
+    "name": "embedding",
+    "shape": [
+      "N",
+      384
+    ],
+    "dtype": "float32"
+  },
+  "outputs_extra": {
+    "name": "patches",
+    "shape": [
+      "N",
+      1369,
+      384
+    ],
+    "dtype": "float32"
+  },
+  "backend_compatibility": [
+    "directml",
+    "cpu"
+  ],
+  "consumed_by": "engine/localization/patch_rerank.py PatchReranker (SVL_PATCH_ONNX)",
+  "weights_note": "dinov2_cls_patch.onnx.data 与 dinov2_cls_384.onnx.data 字节完全相同（同一 frozen ViT-S 权重，sha256 见下）；构建脚本按名复制，不重复入库。",
+  "source": "2026-09-01 从 work/_patch_onnx_tmp/ 入册；再生成脚本 = mvp/scripts/export_patch_onnx.py（2026-10-01 实测：新导出 vs 本资产两路输出 max|d|=0、.data sha256 相同；图文件字节不同仅为元数据，故不替换本资产以保持 sha256 锁定）",
+  "sha256": {
+    "dinov2_cls_patch.onnx": "295a2046a4c1de494cb2b5b217904ea2fa4fcd5b101b402cbdd87308d4b027c4",
+    "dinov2_cls_patch.onnx.data": "5af75ca55bbc9f788e4e5966417ecd8016c7b0025091e5a8fba01589dc26369c"
+  }
+}

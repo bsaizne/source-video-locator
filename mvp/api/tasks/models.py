@@ -68,7 +68,8 @@ class Task:
     render_batch: object | None = field(default=None, repr=False, compare=False)
     status: TaskStatus = TaskStatus.PENDING
     stage: TaskStage = TaskStage.IDLE
-    progress: int = 0
+    # 0-100，一位小数（2026-10-02 续40 UX：进度条要能看出逐段推进）
+    progress: float = 0
     created_at: str = field(default_factory=_now_iso)
     finished_at: str | None = None
     result: dict | None = None
@@ -147,7 +148,7 @@ class Task:
             frame = self._frame()
         self._send(frame, subs)
 
-    def update_progress(self, stage: TaskStage, percent: int, message: str = "") -> None:
+    def update_progress(self, stage: TaskStage, percent: float, message: str = "") -> None:
         with self._lock:
             if self.status is TaskStatus.PENDING:
                 self.status = TaskStatus.RUNNING

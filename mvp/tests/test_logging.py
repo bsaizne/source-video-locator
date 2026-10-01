@@ -185,5 +185,74 @@ class RedactionTest(unittest.TestCase, _RootIsolateMixin):
                 self._restore(snap)
 
 
+class RedactionV2Test(unittest.TestCase):
+    """售后三件·脱敏补强（2026-10-02）：百分号编码盘符路径 + /api query 的 *path= 值。"""
+
+    def test_percent_encoded_win_path(self):
+        out = redact_text("GET /api/index/status?video_path=D%3A%5C%E7%B4%A0%E6%9D%90%5Ctest2.mkv")
+        self.assertIn("<PATH:test2.mkv>", out)
+        self.assertNotIn("%E7%B4%A0%E6%9D%90", out)   # 目录名（编码中文）不得残留
+
+    def test_api_path_query_masked(self):
+        out = redact_text("GET /api/index/status?video_path=D:/vid/x.mkv&n=3")
+        self.assertNotIn("D:/vid", out)
+        self.assertNotIn("x.mkv", out.replace("<PATH:x.mkv>", ""))  # 只允许脱敏形态出现
+
+    def test_plain_api_query_untouched(self):
+        # token 类走 _SECRET_QUERY；普通数值参数不误伤
+        out = redact_text("GET /api/logs/recent?bytes_limit=49152")
+        self.assertIn("bytes_limit=49152", out)
+
+
+class DebugTierTest(unittest.TestCase, _RootIsolateMixin):
+    """三级日志·调试档：默认关；SVL_LOG_DEBUG=1 时 DEBUG 只进 debug.log。"""
+
+    def _run(self, monkey_env: str | None, td: str) -> tuple[str, str]:
+        import os
+        snap = self._snapshot()
+        old = os.environ.get("SVL_LOG_DEBUG")
+        try:
+            if monkey_env is None:
+                os.environ.pop("SVL_LOG_DEBUG", None)
+            else:
+                os.environ["SVL_LOG_DEBUG"] = monkey_env
+            configure_logging(level=logging.INFO, log_dir=td)
+            lg = get_logger("svl.tier")
+            lg.debug("dbg-line")
+            lg.info("info-line")
+            self._flush_files()
+            main = (Path(td) / "video_locator.log").read_text(encoding="utf-8")
+            dbg_p = Path(td) / "debug.log"
+            dbg = dbg_p.read_text(encoding="utf-8") if dbg_p.exists() else ""
+            return main, dbg
+        finally:
+            if old is None:
+                os.environ.pop("SVL_LOG_DEBUG", None)
+            else:
+                os.environ["SVL_LOG_DEBUG"] = old
+            self._restore(snap)
+
+    def test_debug_off_by_default(self):
+        with tempfile.TemporaryDirectory() as td:
+            main, dbg = self._run(None, td)
+            self.assertIn("info-line", main)
+            self.assertNotIn("dbg-line", main)
+            self.assertEqual(dbg, "")
+            self.assertFalse((Path(td) / "debug.log").exists())
+
+    def test_debug_on_writes_debug_log_only(self):
+        with tempfile.TemporaryDirectory() as td:
+            main, dbg = self._run("1", td)
+            self.assertIn("dbg-line", dbg)
+            self.assertIn("info-line", dbg)
+            self.assertIn("info-line", main)
+            self.assertNotIn("dbg-line", main)   # 两档互不重复
+
+    def test_debug_env_off_string_disables(self):
+        with tempfile.TemporaryDirectory() as td:
+            self._run("0", td)
+            self.assertFalse((Path(td) / "debug.log").exists())
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -80,9 +80,21 @@ def _aligned_score(emb: np.ndarray, lib_times: np.ndarray, lib_feats: np.ndarray
 
 def split_results(results: Sequence[Result], *, edited_path, grab_frame: Callable,
                   embed: Callable[[np.ndarray], np.ndarray], lib_times: np.ndarray,
-                  lib_feats: np.ndarray, log: logging.Logger | None = None
-                  ) -> list[Result]:
-    """对多镜头结果段做段级拆分；其余结果原样返回。不修改入参对象。"""
+                  lib_feats: np.ndarray, log: logging.Logger | None = None,
+                  grab_frames: Callable | None = None) -> list[Result]:
+    """对多镜头结果段做段级拆分；其余结果原样返回。不修改入参对象。
+
+    ``grab_frames(path, times) -> list[frame]``（可选）：批量抓帧（生产传并行+缓存版
+    ``_grab_frames_parallel``）。抓帧是纯 IO+解码、与 embed 顺序无关，故先并行批量抓、
+    再主线程串行 ``embed``（DML session 非线程安全）——帧内容与顺序不变 ⇒ 输出逐位一致。
+    缺省 None 时回退逐帧 ``grab_frame``（单测/离线验证器同规格）。
+    """
+    def _grab_many(path, times):
+        times = list(times)
+        if grab_frames is not None:
+            return grab_frames(path, times)
+        return [grab_frame(path, t) for t in times]
+
     out: list[Result] = []
     n_split = n_refined = 0
     for r in results:
@@ -95,8 +107,8 @@ def split_results(results: Sequence[Result], *, edited_path, grab_frame: Callabl
         n = max(2, min(SHOT_MAX_FRAMES, int(dur * SHOT_FPS)))
         ets = [rs0 + dur * (i + 0.5) / n for i in range(n)]
         embs = []
-        for et in ets:
-            v = np.asarray(embed(grab_frame(edited_path, et)), dtype=np.float64)
+        for frame in _grab_many(edited_path, ets):
+            v = np.asarray(embed(frame), dtype=np.float64)
             embs.append(v / max(1e-8, float(np.linalg.norm(v))))
         shots = detect_shots(ets, embs)
         if len(shots) < 2:

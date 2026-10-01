@@ -226,7 +226,7 @@ export interface TaskJson {
   result: ResultBatchJson | RenderMovieJson | null
   error: string | null
   cancel_requested: boolean
-  /** Human-readable current step, e.g. "特征提取 50/200 帧". */
+  /** Human-readable current step, e.g. "分析剪辑画面 50/200 帧"（面向用户话术，续40）. */
   message: string
 }
 
@@ -242,5 +242,6 @@ export type TaskEvent =
 export interface IndexStatus {
   indexMeta: IndexMetaJson | null
   validation: IndexValidationJson
-  backend: BackendInfoJson
+  /** 状态查询不含设备信息时为 null（诚实未知，不硬编码 cpu——2026-10-01 E2E 发现的徽标误标）。 */
+  backend: BackendInfoJson | null
 }

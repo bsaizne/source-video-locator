@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, onUnmounted, watch } from 'vue'
 import AppSidebar from '@/components/AppSidebar.vue'
 import CommandPalette from '@/components/CommandPalette.vue'
 import BaseButton from '@/components/ui/BaseButton.vue'
@@ -17,6 +17,16 @@ onMounted(() => {
   session.ensureSubscribed()
   void session.initApp()
 })
+
+// 进入 READY 才开始周期重探健康：首启门自己已在探测，提前挂定时器会跟它抢 connection，
+// 也会在 initState=FAILED 后把侧栏状态反复改写。Mock 态恒「已连接」，无需重探。
+watch(() => session.initState, (state) => {
+  if (mockMode) return
+  if (state === 'READY') session.startHealthWatch()
+  else session.stopHealthWatch()
+}, { immediate: true })
+
+onUnmounted(() => session.stopHealthWatch())
 </script>
 
 <template>

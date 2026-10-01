@@ -36,19 +36,23 @@ _STAGE_RANGES: dict[ProgressStage, tuple[TaskStage, int, int]] = {
     ProgressStage.CANDIDATE_RETRIEVAL: (TaskStage.RETRIEVAL, 38, 54),
     ProgressStage.LOCALIZATION: (TaskStage.RETRIEVAL, 38, 54),
     ProgressStage.CONFIDENCE: (TaskStage.RETRIEVAL, 38, 54),
-    ProgressStage.EXPORT: (TaskStage.EXPORTING, 92, 7),
+    # 深度复核（2026-10-02 续40 UX）：段循环结束后的全局修复+拆分+精排链独占 92→98，
+    # 逐事件插值推进 ⇒ 修复此前「92% 静默钳死 30+ 分钟」的卡感。导出收尾 98→99.5。
+    ProgressStage.REFINE: (TaskStage.RETRIEVAL, 92, 6),
+    ProgressStage.EXPORT: (TaskStage.EXPORTING, 98, 1.5),
     # 成片渲染是**独立任务**（kind=render），独占整条进度区间；定位任务永不发该阶段。
     ProgressStage.RENDER_MOVIE: (TaskStage.EXPORTING, 0, 99),
 }
 
 
-def map_progress_stage(ev: ProgressEvent) -> tuple[TaskStage, int]:
-    """把一个 service 进度事件映射为 (TaskStage, 0-100 百分比)。
+def map_progress_stage(ev: ProgressEvent) -> tuple[TaskStage, float]:
+    """把一个 service 进度事件映射为 (TaskStage, 0-100 百分比，一位小数)。
 
     事件带 current/total 时在阶段区间内插值：逐帧阶段（索引/特征提取，
     current=已处理数，1-based）用 ``current/total``；逐段阶段（current=段下标，
     0-based）用 ``(current+1)/total``——首段事件就前进、末段事件到达区间右端。
     无 total 的阶段事件取区间起点。未知阶段回退 IDLE。
+    一位小数（2026-10-02 续40 UX）：逐段阶段在短区间内整数百分比会长时间不动。
     """
     stage, base, span = _STAGE_RANGES.get(ev.stage, (TaskStage.IDLE, 0, 0))
     if ev.total and ev.total > 0:
@@ -59,8 +63,8 @@ def map_progress_stage(ev: ProgressEvent) -> tuple[TaskStage, int]:
         else:
             frac = (ev.current + 1) / ev.total
         frac = min(1.0, max(0.0, frac))
-        return stage, round(base + span * frac)
-    return stage, base
+        return stage, round(base + span * frac, 1)
+    return stage, float(base)
 
 
 def run_worker(task: Task, service, *, log: LogFn | None = None) -> None:

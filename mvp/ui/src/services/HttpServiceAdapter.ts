@@ -116,8 +116,9 @@ export class HttpServiceAdapter implements ServiceAPI {
       body: init?.body as string | undefined,
     })
     if (res.network) {
+      // 网络级失败：话术面向用户，技术 detail 保留在括号内供工程师定位（续21 登记的英文技术串尾巴）。
       throw new BackendUnavailableError(
-        `cannot reach backend: ${res.detail ?? 'network error'}`,
+        `无法连接后端服务，请重新启动软件；若反复出现请下载日志发给支持人员（${res.detail ?? 'network error'}）`,
       )
     }
     if (!res.ok) {
@@ -171,7 +172,7 @@ export class HttpServiceAdapter implements ServiceAPI {
       return {
         indexMeta: this.lastIndexStatus?.indexMeta ?? null,
         validation,
-        backend: this.lastIndexStatus?.backend ?? this.unknownIndexStatus().backend,
+        backend: this.lastIndexStatus?.backend ?? null,
       }
     } catch {
       // Backend unreachable (Http offline) — honest MISSING placeholder, not a crash.
@@ -261,7 +262,8 @@ export class HttpServiceAdapter implements ServiceAPI {
   ): Promise<{ path: string; warnings?: string[] }> {
     // The bridge's /api/export exports its own session's latest results batch
     // (set by the preceding /api/results or the async task). format/置信门槛/
-    // 输出目录随请求转发（Phase 22 反馈 ⑨：默认不含低置信，导出即最终工程）。
+    // 输出目录随请求转发。缺省门槛 = LOW（2026-10-01 拍板「默认全部导出」，与
+    // ResultsPage 的初始值一致；取代 Phase 22 反馈⑨「默认不含低置信」口径）。
     // warnings：后端导出前守卫产出的对外告警（如 LOC-2001 碎片告警），透传给 UI 展示。
     void _batch
     void opts?.filename
@@ -271,7 +273,7 @@ export class HttpServiceAdapter implements ServiceAPI {
       body: JSON.stringify({
         output_dir: opts?.outDir ?? '',
         format: opts?.format ?? 'json',
-        min_confidence: opts?.minConfidence ?? 'MEDIUM',
+        min_confidence: opts?.minConfidence ?? 'LOW',
         low_policy: opts?.lowPolicy ?? 'exclude',
         snap_scenes: opts?.snapScenes ?? true,
         material_width: opts?.materialWidth ?? 'scene',
@@ -450,7 +452,8 @@ export class HttpServiceAdapter implements ServiceAPI {
     return {
       indexMeta: null,
       validation: { status: 'MISSING', reason: null },
-      backend: { deviceName: 'cpu', deviceType: 'cpu', isAccelerator: false, fallback: false },
+      // 状态查询/未知时诚实返回 null，不硬编码 cpu（侧栏「后端 CPU」误标根因，2026-10-01 E2E）。
+      backend: null,
     }
   }
 }

@@ -322,12 +322,14 @@ class PipelineConfig:
     min_scene_coverage: float = 0.2
     # 段级拆分（2026-09-30 续32 形态4 runtime 化，engine/localization/shot_split.py）：
     # 多镜头结果段按编辑窗内切镜重排为逐镜子结果（宽 span 保全 ⇒ 严格结构性零回退）。
-    # 离线验证：导出实得 107→115（+8）、严格 130→131、FP 持平；默认关，待真实导出冒烟后拍板。
-    shot_split_enabled: bool = False
+    # 2026-10-01 续35 翻默认开（用户拍板）：生产路径双臂验收 = 严格 130→132 · 导出实得 107→119 ·
+    # FP 4→4，与离线组合验证逐位一致；续34 抓帧提速后 ON/OFF 开销比实测 2.72×。
+    shot_split_enabled: bool = True
     # patch 局部精排（2026-09-30 续32 形态6 runtime 化, engine/localization/patch_refine.py）：
     # 歧义段 top-K 候选各自 ±5s 局部窗 patch+global 融合精排再择优（老主降子 ⇒ 严格零回退）。
-    # 离线验证：盲区 4/5 峰落 GT 窗、对照 4/4 稳定、9/9 读图确证；默认关，待验收后拍板。
-    patch_refine_enabled: bool = False
+    # 2026-10-01 续35 翻默认开（用户拍板）：离线 9/9 读图确证 + 生产双臂 13 增 1 损；
+    # 续34 整条 locate 全字段逐位一致 + 高精度全片实测 ≈18 min（test1）。
+    patch_refine_enabled: bool = True
     confidence: ConfidenceConfig = field(default_factory=ConfidenceConfig)
     seq_align: SeqAlignConfig = field(default_factory=SeqAlignConfig)
 

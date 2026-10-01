@@ -26,8 +26,11 @@ from pathlib import Path
 from uuid import uuid4
 
 LOG_FILENAME = "video_locator.log"
+DEBUG_FILENAME = "debug.log"
 MAX_BYTES = 10 * 1024 * 1024   # 10MB
 BACKUP_COUNT = 5
+DEBUG_MAX_BYTES = 20 * 1024 * 1024
+DEBUG_BACKUP_COUNT = 3
 
 _FMT = "%(asctime)s %(levelname)s module=%(name)s session=%(session_id)s %(message)s"
 
@@ -38,6 +41,18 @@ _UNC_PATH = re.compile(r"\\\\[^/\s\"'<>|]+(?:/[^\s\"'<>|]*)?")
 _POSIX_PATH = re.compile(r"/(?:Users|home|var|opt|mnt|media|srv)/[^\s\"'<>|]*")
 _URL = re.compile(r"\b(?:file|https?|ftp)://[^\s\"'<>|]+", re.I)
 _TRAILING = ".,;:)]}\"'"
+# 售后三件·脱敏补强（2026-10-02）：
+# ① 百分号编码的盘符路径（URL query 里最常见：video_path=D%3A%5CUsers%5C...）；
+# ② 相对 API 路径里 `*path=` 参数的值（我方请求日志只打 path 不打 query，但异常回显
+#    可能带全 URL 残段；token 类参数已由 _SECRET_QUERY 覆盖，这里只补文件路径参数）。
+_PCT_WIN_PATH = re.compile(r"\b[A-Za-z](?:%3a)(?:%5c)(?:[^&\s\"'<>])*", re.I)
+_API_PATH_QUERY = re.compile(r"(/api/\S*?\?[^\s\"'<>]*?path=)(?!<)[^\s&\"'<>]*", re.I)
+
+
+def _pct_basename(m: re.Match) -> str:
+    tail = m.group(0)
+    name = re.split(r"%5c", tail, flags=re.I)[-1] or "%"
+    return "<PATH:%s>" % name
 
 
 def _basename(p: str) -> str:
@@ -73,6 +88,8 @@ def redact_text(text: str) -> str:
         return text
     text = _SECRET_QUERY.sub(lambda m: m.group(1) + "<REDACTED>", text)
     text = _URL.sub(_redact_url, text)
+    text = _PCT_WIN_PATH.sub(_pct_basename, text)
+    text = _API_PATH_QUERY.sub(lambda m: m.group(1) + "<REDACTED>", text)
     text = _WIN_PATH.sub(lambda m: _basename(m.group(0)), text)
     text = _UNC_PATH.sub(lambda m: _basename(m.group(0)), text)
     text = _POSIX_PATH.sub(lambda m: _basename(m.group(0)), text)
@@ -176,8 +193,41 @@ def _ensure_file_handler(log_dir: str | Path | None, root: logging.Logger) -> No
                              backupCount=BACKUP_COUNT, encoding="utf-8")
     fh.setFormatter(_make_formatter())
     fh.addFilter(RedactingFilter())
+    fh.setLevel(logging.INFO)      # 支持档：INFO+（调试行只进 debug.log，两档互不重复）
     setattr(fh, "_svl_file", True)
     root.addHandler(fh)
+
+
+def debug_tier_enabled() -> bool:
+    """调试档开关（env ``SVL_LOG_DEBUG=1``）。默认关——磁盘与隐私都只给支持档。"""
+    return str(os.environ.get("SVL_LOG_DEBUG", "")).strip().lower() in (
+        "1", "true", "yes", "on")
+
+
+def _ensure_debug_handler(log_dir: str | Path | None, root: logging.Logger) -> bool:
+    """按开关挂/摘 DEBUG 级 ``debug.log``。返回调试档是否生效。"""
+    want = debug_tier_enabled()
+    existing = [h for h in root.handlers if getattr(h, "_svl_debug", False)]
+    if not want:
+        for h in existing:
+            root.removeHandler(h)
+            h.close()
+        return False
+    target = (_log_path(log_dir).parent / DEBUG_FILENAME).resolve()
+    target.parent.mkdir(parents=True, exist_ok=True)
+    if existing and Path(existing[0].baseFilename).resolve() == target:
+        return True
+    for h in existing:
+        root.removeHandler(h)
+        h.close()
+    dh = RotatingFileHandler(str(target), maxBytes=DEBUG_MAX_BYTES,
+                             backupCount=DEBUG_BACKUP_COUNT, encoding="utf-8")
+    dh.setLevel(logging.DEBUG)
+    dh.setFormatter(_make_formatter())
+    dh.addFilter(RedactingFilter())
+    setattr(dh, "_svl_debug", True)
+    root.addHandler(dh)
+    return True
 
 
 def configure_logging(level: int = logging.INFO, *, stream=None,
@@ -186,9 +236,17 @@ def configure_logging(level: int = logging.INFO, *, stream=None,
 
     可重复调用：级别更新；文件 handler 会在 ``log_dir`` 变化时切换到新路径
     （测试可在临时目录里隔离验证）。
+
+    三级日志（2026-10-02 售后三件，对齐竞品 wp.diagnostics 客户/支持/调试分层，
+    不抄其加密形态）：
+    - **客户档** = UI 错误条幅话术 + LOC 稳定码（errors.public_error，已存在）；
+    - **支持档** = ``video_locator.log``，INFO+，落盘前脱敏，「下载日志」给客服的就是它；
+    - **调试档** = ``debug.log``，DEBUG 全量（同样脱敏），默认**关**，
+      env ``SVL_LOG_DEBUG=1`` 开启——支持人员指导用户排障时才让开。
     """
     root = logging.getLogger()
-    root.setLevel(level)
+    debug_on = _ensure_debug_handler(log_dir, root)
+    root.setLevel(logging.DEBUG if debug_on else level)
     _ensure_stream_handler(stream, root)
     _ensure_file_handler(log_dir, root)
 

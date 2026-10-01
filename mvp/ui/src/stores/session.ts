@@ -76,11 +76,37 @@ export const useSessionStore = defineStore('session', () => {
     await initApp()
   }
 
+  // 侧栏健康重探（续21 登记尾巴）：initApp 只在首启探测一次，后端进程随 Electron
+  // 崩溃/被杀之后侧栏会一直挂着「已连接」+ 旧设备徽标。READY 之后按固定间隔复查，
+  // 断→通时顺带重读设备设置（后端可能已重启并换了实际设备）。
+  const HEALTH_POLL_MS = 20_000
+  let healthTimer: ReturnType<typeof setInterval> | null = null
+
+  async function probeHealth(): Promise<void> {
+    const prev = connection.value
+    const next = await service.checkHealth()
+    connection.value = next
+    if (prev !== 'CONNECTED' && next === 'CONNECTED') await loadDeviceSettings()
+  }
+
+  function startHealthWatch(): void {
+    if (healthTimer) return
+    healthTimer = setInterval(() => void probeHealth(), HEALTH_POLL_MS)
+  }
+
+  function stopHealthWatch(): void {
+    if (!healthTimer) return
+    clearInterval(healthTimer)
+    healthTimer = null
+  }
+
   async function refreshIndex(originalPath: string): Promise<void> {
     try {
       const st = await service.getIndexStatus(originalPath)
       indexStatus.value = st
-      backend.value = st.backend
+      // 状态查询不带设备信息（backend=null）时保留既有值——不把侧栏徽标误标成 CPU
+      // （2026-10-01 E2E 发现：打包态启动即显示 CPU，实际后端是 directml/amd）。
+      backend.value = st.backend ?? backend.value
     } catch {
       // No status query (Http mode) — leave index/backend unknown rather than crash.
       indexStatus.value = null
@@ -136,5 +162,6 @@ export const useSessionStore = defineStore('session', () => {
     initState, initProgress, initError,
     ensureSubscribed, initApp, retryInit, refreshIndex, buildIndex,
     loadDeviceSettings, setDevicePreference, checkHealth, clear,
+    startHealthWatch, stopHealthWatch, probeHealth,
   }
 })

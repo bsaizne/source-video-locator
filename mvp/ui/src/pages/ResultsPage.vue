@@ -24,12 +24,12 @@ const exportError = ref<string | null>(null)
 // /api/export 的对外告警（如 LOC-2001 碎片告警）：后端只产出不裁剪，这里如实展示。
 const exportWarnings = ref<string[]>([])
 const showExport = ref(false)
-// 反馈 ⑨：导出即最终工程——默认不含低置信（LOW 不导出）；格式默认剪映草稿。
-// A4：门槛/低置信处理/边界吸附改为**用户可选**（后端与适配器本就支持，此前被页面写死），
-// 默认值与旧行为逐字一致，不选就等于没改。
+// 反馈 ⑨ + 2026-10-01 用户拍板：置信门槛默认「全部」（低置信也作为主片段导出）；
+// 格式默认剪映草稿。
+// A4：门槛/低置信处理/边界吸附为**用户可选**（后端与适配器本就支持，此前被页面写死）。
 const exportFormat = ref<'jianying' | 'fcp7_xml' | 'edl' | 'json'>('jianying')
 const materialWidth = ref<'scene' | 'core'>('scene')   // 片段宽度（反馈四轮：可选+提示）
-const minConfidence = ref<'HIGH' | 'MEDIUM' | 'LOW'>('MEDIUM')
+const minConfidence = ref<'HIGH' | 'MEDIUM' | 'LOW'>('LOW')
 const lowPolicy = ref<'exclude' | 'backup'>('exclude')
 const snapScenes = ref<'on' | 'off'>('on')   // BaseSelect 只吃 string，调用处再转 bool
 const EXPORT_DIR_KEY = 'vl.exportDir'
@@ -364,9 +364,9 @@ const renderSummary = computed(() => {
         <label class="rd__field">
           <span>置信门槛</span>
           <BaseSelect v-model="minConfidence">
-            <option value="MEDIUM">高 + 中（推荐）</option>
-            <option value="HIGH">仅高置信</option>
             <option value="LOW">全部（低置信也作为主片段导出）</option>
+            <option value="MEDIUM">高 + 中</option>
+            <option value="HIGH">仅高置信</option>
           </BaseSelect>
         </label>
         <label v-if="minConfidence !== 'LOW'" class="rd__field">

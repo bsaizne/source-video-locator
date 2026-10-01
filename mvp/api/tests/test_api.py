@@ -245,6 +245,9 @@ class LoadResultsTest(ApiTestBase):
         self.assertEqual(r.status_code, 400)
         body = r.json()
         self.assertEqual(body["error"], "load_failed")
+        # LOC-1107 专属码（不得与 LOC-1103=原片索引损坏撞码，errors.py 码规则只增不改）。
+        self.assertEqual(body["code"], "LOC-1107")
+        self.assertEqual(body["message"], "结果文件无法读取，请重新运行分析或改选其它结果文件。")
         self.assertIn("FileNotFoundError", body["detail"])
 
 

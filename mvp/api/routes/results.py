@@ -75,7 +75,9 @@ def load_results(req: LoadResultsRequest, ctx: AppContext = Depends(get_context)
     except Exception as exc:                       # 缺文件/坏 JSON/schema 不符
         return JSONResponse(
             status_code=400,
-            content={"error": "load_failed", "code": "LOC-1103",
+            # LOC-1107：结果文件读取失败。不得复用 LOC-1103（官方语义 = 原片索引损坏，
+            # errors.py 码规则「只增不改」，客服/文档按码定位，一码两义会指错解释）。
+            content={"error": "load_failed", "code": "LOC-1107",
                      "message": "结果文件无法读取，请重新运行分析或改选其它结果文件。",
                      "detail": f"{type(exc).__name__}: {exc}"},
         )

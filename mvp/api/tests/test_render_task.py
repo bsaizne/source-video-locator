@@ -124,7 +124,7 @@ class RenderStageMappingTest(unittest.TestCase):
         stage, pct = map_progress_stage(
             ProgressEvent(ProgressStage.RENDER_MOVIE, 40, 100, "片段 4/10 渲染 40%"))
         self.assertIs(stage, TaskStage.EXPORTING)
-        self.assertEqual(pct, 40)                            # 0-99 区间按 current/total 插值
+        self.assertEqual(pct, 39.6)                          # 0-99 区间按 current/total 插值（续40 一位小数）
 
     def test_render_movie_unknown_total_uses_base(self):
         stage, pct = map_progress_stage(

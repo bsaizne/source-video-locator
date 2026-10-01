@@ -20,7 +20,8 @@ const running = computed(() => props.steps.some((s) => s.status === 'running'))
 
 const progressPct = computed(() => {
   if (!props.progress || !props.progress.total) return 0
-  return Math.round((props.progress.current / props.progress.total) * 100)
+  // 一位小数（2026-10-02 续40）：后端 progress 本身带一位小数，这里只做兜底量化。
+  return Math.round((props.progress.current / props.progress.total) * 1000) / 10
 })
 
 // Friendly label for the current task stage（粗粒度：内部阶段折叠为面向用户的说法）。
@@ -73,7 +74,7 @@ const elapsed = computed(() => {
       </div>
       <div class="pl__meta">
         <span class="mono faint">{{ currentStageLabel }}</span>
-        <span class="mono">{{ progressPct }}%</span>
+        <span class="mono">{{ progressPct.toFixed(1) }}%</span>
         <span class="mono faint">{{ elapsed }}</span>
         <button v-if="running" class="pl__cancel" type="button" @click="emit('cancel')">取消</button>
       </div>

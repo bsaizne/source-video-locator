@@ -45,6 +45,9 @@ verification_cases/
 *.pth.tar
 *.onnx
 *.onnx.data
+# 例外：分发包必需的 DML patch 双输出图（78KB，仓内暂无再生成脚本，丢了就再也导不出来
+# —— 依据 .agent/DECISIONS.md 2026-10-01 续36；其 88MB 外部权重仍不入库，构建时同名复制）
+!mvp/ui/resources/models/dinov2_cls_patch/dinov2_cls_patch.onnx
 *.ckpt
 *.safetensors
 
