@@ -1,5 +1,7 @@
 # FINDINGS —— 边界精修判据对照（竞品 H-CM1 假设 vs 我方现行）= 不采纳，副产品是"双判据盲区"
 
+> **GT 版本**（2026-10-01 补登记，批量执行）：不适用——竞品边界精修判据对照（227 条现行边界 + 44 例人工盲判），不与我方 GT 做召回判定。
+
 > **日期**：2026-09-26　**性质**：探针（零 runtime 改动）　**触发**：采纳评估建议 A（边界精修 7 参数已字节确证）
 > **输入**：09 §8.1 字节确证的 7 参数（\`near_cut_frames=16\`、\`absolute_diff_min=45\`、\`mad_multiplier=4\`、
 > \`max_move_frames=16\`、\`min_segment_frames=32\`、\`min_side_frames=10\`、\`max_additions_per_segment=1\`）+ 代理 96×54

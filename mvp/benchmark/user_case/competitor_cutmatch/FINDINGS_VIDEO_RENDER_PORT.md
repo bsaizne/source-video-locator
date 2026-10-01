@@ -1,5 +1,7 @@
 # FINDINGS — 成片渲染移植（竞品 `exporting.rendering.video_renderer`）
 
+> **GT 版本**（2026-10-01 补登记，批量执行）：不适用——成片渲染能力移植，验收 = 帧数严格校验 + 帧距 + 逐张读图，无 GT 判定。
+
 日期：2026-09-29（续30）。批次 = 用户拍板「先下批偷向吧」→ 按档案排序取竞品差集 **TOP1 唯一未消化项**。
 证据源：`work/full_sweep_blobs.txt` BLOB #138（`cutmatch.exporting.rendering.video_renderer`，
 527 常量 / 75 条中文 docstring）+ #139/#140（`exporting.segments.builder` 碎片告警）+

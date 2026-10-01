@@ -1,5 +1,7 @@
 # FINDINGS — 精修/展示层语义挖掘突破：Nuitka 常量 blob 内嵌中文 docstring（2026-09-26 续10e）
 
+> **GT 版本**（2026-10-01 补登记，批量执行）：不适用——竞品 docstring/常量语义挖掘（纯竞品数据）。
+
 > **触发**：用户拍板「竞品文件数据都有，为什么不去全局搜索精修和展示层」+「自己挖，死命挖」（续10d 后追加）。
 > **方法**：不等执行方机器码专项（09 §8.5 / N1-N8）——直接全局搜索执行方已交付的逆向数据
 > （`cutmatch-analysis/data/`：option_catalog 1563 键 + profile v1 943 条 + nuitka_blobs.json 282 个解码 blob

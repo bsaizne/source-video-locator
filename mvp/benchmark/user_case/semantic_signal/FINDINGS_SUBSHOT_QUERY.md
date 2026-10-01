@@ -1,4 +1,7 @@
 # 蒙太奇段子镜头识别 + 独立查询探针 FINDINGS（2026-09-05）—— POSITIVE
+
+> **GT 版本**（2026-10-01 补登记，批量执行）：现行 139 条 verified（ground_truth_v4.json + test1-3.json，2026-09-02 定案；2026-09-30 重锚定 12 行后仍为现行基准）；另见 §八登记行：蒙太奇子镜头线真值另有 ground_truth_corrected.json（7 段视觉确认）来源。〔推断级：按成文日期推定，依据 GT_VERSION_REGISTER_PROPOSAL_20260928.md〕
+
 > 日期: 2026-09-05 | 性质: 研究侧探针（验证"蒙太奇段用单均值查询导致语义稀释"的修复）
 > 脚本: mvp/scripts/research_subshot_query.py | GPU: DirectML/amd（BACKEND_SELECTED 打印）
 > 背景: 附3（FINDINGS_TEMPORAL_MONOTONICITY.md）揭示 t2r02b = 多镜头蒙太奇段, 整段均值

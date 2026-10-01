@@ -149,6 +149,55 @@
 | `FINDINGS_P36_FINESEG.md`（p36 细切分取证） | `ground_truth_v4.json`（p36 窗 2042-2043.4） | ✅ 已核（2026-09-26）：v4 执行；p36 已由两级切分救回，头部已标注 |
 | `FINDINGS_AMBIGUITY_PROTOTYPE.md`（Ambiguity 原型） | `ground_truth_v4.json`（`work/_amb_proto_run.py` L22 直读） | ✅ 已核（2026-09-26）：v4 执行，头部已标注 |
 
+
+**2026-10-01 批量补登记（44 份，用户拍板；依据 GT_VERSION_REGISTER_PROPOSAL_20260928.md + 续29~35 新增 12 份）**：
+
+| `competitor_cutmatch/FINDINGS_BOUNDARY_REFINER_COMPARISON.md` | 不适用（44 例人工盲判） | ✅ 2026-10-01 已加头 |
+| `competitor_cutmatch/FINDINGS_CAPABILITY_GAP.md` | 不适用（能力差距分析） | ✅ 2026-10-01 已加头 |
+| `competitor_cutmatch/FINDINGS_CUTMATCH_CONSTANTS_ADOPTION.md` | 不适用；基线引用 117 已过时 | ✅ 2026-10-01 已加头 |
+| `competitor_cutmatch/FINDINGS_CUTMATCH_POSTPROCESS_REPLAY.md` | 不适用（几何复现 24/24） | ✅ 2026-10-01 已加头 |
+| `competitor_cutmatch/FINDINGS_DOCSTRING_BREAKTHROUGH.md` | 不适用（竞品数据） | ✅ 2026-10-01 已加头 |
+| `competitor_cutmatch/FINDINGS_COMPETITOR_FULL_SWEEP.md` | 不适用（竞品数据） | ✅ 2026-10-01 已加头 |
+| `gt_review/FINDINGS_TEST1-3_GT_BUILD.md` | 本体即 GT 建设记录（09-02 定案） | ✅ 2026-10-01 已加头（注明 09-30 重锚定） |
+| `competitor_cutmatch/FINDINGS_COMBO_FIVE_RING_TEST1.md` | verified-139（推断级） | ✅ 2026-10-01 已加头 |
+| `competitor_cutmatch/FINDINGS_P0_DENSE_START_TEST1.md` | verified-139；基线 117 已过时 | ✅ 2026-10-01 已加头 |
+| `competitor_cutmatch/FINDINGS_FAST_GLOBAL_REPRO.md` | verified-139；117/119 双臂并存 | ✅ 2026-10-01 已加头 |
+| `competitor_cutmatch/FINDINGS_PROXY_B_STAGE_REVIEW.md` | 不适用（几何+盲判） | ✅ 2026-10-01 已加头 |
+| `competitor_cutmatch/FINDINGS_PROXY_D_STAGE_REVIEW.md` | verified-139；基线引用已过时 | ✅ 2026-10-01 已加头 |
+| `competitor_cutmatch/FINDINGS_QUERY_UNIT_SWAP.md` | verified-139；基线引用已过时 | ✅ 2026-10-01 已加头 |
+| `competitor_cutmatch/FINDINGS_PATCH_FUSION_PROBE.md` | verified-139（真值窗 v4/test3） | ✅ 2026-10-01 已加头 |
+| `semantic_signal/FINDINGS_M4_V4.md` | v4 重跑 | ✅ 已在表（E 类） |
+| `semantic_signal/FINDINGS_M8_V4.md` | v4 重跑 | ✅ 已在表（E 类） |
+| `semantic_signal/FINDINGS_P28P36_RECALL_VERIFY.md` | v4 + 09-04 rerun 批 | ✅ 2026-10-01 已加头 |
+| `semantic_signal/FINDINGS_M1.md` | v3；M1-v2 复审覆盖 | ✅ 2026-10-01 已加头（指向复审） |
+| `semantic_signal/FINDINGS_M6.md` | v3；数字作废 | ✅ 2026-10-01 已加头（指向 M6_REVISED） |
+| `semantic_signal/FINDINGS_P3.md` | v3（方向维持） | ✅ 2026-10-01 已加头 |
+| `semantic_signal/RESEARCH_PROPOSAL_CONTEXT_RERANK.md` | v3 提案口径；已由 patch v2 落地翻案 | ✅ 2026-10-01 已加头 |
+| `semantic_signal/FINDINGS_C_ITEM_8FPS.md` | verified-139；基线已过时 | ✅ 2026-10-01 已加头 |
+| `semantic_signal/FINDINGS_SUBSHOT_QUERY.md` | verified-139 + corrected.json 窗 | ✅ 2026-10-01 已加头 |
+| `semantic_signal/FINDINGS_TEMPORAL_MONOTONICITY.md` | verified-139（推断级） | ✅ 2026-10-01 已加头 |
+| `semantic_signal/FINDINGS_TIMELINE_PRIOR.md` | verified-139（推断级） | ✅ 2026-10-01 已加头 |
+| `semantic_signal/FINDINGS_LENIENT_V4_METRICS.md` | v4（脚本直读） | ✅ 2026-10-01 已加头 |
+| `semantic_signal/RESEARCH_PROPOSAL_PATCH_RECALL_V2.md` | verified-139（推断级） | ✅ 2026-10-01 已加头 |
+| `semantic_signal/RESEARCH_PROPOSAL_SECOND_SIGNAL.md` | verified-139（推断级） | ✅ 2026-10-01 已加头 |
+| `semantic_signal/RESEARCH_PROPOSAL_TRAINING.md` | verified-139（推断级） | ✅ 2026-10-01 已加头 |
+| `montage_research/FINDINGS.md` | ground_truth_corrected.json（v2 代际） | ✅ 2026-10-01 读文判定并加头 |
+| `scene_recall/FINDINGS.md` | v3（41 条，08-30 成文） | ✅ 2026-10-01 读文判定并加头 |
+| `second_signal/FINDINGS.md` | v3（41+4，08-30 成文） | ✅ 2026-10-01 读文判定并加头 |
+| `competitor_cutmatch/FINDINGS_CAPABILITY_MAP_20260928.md` | 不适用；基线引用 117 已过时 | ✅ 2026-10-01 已加头 |
+| `competitor_cutmatch/FINDINGS_COMBO_CALIBER_ALL_CASES.md` | 重锚定前（127/105 时代） | ✅ 2026-10-01 已加头（口袋集指向新版） |
+| `competitor_cutmatch/FINDINGS_DEGRADATION_LEGS_AND_DUP_CLAIM_WARN.md` | 重锚定前（127 时代双臂） | ✅ 2026-10-01 已加头 |
+| `competitor_cutmatch/FINDINGS_E3_ECC_PROBE.md` | 判据探针口径 | ✅ 2026-10-01 已加头 |
+| `competitor_cutmatch/FINDINGS_ORDERED_SEARCH_M0.md` | 重锚定前（105 时代） | ✅ 2026-10-01 已加头 |
+| `competitor_cutmatch/FINDINGS_RETRO_MULTIMODAL_REVIEW_20260930.md` | 跨代际补复核 | ✅ 2026-10-01 已加头 |
+| `competitor_cutmatch/FINDINGS_SOURCE_MERGE_PORT.md` | 现行（2mkv GT） | ✅ 2026-10-01 已加头 |
+| `competitor_cutmatch/FINDINGS_VIDEO_RENDER_PORT.md` | 不适用（渲染验收） | ✅ 2026-10-01 已加头 |
+| `semantic_signal/FINDINGS_GT_TICKET_ADJUDICATION_20260930.md` | 本体即 09-30 重锚定记录 | ✅ 2026-10-01 已加头 |
+| `semantic_signal/FINDINGS_INSCENE_REFINE_PROBE_20260930.md` | 现行（重锚定后 130/107 时代） | ✅ 2026-10-01 已加头 |
+| `semantic_signal/FINDINGS_SPLIT_PATCH_PROD_ACCEPT_20260930.md` | 现行（130→132 双臂验收） | ✅ 2026-10-01 已加头 |
+| `semantic_signal/FINDINGS_SPLIT_PATCH_GRAB_PERF_20261001.md` | 不适用（零语义性能归因） | ✅ 2026-10-01 已加头 |
+
+
 **登记规则**：① 新建研究结论文档时，标题下第一行写 `> **GT 版本**：<文件>（<条数>，<是否逐帧确认>）`；
 ② GT 被修正后，执行者更新本表并在受影响文档头部加 ⚠️ 标注；
 ③ 引用结论前先查本表——**本项目已因缺此机制亏三次**（见 §一）。

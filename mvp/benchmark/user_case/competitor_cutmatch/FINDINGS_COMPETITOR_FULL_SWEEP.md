@@ -1,5 +1,7 @@
 # FINDINGS — CutMatch 逆向数据最终全量扫穿（282 blob + 1563 键目录 + 943 键 profile 对账）
 
+> **GT 版本**（2026-10-01 补登记，批量执行）：不适用——竞品 282 blob 全量扫穿（纯竞品数据）。
+
 > 输入：`work/full_sweep_blobs.txt`（282 个 Nuitka 常量 blob 全量摘要，已完整读取）；
 > `cutmatch-analysis/data/cutmatch_option_catalog.json`（1563 键 / 4101 出现位）；
 > `cutmatch-analysis/data/competitor_profile_v1.json`（943 键）。

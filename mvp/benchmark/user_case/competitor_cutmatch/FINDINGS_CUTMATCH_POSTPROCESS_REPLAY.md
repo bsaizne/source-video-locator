@@ -1,5 +1,7 @@
 # FINDINGS · 竞品 B 段后处理规则的**独立重放确证** + 「输出层换切点」可行性探针
 
+> **GT 版本**（2026-10-01 补登记，批量执行）：不适用——竞品 probs 后处理重放（24/24 逐帧几何复现）。
+
 > 起因：对方 `FINDINGS/11_SCENE_DETECTION_POSTPROCESS.md` 回答我方 §G（trim 25:75 / group_midpoint / min_gap / many_hot），
 > 并列出 4 项「静态不可得」的未知（组中点取整 / min_gap 保留谁 / sensitivity 作用 / many_hot 展示层），
 > 同时建议我方「直接用 probs.npy 自己重放任意后处理规则」。**本轮把这个重放做到逐帧级**。

@@ -1,5 +1,7 @@
 # Phase 24-2 · GT 级 patch 召回覆盖探针 M6 FINDINGS —— 41 条 GT 的 CLS/patch 全索引召回统计
 
+> **GT 版本**（2026-10-01 补登记，批量执行）：原版基于 v3，数字已作废——v4 重算见同目录 FINDINGS_M6_REVISED.md（RESCUE 1/41→0/39，方向彻底关闭）。
+
 > 日期:2026-09-01 | 性质:**研究侧探针(零 runtime 改动, DML 双输出 ONNX, 6633s ≈ 110min)**
 > 起因:用户拍板「跑完 41 条 GT 再决定 patch 召回 runtime 化值不值」——M5 只测了 6 个探针点, M6 扩到全量 GT,
 > 统计到底有几条是「CLS 全索引 rank>20(runtime 候选池外)但 patch 能排进混合池 top-20」的。

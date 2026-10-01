@@ -1,5 +1,7 @@
 # C 项验证 FINDINGS —— 编辑侧采样率 2/4/8fps 三档全量对比（2026-09-05）
 
+> **GT 版本**（2026-10-01 补登记，批量执行）：现行 139 条 verified（ground_truth_v4.json + test1-3.json，2026-09-02 定案；2026-09-30 重锚定 12 行后仍为现行基准）；文内 112/118/125/127 属当时基线，文内引用的旧基线属当时现役口径、现已过时，引用数字须注明口径代际（现行基线见 .agent/STATE.md）。〔推断级：按成文日期推定，依据 GT_VERSION_REGISTER_PROPOSAL_20260928.md〕
+
 > 性质: 研究侧验证（C 项「编辑侧 2fps→8fps + 细切分」实施前的收益/风险量化）。零 runtime 改动。
 > 步骤: ① p36 单段 8fps 取证（research_p36_8fps_fineseg.py）→ ② test 域 24 未命中段 8fps 扫描
 > （research_fineseg_8fps_scan_test.py）→ ③ 四片全量管线重跑 edited_segment_fps=8.0（rerun_8fps.py /

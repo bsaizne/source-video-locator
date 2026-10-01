@@ -1,5 +1,7 @@
 # 方向 B 探针 FINDINGS —— 剪辑时序单调性约束 = 证伪（2026-09-05）
 
+> **GT 版本**（2026-10-01 补登记，批量执行）：现行 139 条 verified（ground_truth_v4.json + test1-3.json，2026-09-02 定案；2026-09-30 重锚定 12 行后仍为现行基准）。〔推断级：按成文日期推定，依据 GT_VERSION_REGISTER_PROPOSAL_20260928.md〕
+
 > 日期: 2026-09-05 | 性质: 研究侧静态度量探针（读结果批 + GT + 原片序, 零 runtime, 不跑序列对齐算法）
 > 立项: 用户拍板 A（编辑时序约束方向, 在方向 A 身份路由正确 + test3 时序锚点错位重核后）
 > 脚本: mvp/scripts/research_temporal_monotonicity.py | 数据: work/rerun_*_runtime_twopassflash.results.json

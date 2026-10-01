@@ -1,0 +1,159 @@
+# --- Source Video Locator — repository hygiene -------------------------------
+# .gitignore governs what lands in git. Design goal: this repo holds the MVP
+# product code (mvp/), CI workflows (.github/), project state (.agent/) and design
+# documents. It does NOT hold: video datasets, model weights, extracted features,
+# third-party engines, tool binaries, or generated artifacts. See AGENTS.md.
+
+# ----------------------------- Python --------------------------------------- #
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# ----------------------------- Video datasets ------------------------------- #
+datasets/
+*.mkv
+*.mp4
+*.mov
+*.avi
+*.webm
+*.flv
+*.m4v
+
+# ------------------------- Work / caches / outputs -------------------------- #
+work/
+results/
+logs/
+tmp/
+cache/
+diagnostics/
+verification_cases/
+
+# ---------------------- Extracted features / serialized --------------------- #
+*.npy
+*.npz
+*.stale
+*.pkl
+
+# --------------------- Model weights / trained assets ----------------------- #
+*.pth
+*.pt
+*.pth.tar
+*.onnx
+*.onnx.data
+*.ckpt
+*.safetensors
+
+# ---------------------- Third-party / tool binaries ------------------------- #
+engines/
+tools/
+
+# ----------------- Research code / phase reports (not product deliverables) -- #
+/src/
+benchmark_report*.md
+
+# ----------------------- Generated env / report snapshots ------------------- #
+benchmark-*.agentctx.json
+benchmark_results.json
+environment.json
+report_summary.json
+benchmark_report.html
+*.log
+
+# --------------------- Secrets / credentials (never commit) ------------------ #
+.env
+.env.*
+# 例外: Vite 生产构建配置(仅公开的 VITE_* 变量, 无密钥)。必须入库——
+# 被忽略会让 CI checkout 缺该文件, 打包版回落到 MockServiceAdapter(假"已连接"+假日志)。
+!.env.production
+*.pem
+*.key
+*.pfx
+*.jks
+id_rsa
+id_rsa.pub
+id_dsa
+id_ed25519
+credentials*
+
+# ------------------------------ IDE / OS temp -------------------------------- #
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ------------------------------ UI (Vue/Electron) ---------------------------- #
+mvp/ui/node_modules/
+mvp/ui/dist/
+mvp/ui/out/
+mvp/ui/release/
+mvp/ui/.vite/
+mvp/ui/*.log
+# allow the mvp/logs/.gitignore guard to be committed (logs/ above ignores the dir)
+!mvp/logs/
+!mvp/logs/.gitignore
+
+# --------------------------- benchmark 研究数据 ------------------------------ #
+# 只收 md/py/json 等小文件; 对照图/抽帧/视频等大文件不入库。
+mvp/benchmark/**/*.jpg
+mvp/benchmark/**/*.jpeg
+mvp/benchmark/**/*.png
+mvp/benchmark/**/*.webm
+mvp/benchmark/**/*.mp4
+mvp/benchmark/**/_frames*/
+mvp/benchmark/user_case/cases/
+mvp/benchmark/user_case/gt_v3/
+mvp/benchmark/user_case/gt_review/
+mvp/benchmark/user_case/gt_rebuild/
+mvp/benchmark/user_case/gt_A/
+mvp/benchmark/user_case/contact/
+mvp/benchmark/user_case/contact2/
+mvp/benchmark/user_case/export_smoke/
+mvp/benchmark/release/
+mvp/benchmark/user_case/semantic_signal/work/
+
+# ------------------------------ 杂项本地文件 --------------------------------- #
+.claude/
+cur
+bundle_report.md
+bundle_optimization_report.md
+mvp/scripts/build_backend_work/
+mvp/scripts/dist_backend/
+mvp/scripts/build_backend.log
+
+# ===== ↑ 以上同步自 .gitignore（「从 .gitignore 同步」只重写以上部分）=====
+.git/
+.hg/
+.svn/
+node_modules/
+bower_components/
+jspm_packages/
+site-packages/
+coverage/
+htmlcov/
+lcov-report/
+cmakefiles/
+cmake-build-*/
+bazel-*/
+pods/
+deriveddata/
+storybook-static/
+playwright-report/
+test-results/
+allure-results/
+allure-report/
+cdk.out/
+*.dist-info/
+eggs/
+pip-wheel-metadata/
+wheels/
+# ----- ↑ 以上为 ZCode 默认排除规则（自定义规则请写在本行下方，不会被同步/恢复改动）-----
+# 自定义规则写在下方（本行提示可删除）

@@ -1,5 +1,7 @@
 # 单调弱先验进候选生成（NEXT_STEPS ②③，2026-09-02 拍板实施）——实测零触发
 
+> **GT 版本**（2026-10-01 补登记，批量执行）：现行 139 条 verified（ground_truth_v4.json + test1-3.json，2026-09-02 定案；2026-09-30 重锚定 12 行后仍为现行基准）。〔推断级：按成文日期推定，依据 GT_VERSION_REGISTER_PROPOSAL_20260928.md〕
+
 > 做法: 把「编辑序≈原片序」作为候选生成阶段的弱倾向（非仅事后修复）。对 Ambiguous 型段
 > （>=2 保留证据簇）用前序段定位中点做时间轴锚点：primary 在带外(>ta_band_s=45s)且存在
 > 带内竞争候选(cover 落差<=ta_max_cover_drop=0.10)时, 切换 primary 到带内候选。

@@ -1,5 +1,7 @@
 # FINDINGS —— patch×global 加权融合（H-F1）探针 = 不救失败族，只在"已对"案例上放大 margin
 
+> **GT 版本**（2026-10-01 补登记，批量执行）：现行 139 条 verified（ground_truth_v4.json + test1-3.json，2026-09-02 定案；2026-09-30 重锚定 12 行后仍为现行基准）（探针真值窗取自 v4/test3，rank/margin 口径不涉三指标）。〔推断级：按成文日期推定，依据 GT_VERSION_REGISTER_PROPOSAL_20260928.md〕
+
 > **日期**：2026-09-26　**性质**：探针（零 runtime 改动）　**触发**：采纳评估建议 B
 > **依据**：09 §4/§9.4 —— \`global_weight=0.45\` / \`patch_weight=0.55\` 已字节确证，且二者出现在
 > \`matching/feature_index/retrieval.py\` 的 \`match_commentary_scenes\` 的 **co_consts**（代码级互证）。

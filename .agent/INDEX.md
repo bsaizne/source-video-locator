@@ -190,6 +190,18 @@ D:\claudework\benchmark
   原片 1fps 索引 top-20，分 GT 疑错/同源重复/推翻读图/无效四类，产物 `work/gt_tickets_retrieval.json`。
 - `mvp/scripts/review_retro_three.py` — 历史纯数据判负的补读图复核出图（ordered_search 回退 /
   密度翻转 / 合并拼接点两侧），产物 `work/retro_review_visual/`。
+- `mvp/scripts/probe_split_patch_timing.py` / `rerun_split_patch_arms.py` / `time_full_locate_optimized.py`
+  — 续34：两旋钮段耗时归因（monkey-patch 计时，不重跑整条 locate）/ 生产路径双臂四片复跑 /
+  整条 locate A/B。产物 `work/spl_patch_timing/*`、`work/spl_patch_arms/*`。
+- `mvp/scripts/attr_packaged_headless.py` — **打包态归因 harness（续36）**：以与 Electron 完全相同的
+  env（release 通道 + 会话令牌 + 随机端口 + 包内 ffmpeg/模型 + 同一 `SVL_DATA_DIR` 复用索引）直接起
+  包内 `backend.exe`，无 UI/无预览/无观察，轮询 `/api/tasks/{id}` 记录 (时刻,stage,message) + 轮询延迟 +
+  后端进程 CPU。第 4 参 `mode=venv` = 用同一 harness 起源码树 `run_backend.py`（分离冻结包 vs 服务形态）。
+  产物 `work/pkg_attr/{headless,venvhttp}_<case>.{events.csv,summary.json,results.json}`。
+- `mvp/scripts/attr_env_phase_table.py` — 把 E2E 打包日志 / 各臂 events 折成同一张阶段耗时表（缺臂少列，不编数）。
+- `mvp/scripts/attr_lab_arm_timestamped.py` — 给 venv 直跑臂加 elapsed 时间戳（rerun 产物先留痕再重跑）。
+- `mvp/scripts/accept_packaged_bundle.py` — **包体验收（续36 新增，重打后必跑）**：patch 资产在位 +
+  sha256 + 合成冒烟 `patch reranker device=dml` + 耗时阈值 + 出结果；对未修包实测 `FAILED=5`。
 - `mvp/scripts/visual_gate_flips.py` — 被拒段逐图复核出图（QUERY / REJECTED / GT 三行）。
 - `mvp/scripts/bench_perf_tiers.py` — 10/60/128min 三档性能实测（硬断言 DirectMLBackend）。
 - `mvp/scripts/blind_sidechannel.py` — 盲判帧差旁证（跨点帧差 / 同侧基线）。

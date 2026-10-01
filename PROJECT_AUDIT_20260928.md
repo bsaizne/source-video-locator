@@ -93,3 +93,25 @@
 - **等用户拍板**：残留清理（§2 🔴/🟡 项）、git 提交、置信公式豁免（2026-09-01 冻结护栏）、UI/导出验收打包授权（vote_prior/dense_recheck 翻默认开的前置）。
 - **可执行（已有材料）**：展示层移植（切点时间线展开+单帧守卫）、ED 快速分镜复核、ordered_search 真值参数探针、speed_fill、口径档对照收尾。
 - **等外部**：执行方 D 段剩余口径档（接口已留）；机器码专项（N1/N4 推翻后价值缩水，唯 candidate_count 等占位符）。
+
+## 9. 应用数据目录（SVL_DATA_DIR）残留清单（2026-10-01 续35 卫生补登）
+
+§1/§2 只覆盖**仓内**尺寸，产品运行时数据落在用户数据目录，此前无在册清单——续30 登记的
+「成片渲染产物 `rendered/` 未进残留清理清单」正是这个缺口的一个成员。实测（2026-10-01，
+两个目录都在用：venv/研究臂走 `%LOCALAPPDATA%\SourceVideoLocator`，打包整包走
+`%APPDATA%\Video Locator AI\data`，Electron 通过 `SVL_DATA_DIR` 指过去）：
+
+| 子目录 | LOCALAPPDATA | APPDATA(打包) | 内容 | 判定 |
+|---|---|---|---|---|
+| `merged/` | **1.9 GB** | 11 MB | 多原片流复制合并产物（video.concat） | 🟡 可删，下次合并重算（copy 流复制，分钟级）；删前确认无脚本按名引用 |
+| `index/` | 89 MB | 109 MB | 原片特征索引 `<name>_<hash>.idx/` | ✅ 保留——四片索引是复现基线依赖，重建=全片抽帧+推理 |
+| `models/` | 85 MB | 85 MB | dinov2 CLS ONNX + vits14 权重 | ✅ 保留（重下/重导出成本高，且启动断言依赖） |
+| `edited_cache/` | 164 MB | 28 MB | 编辑片抓帧/特征缓存 | 🔴 可删，自动重建（零语义风险） |
+| `previews/` | 0 | 1.9 MB | 结果页双画面预览抽帧 | 🔴 可删，自动重建 |
+| `rendered/` | 未生成 | 未生成 | **成片渲染产物**（`paths.rendered_root`，2026-09-29 续30 移植） | 🔴 可删，自动重建。**本条目即续30 尾巴的补登**：UI 传显式 `out_dir` 时不进此目录（r3/r4 E2E 实跑成片落在 `work/ui_accept/export_out/movie_test2-om_d9b1d3850e3a.mp4`，96 MB），排查残留时两处都要看 |
+| `exports/` | 0 | 96 KB | 导出的工程/清单文件 | 🟡 用户资产，不进自动清理 |
+| `settings.json` | 1 KB | 1 KB | 设备偏好（preferred=directml） | ✅ 保留 |
+
+- **统一清理入口仍未实现**：`paths.py` 的 docstring 写了「残留清理由统一入口管理」，但仓内没有
+  对应函数/脚本——本表就是那个入口的判据来源；执行删除属「等拍板」动作（与 §2 同口径）。
+- 合计可释放（🔴 + 🟡 中的 merged）≈ **2.06 GB**，全部在产品运行时目录、不动仓内证据链。

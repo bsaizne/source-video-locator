@@ -1,5 +1,7 @@
 # FINDINGS — P0 密集 10fps 起点复核 + P1a 连续偏移修正 test1 实测（2026-09-26 续10f）
 
+> **GT 版本**（2026-10-01 补登记，批量执行）：现行 139 条 verified（ground_truth_v4.json + test1-3.json，2026-09-02 定案；2026-09-30 重锚定 12 行后仍为现行基准）；文内基线 117/139 = vote_prior 移植前口径，文内引用的旧基线属当时现役口径、现已过时，引用数字须注明口径代际（现行基线见 .agent/STATE.md）。〔推断级：按成文日期推定，依据 GT_VERSION_REGISTER_PROPOSAL_20260928.md〕
+
 > **前置核对（用户要求，全部通过）**：`mvp/scripts/verify_refine_bindings.py` ——
 > ① **49/49 新键字节级证实**（键名在偏移处含 0x61 前缀剔除 + val_off 值解码一致；`timeline_strictness`="normal" 字符串单独在位）；
 > ② **名表/值表排序一致性** profile 区与 adjacent 区均 True（防相邻配对假象，DECISIONS 2026-09-26 纪律）；

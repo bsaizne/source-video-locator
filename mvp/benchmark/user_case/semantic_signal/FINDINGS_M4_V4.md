@@ -1,5 +1,7 @@
 # 索引密度探针 M4 —— v4 GT 重跑（p26 行修正, 2026-09-04）
 
+> **GT 版本**（2026-10-01 补登记，批量执行）：v4（2026-09-01 修正）重跑版✅（CHANGELOG 2026-09-04）；对应旧口径版 FINDINGS_M4.md 已作废留档。现行基准已再经 2026-09-30 重锚定。
+
 > 性质: 研究侧重跑（零 runtime 改动, DML batch=1, 664s, 仅 p26 案例）
 > 起因: FINDINGS_REVIEW_M1M8 判 M4 的 p26 行「旧真值窗 2809; 修正后真值 1766 → 数字需重算」。
 > 脚本: `mvp/scripts/research_semantic_signal_M4_density_v4.py` | 数据: `work/semantic_signal_M4_results_v4.json`

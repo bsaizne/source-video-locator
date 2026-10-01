@@ -1,5 +1,7 @@
 # Phase 21 场景指纹召回扩展层 — FINDINGS(2026-08-30)
 
+> **GT 版本**（2026-10-01 补登记，批量执行）：v3（41 条镜头级，2026-08-28 定案；早于 v4/test1-3 与 09-30 重锚定）。场景扩池层已产品化默认开（scene_recall_enabled），现行基线见 .agent/STATE.md。
+
 > 交接执行单:场景表(索引侧)+ 证据扩池(检索后)+ 回归门槛 + 单测 + 收尾。
 > 原型:`mvp/scripts/research_scene_retrieval.py`(p26 场景指纹 12→3);实验证据:`scene_retrieval_results.json`。
 

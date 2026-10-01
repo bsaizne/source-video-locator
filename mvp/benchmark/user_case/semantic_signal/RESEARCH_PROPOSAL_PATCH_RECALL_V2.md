@@ -1,5 +1,7 @@
 # 立项提案：patch 召回 v2 —— 池外/低置信段的 patch 级二次召回（零训练）
 
+> **GT 版本**（2026-10-01 补登记，批量执行）：现行 139 条 verified（ground_truth_v4.json + test1-3.json，2026-09-02 定案；2026-09-30 重锚定 12 行后仍为现行基准）。〔推断级：按成文日期推定，依据 GT_VERSION_REGISTER_PROPOSAL_20260928.md〕
+
 > 日期：2026-09-06 ｜ 状态：**已立项（用户拍板），门控设计探针进行中**
 > 性质：召回层补充（仅低置信/池外段触发），零训练、零新依赖、需 bump feature_version 与否视实现（候选池不落索引则不需要）
 > 前置：本日判决探针 `probe_patch_recall_v2.py` ——「patch 已死」结论在 twopass+最新 GT 条件下被部分推翻

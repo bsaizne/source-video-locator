@@ -1,5 +1,7 @@
 # Phase 24-2 · 多模态判定探针 M1 FINDINGS —— 字幕语义召回 + VLM 事件级判定
 
+> **GT 版本**（2026-10-01 补登记，批量执行）：原版基于 v3（2026-09-01 成文，同日 GT 大修正）；v4 后由 M1-v2 复审覆盖（14 案例本模型直看帧，TODO 2026-09-06(XII)），引用以复审为准。
+
 > 日期:2026-09-01 | 性质:**研究侧探针(零 runtime 改动, VLM 调用 36 次)**
 > 起因:用户拍板分层检索方向「**结合多模态进行判定**」(A: 召回层+判定层两层都测)
 > 脚本:`mvp/scripts/research_semantic_signal_M1_multimodal.py` | 数据:`work/semantic_signal_M1_results.json`

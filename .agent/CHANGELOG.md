@@ -1,5 +1,440 @@
 # CHANGELOG
 
+## 2026-10-02（续40 后续三）— r6 出包：UI 三修复 + 售后三件进分发包（包体真机全验）
+
+**用户拍板「出包吧」**。`Video-Locator-win-x64-20261002r6.zip`（1.68GB / 8364 条目，
+win-unpacked 01:38 全新构建，BUILD_EXIT=0）。
+
+- **包体装配验收** `accept_packaged_bundle.py` = **FAILED=0**（syn 冒烟 22.3s、device=dml）。
+- **三防冒烟**（`work/pkg_attr/three_defense_smoke_r6.py`）= 全过（LISTEN/health200/401/无令牌拒启 rc=1）。
+- **调试档包内冒烟（新）**：包内 backend.exe + `SVL_LOG_DEBUG=1` → 日志目录出现
+  `debug.log` + `video_locator.log` 双档，health 200 = PASS。
+- **启动冒烟**：Electron 4 进程 + backend.exe 子进程 = PASS。
+- **包体真机快验（合成素材，CDP 驱动 r6 exe）**：首页卡徽标「**未分析**」✓；分析实时文案
+  「复用已有母片索引：source.mp4 / 镜头边界粗扫 / 逐段定位 1/1」✓；进度**一位小数 92.0%** +
+  计时器走动 ✓；跑完 1 结果 HIGH 0.99 + 自动预览；包内日志 `backend selected=directml` +
+  `patch reranker device=dml`（01:45:24）✓。
+- **r6 内容 = r5 全部 + 续40 后续（UI 三修复）+ 续40 后续二（售后三件）**。
+  渲染层修复入包经 grep 产物确证（ProjectCard chunk 含「未分析」、AnalysisPage 含 toFixed(1)）。
+- **数据留存裁决（用户 2026-10-02）**：应用数据目录残留（merged 1.9GB / edited_cache /
+  index 等，PROJECT_AUDIT §9）**不删、待办不再挂档案**；本次新查项（data_fresh_probe、
+  Electron 缓存、.idx.stale、mvp/logs）同样不删不登记。§9 仅作审计事实留档。
+- **现役包 = r6**；r5 zip 处置未拍板（默认保留）。
+
+## 2026-10-02（续40 后续二）— 售后可诊断性三件：脱敏补强 + 三级日志 + 客服编号对照表
+
+**用户拍板「按推荐顺序，先启动脱敏三件」**（差集 TOP8 第 5 项，续17 登记）。
+先纠档：路径脱敏主体**续19 T1-2 已落地**（`redact_text` + `RedactingFilter`，msg/traceback/URL/token 全覆盖），
+本批 = 补漏 + 补齐另两件：
+
+- **① 脱敏补强**：a) `launcher.make_server` 关 uvicorn `access_log`（访问行带**原始 query**
+  如 `video_path=D%3A%5C...` 且走 uvicorn 自己的 logger 不过我方过滤器；`module=api` 请求日志已覆盖可诊断性）；
+  b) 新规则 `_PCT_WIN_PATH`（百分号编码盘符路径 → `<PATH:文件名>`，保留文件名利于客服对单）；
+  c) `_API_PATH_QUERY`（`/api/...?*path=` 参数值打码，负向前瞻避免二次吞 `<PATH:>`）。
+- **② 三级日志**（对齐竞品 wp.diagnostics 客户/支持/调试分层，不抄 .cmlog 加密形态）：
+  客户档 = UI 话术 + LOC 码（已有）；支持档 = `video_locator.log`（INFO+，脱敏，「下载日志」即此）；
+  **调试档（新）**= `debug.log`（DEBUG 全量、同样脱敏、20MB×3，默认**关**，
+  env `SVL_LOG_DEBUG=1` 由支持人员指导开启；主文件 handler 钉 INFO 两档互不重复）。
+- **③ 客服编号对照表** `mvp/docs/SUPPORT_ERROR_CODES.md`：全部 **13 个对外码**
+  （LOC-1000/1101/1102/1103/1104/1105/1106/1107/1109/1201/2001/2002/9999）× 含义/用户话术/
+  常见触发/客服处置 + 竞品 11 族归口参照；AUTH/DISK/MEM 三类**预留占位**（对应功能未做）。
+  防漂移 = 新测试 `test_support_codes_doc.py`：源码码集 ⇔ 表码集双向相等 + 核心异常类码唯一。
+- **验证**：后端 **469（+9）** · API **100** 全绿；前端零改动。规则次序教训：整段 query 打码
+  会吞掉既有 `session=<REDACTED>` 断言语义 ⇒ 收窄为只打 `*path=` 值；百分号正则懒惰匹配只吃到
+  前缀 ⇒ 改贪婪到 `&`/空白分隔符（两条均有回归锁）。
+- **r6 重打累计内容** = 续40 后续（UI 三修复）+ 本批三件（launcher/logging/errors 文档）。
+
+## 2026-10-02（续40 后续）— 真机 UI 三问题修复：REFINE 进度区间 + 一位小数 + 全量中文话术
+
+**用户真机反馈三条**：① 项目卡「empty」英文技术值漏到界面 + 长文件名逐字换行 + 徽标与邻卡挤；
+② 进度条一直卡 92、要精确到小数点后一位；③ 「高精度精修：patch 局部精排」暴露技术点，全部进度文案重写。
+
+- **① ProjectCard**：`STATUS_LABEL.empty='未分析'`（原样漏英文的根因=标签表缺键直显枚举值）；
+  图标+徽标成组靠左（原 space-between 把徽标推到右缘与邻卡图标贴一起）；`.pcard__meta` 单行省略号
+  （长合并文件名不再「合 并」逐字折行）。
+- **② 进度逻辑**：新增 `ProgressStage.REFINE`，worker 映射 92→98 逐事件插值（EXPORT 挪 98→99.5）——
+  段循环后的全局修复/拆分/精排链不再把进度钳死 92；`Task.progress` 改 float、
+  `map_progress_stage` 输出**一位小数**、`ProgressPipeline` 显示 `toFixed(1)`。
+- **③ 话术全量重写（locator_service 21 条消息）**：`patch 局部精排`→「画面深度复核 i/n」、
+  `segment i/n: text card/retrieval/localize/confidence`→「逐段定位 i/n」、`reuse index`→
+  「复用已有母片索引」、`特征提取`→「分析剪辑画面」、`twopass coarse sampling/segmentation`→
+  「镜头边界粗扫/精修」、`exporting/exported`→「正在导出/已导出」等；REFINE 链入口补发首条消息
+  覆盖此前 ~6.5min 静默空窗（text anchor 批处理段）。
+- **验证**：后端 **460** · API **100（+1 REFINE 区间测试；2 处期望随小数更新）** · vitest **132** ·
+  双 typecheck · `test:mock` 全绿；浏览器 dev + 源码树后端（DML 生效）合成素材实跑：
+  「母片索引已完成（共 90 帧）/镜头边界粗扫/画面深度复核 1/1/**98.0%**」逐条目检 ✓；
+  首页卡「未分析」徽标 + 长名单行截断 ✓。
+- **登记**：dev 浏览器态侧栏徽标显示「CPU 回退」而实测 backend selected=directml（打包态 r5 显示
+  正确 = GPU (DirectML)）——dev 专属形态，未修；本次改动**未进 r5 包**，需 r6 重打才到用户手上。
+
+## 2026-10-02（续40）— r5 重打 + 包体验收全过：打包态 62.6→27.0 min，续36 修复真机确证
+
+**用户拍板 = r5 重打 + 包体验收**。全部通过：
+
+- **构建**：`build-release.ps1` 四阶段全过 → `release/Video-Locator-win-x64-20261001r5.zip`
+  （1.68GB / 8364 条目，含 patch 资产 4 条目增量；r4 zip 保留未删，删旧包需另行授权）。
+- **首跑抓到一个构建缺陷**：续36 新增的 patch 资产 sha256 断言用 `Get-Content -Raw`（ANSI/GBK）
+  读 UTF-8 `asset.json` ⇒ `ConvertFrom-Json` 崩（该断言 r5 前从未实跑）。修 = 加 `-Encoding UTF8`。
+- **包体装配验收** `accept_packaged_bundle.py` = **FAILED=0**（r4 实测 FAILED=5）：资产在位 +
+  sha256 双对 + 包内 backend.exe 合成冒烟 23.2s ≤45s、`backend selected=directml`、
+  **`patch reranker device=dml`**。
+- **三防冒烟**（新 `work/pkg_attr/three_defense_smoke_r5.py`，产物只落 work/）= 全过：
+  BACKEND_LISTEN 公告 / health 200 / 受保护端点无令牌 401 / release 无令牌拒启 rc=1。
+  ⚠️ 注：`/api/health` 属放行路径不能当门禁负例（首版误用已改）。
+- **真机 E2E（test2 全链，CDP 驱动整包）**：
+  ① **续36 根因修复真机确证**：包内日志 `patch reranker device=dml`（r3/r4 同位置 = cpu）；
+  ② **打包态 locate elapsed = 1622.0s = 27.0 min**（r3/r4 = 3756.7s 62.6 min；实验室 1396.7s）
+    ⇒ 「打包态应回到 ~23min 级」达成（残余 1.16× 为段循环前 P 段）；
+  ③ 结果与 r3 E2E 逐字段一致：67 段 / 31高 9中 25低 2未定位 / shot_split 54→67（split 9, 14 shots）/
+    patch_refine refined 65 switched 11 ⇒ 零语义漂移；
+  ④ **r4 尾巴一 = 精修进度文案落地**：UI 实测「高精度精修：patch 局部精排 10/67」逐段推进；
+  ⑤ **r4 尾巴二 = 导出默认项**：置信门槛默认选中「全部（低置信也作为主片段导出）」。
+- **新登记（非阻塞）**：a) 段循环结束→shot_split 开始之间约 6.5 min（sequence/temporal/conflict
+  修复 + 置信）无任何进度消息且百分比单调钳死 92%，用户观感仍像卡住——候选 UX 尾巴；
+  b) 包内 CLS `dinov2_cls_384/asset.json` 无 sha256 ⇒ 每次启动 WARNING
+  「asset integrity skipped」（既有，非 r5 回归）；c) 本次真机跑未做渲染成片（r3 已验）。
+- **git 仍未提交（等口令）**：续33后续~续40 全部，含本次 `build-release.ps1` 编码修复。
+
+## 2026-10-01（续39）— GT 20条工单结案：17修订/3保留，同批重计133/125/138
+
+> **▶ 2026-10-01（续39）— 20 条 GT 缺口核对及写回完成**
+> 用户令「那你去完成啊」：原生帧节奏解码、切点/动作图证与源帧辅助匹配完成；**17 条修订、3 条保留**。
+> 10 条原片窗修订 + 7 条仅 ED 锚点收紧；139 个 ID、其余119正例、9负例保留，未扩充蒙太奇标签。
+> 四份 GT 版本追加 `gt-gap-review-20261001-r1`；备份 `work/gt_backup_pre_gap_review_20261001/`；MD5 manifest 已更新。
+> 原 ON 结果批不变，同评估器重计 **严格 133/139 · 主片段 125/139 · 场景 138/139 · 负例误报 4/9**。
+> 相对旧GT读数132/119/137：这是**标注修订导致重计，不是算法提升**。p34 HIT→part 如实保留。
+> t1r08c 零时长已改一帧锚点，但严格仍未命中（MISS→part）；续38“实际覆盖该点”过强，现撤回。
+> t2r03b 旧“同源重复”已追加取代说明；t1r22/t1r25/t2r06c 原标注成立。
+> **范围/精度**：本轮核对20工单，非全139条重标；源窗为图证帧时间包络，不声称亚帧精度；执行者Codex，非用户逐条亲审。
+> 报告 `mvp/benchmark/user_case/semantic_signal/FINDINGS_GT_GAP_REVIEW_20261001.md`；最终图证 `work/gap_gt_review_final_20261001/`。
+> 校验通过：输入8哈希、备份逐字节、结果4哈希不变、未选119正例/9负例不变、ID保留。GT工单结案，算法仍有6条严格未命中。
+
+- 续38中间记录保留；本条取代其待定结论，特别是t1r08c“有正确结果”的过强判断。四份生产结果与评估器/runtime未改；未提交、未打包。
+
+
+## 2026-10-01（续38）— 20 条 GT 缺口采样图证审计；纠正三帧多数票与单代表行的误判
+
+- 用户提醒「gt还没核对呢」；当前主线调整为先GT，r5未打包。
+- 复用已有audit.json/7张图，补20张详细图（420帧），复算当前GT与ON批确认132/119、工单20条一致；锁定4份GT+4份结果SHA256。
+- 1零时长（t1r08c实际有正确结果）/2明确重锚候选（t1r13a、t3r10）/4我方错位/10复合标注/3待定。
+- 撤回t1r12a、t3r02a整条GT错的初判：切点前确有旧GT内容；t2r02b/t2r03b也被三帧抽样遗漏短锚点。旧“同源重复”注释不据此静默删除。
+- 完成的是逐条采样审计，原生帧边界与用户裁决仍待办；GT、评估器、runtime均未改，不能上修指标。
+- 报告 `mvp/benchmark/user_case/semantic_signal/FINDINGS_GT_GAP_REVIEW_20261001.md`；可浏览证据 `work/gap_gt_review_20261001/review.html`、输入指纹 `review.json`。
+
+
+## 2026-10-01（续37 后续二）— 竞品全量重挖（函数级 varnames + 内联常量）= 竞品侧精度杠杆已空
+
+- 用户令「重新挖竞品，全部挖干净」。62 个算法模块 9,850 常量逐值转储逐个读完（新证据类型 = 每函数 co_varnames + 内联数值）。
+- 新发现 3 项从未测过的差异，全部实测：①主 span 1× 等长偏移对位锚定 = 导出 119→119（+4−4）；
+  ②编辑帧裁黑白边（竞品 inRange 9/246 + 0.4）= 2mkv 生产路径端到端 严格 37→36 / 导出 34→33 / 场景 39→38，净负；
+  ③窗内峰位移 = 119→119。三项全部关闭。
+- 总账（22 项机制 × 我方状态）见 `mvp/benchmark/user_case/competitor_cutmatch/FINDINGS_COMPETITOR_REDIG_20261001.md`。
+- 零 `mvp/src` 改动；产物 `work/cm_redig/`。
+
+## 2026-10-01（续37 后续）— 「窗内峰位移」探针 = 净零，关闭；20 行导出缺口按图分诊
+
+- **问题**：用户问「主 span 选错，竞品用什么替换 / 换机制是否更好」。逐行拆 13 行「严格 HIT·主 span 未中」：
+  命中的都是 14~48s 场景宽 sub 蹭覆盖，**不是可替换的正确主 span**；竞品在其中只中 5 行（全是局部稠密对位类），
+  全集仍是我方独家 43 vs 竞品独家 7 ⇒ **不证明换机制更好**。
+- **假设**：`patch_refine` 算了窗内 `peak_s` 却丢弃峰位置（只能在 ≥3s 聚簇中心间切）。
+  探针 `mvp/scripts/probe_inwindow_peak.py`（A 窗内均值峰 / B 保时序对位偏移；同网格同 0.45/0.55 同 margin 0.05，不扫参；
+  DML，四片 ≈51min）。**结果：导出 119→119（A）/119→119（B，+3 −3），严格 132、FP 4 均不变 ⇒ 判负关闭**。
+- **13 行定向诊断 + 读图（8 行，`work/inwindow_peak_probe/gt_audit/audit_{1,2}.png`）**：
+  t2r06c = 真错可修（GT 同人同蓝盒，融合分 GT 0.839 ≫ 主 0.622，仅因 GT 距主 5.4s 超 ±5s 窗 0.4s）；
+  t3r10 / p40 = 我方主 span 画面与 ED 构图更像（**疑 GT 窗偏**）；t1r13a = ED 内容与 GT/主 span 均不符（疑 GT）；
+  t1r14a / t1r22 = 同一镜头内 3~8s 偏移（静态暗景，观感差异小）；p34 / t3r02a = 暗景/火景三方均不同镜，未定。
+  ⇒ 剩余缺口**异质且掺 GT 疑点**，无单一可移植机制。
+- 零 `mvp/src` 改动；产物 `work/inwindow_peak_probe/`（summary.txt + A/B 结果批 + 读图）。
+
+## 2026-10-01（续37）— 补 patch 双输出 ONNX 再生成脚本（续36 登记缺口）
+
+- 新增 `mvp/scripts/export_patch_onnx.py`：同 `export_dml_model.py` 法（同权重解析/opset 17/默认外部权重），
+  导出图 = `DinoV2Small.forward_features` 双输出（`embedding` [N,384] + `patches` [N,1369,384]，不含 L2）。
+  默认出到 `work/_patch_onnx_export/`，**不覆盖**仓内资产；内置四项校验（checker+IO 约定 / torch-vs-onnx /
+  新旧资产对照 / `.data` vs CLS 资产字节）。
+- 实测：torch-vs-onnx CLS 1.3e-5、patches 1.8e-4（cos=1.0）；**新 vs 仓内资产两路 max|d|=0**；
+  `.data` sha256 = 仓内 = CLS 资产；`PatchReranker` 加载新图 `device=dml`。`.onnx` 图字节不同（元数据），
+  故仓内资产不替换、sha256 锁定不变，仅改 `asset.json.source` 指向脚本（构建/验收只消费 `sha256`）。
+- 未改任何 `mvp/src`；后端 460 全绿（skipped=2）。未提交 git。
+
+## 2026-10-01（续36）— 打包态归因闭环：62.6min 的根因 = patch 精排器静默回退 CPU torch（资产没随包）
+
+**动机**：用户拍板「打包态性能归因第二步」+ 顺手清四件接线卫生。续35 只做到「环境罚 2.69x、
+问题在环境层」，本批把那一步拆到底并落到**具体缺失资产**。
+
+**三臂对照（test2、同代码、同索引复用、两旋钮开）**：整包 E2E 3756.7s（主循环 1245s + 后处理 2512s）/
+打包 backend.exe **headless** 3625.0s（1150s + 2475s）/ 源码树直跑 1396.7s。
+⇒ **UI/预览/CUA 观察无罪**（去掉整包 UI 后 3625 vs 3757，差 3.5%；逐段 21.0s vs 22.0s），
+**冻结包本体罚 2.60x 且各阶段均匀**——推翻续35 的运行时干扰假设。
+
+**根因（一条日志行）**：包内 `patch reranker device=cpu`、源码树 `device=dml`。
+`patch_rerank.py:157 resolve_patch_onnx()` 解析顺序 = 显式配置 → `SVL_PATCH_ONNX` → 相对**源码树**
+`work/_patch_onnx_tmp/dinov2_cls_patch.onnx`；冻结包没有 `work/`、Electron 只注入了 `SVL_DML_MODEL`
+⇒ 精排器落 `_try_torch()` 用 CPU torch 出 1369 patch 特征，而它被「逐段近场重排」与「patch_refine」
+两条热路径共用。`locator_service.py:1751` 当时只记 info，验收只看「起得来跑得完」→ 瞒了约两周。
+
+**双向验证**：合成素材同一 harness——打包无图 78.5s / 打包加 `SVL_PATCH_ONNX` **20.2s** / 源码树 20.1s。
+大素材（Arm D，打包 backend.exe + 图）= **1400.5s**，与 venv 1396.7s 差 0.3%，主循环 365s、后处理 1036s。
+⇒ 冻结包本体无罚，2.69x 全部来自这一处缺失。
+**零语义三方闭合**：Arm A（CPU 精排）/ Arm D（DML 精排）/ venv 三份 test2 结果批，67 段含 confidence
++ 信封字段两两差异 0（仅 result_id 不同）⇒ 性能缺陷、非质量缺陷，生产基线读数不变、三指标无需重跑。
+已排除项：ffmpeg 二进制（tools 与包内 md5 相同）、numpy OpenBLAS dll（相同）、轮询开销（p50 4ms）。
+
+**落地（用户拍板「直接随包」，实测更省：权重与 CLS 那份字节相同）**：
+① `dinov2_cls_patch.onnx`（78KB 图）**入仓** `mvp/ui/resources/models/dinov2_cls_patch/` + `asset.json`
+（记图/权重 sha256、IO=输入 1×3×518×518、输出 embedding+patches(1369,384)、opset 17）；外部权重
+由构建按 ORT 要求的同名从 CLS 资产复制（sha256 `5af75ca5…` 实测两份一致）⇒ 分发包净增 **≈88MB** 非 176MB；
+② `build-release.ps1` 装配 + fail-fast + sha256 断言（资产没进去就不出包）；
+③ `electron/main.ts` 打包态注入 `SVL_PATCH_ONNX`；
+④ `locator_service._announce_patch_reranker()`：GPU 特征后端 + CPU 精排 = **WARNING**（含修复指引），3 条单测；
+⑤ 新 `mvp/scripts/accept_packaged_bundle.py` 包体验收（资产在位/摘要/合成冒烟 `device=dml`/阈值 45s/出结果）。
+负路径已实测：对未重打的 win-unpacked 该脚本报 `FAILED=5`（缺清单/缺图/缺权重/`device=cpu`/75.4s 超阈值）。
+
+**接线卫生四件**：`HttpServiceAdapter` 兜底 `min_confidence 'MEDIUM'→'LOW'`（与 2026-10-01「默认全部导出」
+口径一致，含回归锁；顺带更正旧「默认不含低置信」注释）；`rendered/` 连同整个应用数据目录残留清单补进
+`PROJECT_AUDIT_20260928.md` 新 §9（merged 1.9GB / index / models / edited_cache / previews / rendered /
+exports 逐项判定，并登记「统一清理入口仍未实现」）；侧栏周期健康重探（`session.startHealthWatch` 20s，
+断→通重读设备设置，`App.vue` 只在 READY 后启、Mock 态不启，2 条 vitest）；Mock 导出告警改 **opt-in**
+`localStorage 'svl.mock.exportWarnings'='1'`（**不在 Mock 里复制后端判据**，避免通道漂移，2 条 vitest）。
+
+**门禁**：后端 **460 OK（skipped=2，+3）** · API **99 OK** · vitest **132**（15 文件全绿，+4：
+其中 `exportResults POSTs /api/export with output_dir` 的默认门槛断言随口径改为 LOW）· 双 typecheck 干净 ·
+`test:mock` PASS。`attr_packaged_headless.py` 一次事故留痕：argv 传空串被 `Path("")`→`.` 解析，
+把索引建进 `win-unpacked/resources/backend/`，已中止并清空误建目录（无文件落盘），脚本补空串容错 +
+「SVL_DATA_DIR 不得落在包体资源目录内」断言。
+
+**产物**：`work/pkg_attr/`（armA_packaged_cpu_reranker.* / armD_packaged_dml_reranker.* / events.csv /
+summary.json / *_console.log / smoke_data）；文档
+`semantic_signal/FINDINGS_PKG_PATCH_RERANKER_CPU_FALLBACK_20261001.md`；脚本
+`attr_packaged_headless.py`、`attr_lab_arm_timestamped.py`（已写未跑，venv 阶段时间戳用）、
+`attr_env_phase_table.py`、`accept_packaged_bundle.py`。
+
+**未做/待拍板**：① **r5 重打**（本批修复只有重打才进分发包；`accept_packaged_bundle.py` 需对 r5 复跑）；
+② git 提交（续33后续~续36 全部未提交，铁律等口令）；③ patch 图在仓内**无再生成脚本**
+（`export_dml_model.py` 只出 CLS），已登记 Known Issues；④ mac 包会多带 88MB 死资产（MPS 侧精排本就 torch），
+H3 正式化时再裁。
+
+
+## 2026-10-01（续35 归因）— 打包态性能归因第一步：环境罚 2.69× 确证，推理/抓帧吞吐排除
+
+**动机**：E2E 实测打包态 test2 ON 臂全链 3756.7s ≈ 62.6 min，超实验室串行口径（40 min），抓帧提速疑似未兑现。
+
+**实验 1（全链对照）**：实验环境（venv 直跑、DML 硬断言 DirectMLBackend、现役优化后代码）
+重跑 test2 ON 臂（`rerun_split_patch_arms.py on test2`，旧产物先备份）= **1396.7s ≈ 23.3 min**。
+⇒ 打包环境罚 = 62.6 / 23.3 ≈ **2.69×**——「1.56×」实为低估，性能问题确证在**打包运行环境层**，
+不是 test2 外推失真、不是代码层。
+
+**实验 2（微对照，分离推理 vs IO）**：同一文件（1.mp4，127 帧）经打包 backend.exe（HTTP /api/index）
+与 venv 直跑各建一次索引：**13.7 fps vs 12.7 fps**——打包态 DML 推理 + 基础抓帧吞吐**无差**
+（打包甚至略快，噪声内）。⇒ 慢不在推理层、不在 ffmpeg 单帧 spawn 层。
+
+**零语义跨环境再证（副产品）**：新旧 on_test2 结果批 strip(`result_id`) 后 **67 段全字段逐位一致**
+（85101 字节 == 85101 字节）；整文件哈希差异全部来自 result_id 会话成分。跨环境浮点疑虑排除。
+
+**初步定位与下一步**：慢在打包运行时环境（Electron 同机资源、E2E 期间用户预览 + CUA 观察干扰等
+运行时因素）；精确分解需**打包态关干扰单变量复跑**（关预览、无自动化观察、拿阶段耗时）——
+下批候选。本批不再深挖（用户令跑完交接关机）。
+
+**产物**：`work/spl_patch_arms_att_backup/`（rerun 日志 + 旧 on_test2 备份）；新
+`work/spl_patch_arms/on_test2.results.json`（确定性等价取代）。临时对照目录
+`%TEMP%/svl_attr_pkg|venv2` 可删。
+
+## 2026-10-01（续35 GT头）— 44 份研究文档 GT 版本标注头批量补齐（用户拍板「32 份补齐」）
+
+- **范围**：`gt_impact_scan --check` 现报 44 份未标注（2026-09-28 提案的 32 份 + 续29~35 新增 12 份），
+  一次补齐。依据 = `GT_VERSION_REGISTER_PROPOSAL_20260928.md`（A 不适用 6 / B GT 本体 1 / C 现行139推断 7 /
+  E v4重跑确证 3 / F v3时代 4 / G 现行139推断 8 / H 读文判定 3）+ 新增 12 份按档案代际直接确证。
+  **H 类 3 份本批读文判定**：montage_research=corrected.json(v2 代际)、scene_recall=v3(41条,08-30)、
+  second_signal=v3 预研（结论由 09-05 接续线覆盖）。
+- **落地**：新脚本 `mvp/scripts/apply_gt_version_headers.py`（幂等，已带头的自动跳过——
+  SOURCE_MERGE_PORT 创建时已带「GT 口径」头故跳过，扫描器残留 1 条为关键词误报）；每份标题下插入
+  `> **GT 版本**（2026-10-01 补登记）：…`，含代际 + 基线过时提醒（117/127 时代数字）+ 09-30 重锚定提醒；
+  `FINDINGS_GT_CONTAMINATION_AUDIT.md` §八 追加 44 行登记表。**零正文技术结论改动**。
+- **复扫**：`gt_impact_scan --check` 44 → 1（即上述误报）。
+- 另：提案文档状态仍是「待用户确认未生效」字样——本批即拍板执行，状态以本条与 §八 登记行为准。
+
+## 2026-10-01（续35 r4）— 导出默认「全部」+ UX-P1 后处理进度 + 徽标误标修复 + r4 重打
+
+**用户令**：置信门槛默认全导出；改完修上面登记的问题。三件全部落地：
+
+- **① 导出置信门槛默认改「全部」**（`ResultsPage.vue` `minConfidence` 默认 `'LOW'`，选项置顶，
+  原「高 + 中（推荐）」去掉推荐标记）。效果 = 低置信段也作为主片段导出（`低置信段`选择器在 LOW 下隐藏，
+  后端语义不变）。2026-09-28 A4「默认值与旧行为逐字一致」的口径由本拍板取代。
+- **② UX-P1 后处理零进度上报**：`patch_refine.apply_patch_refine` 新增可选 `progress(done,total)`
+  逐段回调（跳过段也计数）；`locator_service.locate` 在 shot_split 前/patch_refine 前后发
+  `LOCALIZATION` 阶段事件（消息「高精度精修：多镜头段切镜拆分」「patch 局部精排 i/n」——
+  该阶段在 UI 映射为「镜头分析」步骤，消息落到可见位置，百分比经 worker 单调钳制不回跳）。
+  E2E 实测 36 分钟静默「92% 卡感」（用户两次反馈）自此有逐段文字进度。新单测 2 项
+  （逐段回调含跳过段 + 缺省零回归）。
+- **③ UI-P3 侧栏「后端 CPU」误标**：根因 = `GET /api/index/status` 只返回状态不含设备信息，
+  前端 `unknownIndexStatus`/norm 硬编码 `cpu` 并写进侧栏（E2E 全程实际 directml/amd）。
+  修法 = `IndexStatus.backend` 改可空，未知时返回 `null`（诚实未知），`session.refreshIndex`
+  null 时保留既有值，徽标自然显示「—」。vitest 回归锁两条（MISSING 占位 backend=null /
+  buildIndex 仍带真实设备）。
+- **回归**：后端 **457 OK（+2）** · API **99** · vitest **127** · 双 typecheck 干净 · `test:mock` PASS。
+  零 `feature_version` 变更，定位语义零变化（进度回调纯观测）。
+- **r4 重打**：build_backend（1053 MiB）+ electron-builder → backend 冒烟三防全过
+  （health 200 / BACKEND_LISTEN / release 无令牌拒启）+ **启动冒烟 PASS**（Electron 多进程 +
+  backend.exe 子进程拉起）→ `Video-Locator-win-x64-20261001r4.zip`（1.5G）。
+  **r3 zip 已删**（用户授权的旧包清理同口径：r4 全量取代，r3 含旧导出默认/无进度上报）。
+  ⚠️ r4 未做真机全链复跑（分析 60+ 分钟/次）；进度上报与默认导出为低风险改动，由单测+冒烟兜底，
+  下次真机分析时顺带核对「镜头分析：高精度精修 i/n」文案与导出对话框默认项即可。
+
+## 2026-10-01（续 35 E2E）— r3 包真机端到端验收 = 全过（含 LOC-2002×5 实证 + 4 项新发现）
+
+**素材**：tset2-ed.mp4 × test2-om.mp4（原班 test2 素材，D:\ProjectXIXI\test2\）+ 合并专项用 ffmpeg copy 切的
+src_part1/2.mp4（work/e2e_r3/）。全程计算机操控打包 exe（win-unpacked，非 mock、Http 态）。
+
+**全过项**：
+① 原生对话框单选（新建项目）与多选（「选择多个源片文件（按播放顺序）」标题正确）；
+② **真实合并**：part1+part2 → copy 流复制产物 126.83s（=两段之和），UI 徽标「已合并 · 流复制（不重编码）」
++ 重新合并/取消合并按钮 + 元数据改探产物（FPS 29.21）+ 项目卡「merged_…（合并 2 段）」全在位（续29 UI 首次打包态验证）；
+③ 索引复用（test2-om 5051 帧校验 1.6s）+ **后端 directml/amd 日志确证**；
+④ **高精度默认开全链**：twopass 54 段 → **shot_split 54→67（与续32 验收数字逐字一致）** →
+**patch_refine 精排 65 段、切换主 span 11** → locate finished **3756.7s ≈ 62.6 min** →
+31 高 / 9 中 / 27 低（含 2 未定位）；对照 r2 默认态同素材（52 结果 26 高）= 结果 +15、高置信 +5；
+⑤ 结果页 67 行 + 双画面预览同景同人 + 置信/疑似蒙太奇标注 + 手动修正面板；
+⑥ 剪映草稿导出：19 个预转码整镜头素材 + draft_meta_info（cbed284 assets 在包内）；
+⑦ **LOC-2002 打包态实证**：对话框提醒 + 页面黄色横幅双通道，**5 组**重复认领告警（15-17→3277-3285s、
+26-28→3395-3420s、36-37→3721-3727s、50-51→1250-1294s、55-58→1614-1636s），文案与设计一致
+（shot_split 拆细后同源段被正确识别成组，比旧默认态 1 组信息量更大）；
+⑧ **成片渲染**：对话框「渲染成片」→ 41 段 / mode=copy / **h264_amf 硬编** / nb_frames=2259==严格计数 /
+**CFR 24000/1001（续30 AAC 接缝修复未复发）** / 94.24s / 96MB，产物落在导出对话框输出目录
+（work/ui_accept/export_out/movie_test2-om_d9b1d3850e3a.mp4）。
+
+**新发现（登记）**：
+- **[UX-P1] 分析后处理阶段零进度上报**：shot_split+patch_refine 约 36 分钟内 UI 停在「镜头分析 92% · 00:00」，
+  用户实测观感 =「卡住了」（本会话两次反馈）。backend/ffmpeg 实为满负荷（572%~619% CPU 交替）。
+  建议：给后处理阶段加 ProgressStage 子阶段或至少把文案换成「高精度精修中…」。
+- **[性能] 打包态全链 62.6 min ≈ 实验室串行口径 40 min 的 1.56×**：两阶段（段循环 26 min、后处理 36 min）
+  同比偏慢 ~1.5-3×，抓帧优化在打包态未见兑现——需离线归因（GPU 共享/环境差异/并行抓帧是否生效）。
+- **[UI-P3] 侧栏「后端」徽标显示 CPU 与实际 directml/amd 不符**（无设备信息的任务后回落显示 CPU）。
+- **[日志噪音] 预览流中断伴随 asyncio `connection_lost` ERROR 刷屏**（良性，建议降噪）。
+
+**边界**：渲染帧距逐帧核对未做（靠 nb_frames==严格计数 + CFR 帧率兜底）；导出 EDL/FCP7 通道未逐一点击
+（剪映主通道 + LOC-2002 已覆盖导出链路主风险）。
+
+## 2026-10-01（续 35 后续）— 两旋钮翻默认开（选 c）+ r3 分发包重打 + 旧打包清理
+
+**拍板**：用户「按你的计划来」+「旧打包没影响就删掉」⇒ 三选一选 **(c)**，权威记录 `DECISIONS.md` 2026-10-01 条目。
+
+**① 翻默认**：`infrastructure/config.py` `shot_split_enabled=True` / `patch_refine_enabled=True`。
+随裁决落地：`test_locator_service._Ffmpeg` 补 `grab_frame` 假桩（默认开后 locate 走 shot_split 抓编辑窗帧，
+缺桩 = `test_locate_index_bundle_reuse` AttributeError）；`locator_service` 两处「默认关」注释更新；
+`PRODUCT_INTRO` 命中数字更新到新基线（严格 95% 132/139 · 场景 99% 137/139 · 负例 4/9 正确拒绝，
+旧文案 84%/117/5 系多代前的读数）+ 复定位口径改「高精度全片 ≈18 分钟（155s 成片、55 段；片长段数相关）」，
+旧「4~7 秒/片段」为低精度热缓存口径随默认翻转下架。
+回归：后端 **455 OK（skipped=2）** · API **99 OK**。**生产现役基线自此 = 严格 132 · 场景 137 · 负例 4/9 · 导出实得 119/139**。
+
+**② r3 重打**：`build_backend.py` PyInstaller 1053 MiB → backend.exe 冒烟三防全过（health 200 /
+`BACKEND_LISTEN 127.0.0.1 8899` / release 无令牌拒启 exit=1）→ `npm run build:electron` win-unpacked 重建
+（剪映 `pyjianyingdraft/assets/*.json` 在位；包内 backend.exe = 02:25 新构建，含翻默认）→
+**启动冒烟 PASS**（Electron 多进程 + backend.exe 子进程拉起）→ `Video-Locator-win-x64-20261001r3.zip`
+（1.5G / 8360 条目）。r3 首次含：续27 多原片合并 / 续29 UI 多选接线 / 续30 成片渲染 / 续31 LOC-2002 /
+续34 抓帧提速 / 续35 两旋钮默认开 + LOC-1107。
+事故留痕：backend 冒烟日志误生成于 `resources/backend/` 内被 e-builder 打进包——已从 resources 与
+win-unpacked 双侧删除（其余内容与净构建等价）；教训与「出图脚本落盘路径自带区分度」同族：**冒烟/临时产物不要落在打包源目录**。
+
+**③ 旧打包清理**：`Video-Locator-win-x64-20260929r2.zip`（1.5G，缺上述全部新能力）已删除（用户本轮明确授权）；
+win-unpacked 由 e-builder 原地重建非旧物；`dist_backend`/`build_backend_work` 为空目录未动。
+
+**边界**：默认态四片读数 = 续33后续 ON 臂（四片全实跑 132/119/4）；抓帧优化代码仅 test1 做了整条 locate
+全字段逐位一致验证，余三片靠机制同一性外推（与续34 边界一致）。**未做**：UI 真机 E2E 复核（r3 包上可做）。
+
+## 2026-10-01（续 35）— 接线卫生小批：load_failed 撞码修复（LOC-1107）+ 网络失败条幅中文话术
+
+**范围**：Next Actions「接线卫生（低成本尾巴）」中无需拍板的两件，零语义、零 API/UI 契约变化。
+
+- **① `load_failed` 撞码修复**：`mvp/api/routes/results.py` 的 `/api/results/load` 400 体此前借用
+  `LOC-1103`，但 errors.py 里 1103 的官方语义 = 原片索引损坏（IndexError / FeatureStoreError 同码族），
+  一码两义违反 T1-2 码规则「只增不改、客服/文档按码定位」。改为新码 **`LOC-1107`**（1xxx 段首个空位），
+  `message` 中文话术不变；`detail` 技术串口径**确认为设计内不动**（errors.py：detail 是工程师通道，
+  前端只展示 message+code；`test_load_missing_file_returns_400_not_500` 本就断言 detail 含
+  FileNotFoundError）。测试补断言 `code=LOC-1107` + `message` 全文作回归锁。
+- **② 网络级失败条幅中文话术**：`mvp/ui/src/services/HttpServiceAdapter.ts` 的
+  `BackendUnavailableError` 消息从 `cannot reach backend: …` 改为中文话术
+  （`无法连接后端服务，请重新启动软件；若反复出现请下载日志发给支持人员（技术 detail）`），
+  技术 detail 保留在括号内（续21 登记尾巴）。相关 vitest 只断言异常类型不断言文本，零改动。
+- **未动（仍登记）**：后端进程消失后侧栏健康重探、`rendered/` 并入残留清理清单、
+  Mock 适配器不产 warnings（dev 态）、竞品「渲染失败仍出 XML」语义（待拍板）。
+- **回归**：后端 **455 OK（skipped=2 既有）** · API **99 OK** · vitest **127 passed** · 双 typecheck 干净。
+  零 `feature_version` 变更，生产三指标不变。本批与续33后续/续34 改动同样**未提交**（等口令）。
+
+## 2026-10-01（续 34）— shot_split/patch_refine 抓帧提速：归因 grab=77.6% + 缓存+并行落地 = 全片 1.90× 零语义
+
+**动机**：续33 后续两旋钮进生产路径，ON 臂单片 31–44min vs OFF 7–8min（旋钮自身 ~24–36min），
+档案明确「未做单臂拆分归因」。用户问「性能有什么可优化」→ 拍板「都要」（先归因拿基线，再落零语义改动，对比提速 + 验逐位一致）。
+
+**归因（杠杆0）**：新探针 `mvp/scripts/probe_split_patch_timing.py`（monkey-patch 计时，
+`off_{case}批 → shot_split → patch_refine` 复现 ON 臂后半段，不重跑整条 locate）。全片 test1 baseline 臂：
+**grab 合计 978.9s = 77.6% wall**（源片 ffmpeg spawn 822.9s/1860次/0.442s = 65.2%、编辑片 156.0s = 12.4%）、
+embed.dual 136.6s = 10.8%、patch_score.numpy 114.0s = 9.0%、embed.cls 27.5s = 2.2%。
+⇒ 与历史 `_patch_rerank_span`「grab 占 81%」同量级，**瓶颈是 ffmpeg 逐帧 spawn 不是模型推理**。
+
+**落地（杠杆1+2，零语义）**：① `locator_service.py:1105/1123` 两旋钮 `grab_frame` 从裸 `self.ffmpeg.grab_frame`
+换 `self._grab_frame_cached`（512 FIFO 缓存）；② 两模块（`patch_refine.py`/`shot_split.py`）加可选
+`grab_frames` 批量参数 + `_grab_many` helper，生产传 `self._grab_frames_parallel`（4 线程），把「grab→embed 逐帧交错」
+重构为「**先并行批量 grab → 再主线程串行 embed**」。**遵守续6 教训：DML forward 保持串行**（DML EP 多线程并发 Run 段错误），
+只并行 grab（纯 IO+解码），`ex.map` 保序 ⇒ 帧内容与顺序不变。`grab_frames=None` 默认回退逐帧 ⇒
+离线验证器（`validate_patch_refine.py:85`/`validate_split_patch_refine.py:91,96`）+ 单测零回归。
+
+**验证（整条 locate 全字段逐位一致 = 最强零语义证明）**：① 微探针三向 span 一致
+**baseline_full == optimized_full == ref(on_test1 生产参照) = TRUE**（各 55 spans）；② 升级 = 跑完整 `srv.locate()`
+（`time_full_locate_optimized.py`，优化后代码、双旋钮开、test1 全片），输出与续33 原始串行生产产物
+`work/spl_patch_arms/on_test1.results.json` **strip(result_id) 后全部确定性字段逐一比对差异段数=0**
+（confidence_score/candidate_rank/alternatives/reasons/original_segments/信封字段全比；字节数 99953==99953）
+⇒ 零语义达「完整生产 locate 路径全字段级」。**旋钮段全尺度 A/B：1262.3s → 664.9s = 1.90×**（省 10.0 min/片；
+split 127.2→66.8、refine 1135.1→598.1）；缓存把 raw grab 2591→1691 次（省 35%），并行摊剩余到 4 线程。8 段子集先行 A/B = 2.09×。
+**缓存驱逐路径全片额外覆盖**：1691 grab / 512 上限 ⇒ ~3 次 clear，多线程竞争下仍逐位一致。
+**整条 locate 实测（用户侧）**：opt_full = **1052.4s = 17.54 min**；P（pre-knob，旋钮无关）= 387.5s；serial_full = 1649.8s = 27.5 min
+⇒ **full-locate 提速 1.57×**（Amdahl：P 占优化后 37% 未碰，故 1.57× < 旋钮段 1.90×）；**ON/OFF 开销比 串行 4.26× → 优化 2.72×（实测）**。
+
+**回归门**：后端 **455 OK (skipped=2)** · API **99 OK** · 零 `feature_version` 变更 · 生产三指标不变（旋钮默认仍关）。
+**边界**：两个提速口径须分清——旋钮段 1.90× / 整条 locate 1.57×（用户实际体验）；只验 test1 全片（2mkv/test2/test3 未跑全片 A/B，
+零语义由整条 locate 全字段一致+回退兼容+全绿保证，提速机制 grab 占比 77.6% 与片子无关可外推）；未做杠杆3（改 REFINE_FPS/窗口/CLS 预筛——会改结果需三指标回归）。
+**待拍板**：旋钮默认值仍关——**ON/OFF 开销比已实测降到 2.72×**（高精度全片 locate = test1 实测 17.54 min，不再是原「30–45 min/片」），
+续33「三选一」时间口径据此更新，(c) 选项 `PRODUCT_INTRO` 文案可下修到「高精度 ≈18 min/片（test1 实测，片长相关）」；杠杆3 是否立项。
+归档 `FINDINGS_SPLIT_PATCH_GRAB_PERF_20261001.md`；产物 `work/spl_patch_timing/*`（含 fulllocate_on_test1）。
+
+## 2026-09-30（续 33 后续）— 两旋钮生产路径双臂验收 PASS（严格 130→132 / 导出实得 107→119 / FP 4→4）+ 耗时代价 4~5× 实测
+
+**动机**：离线组合验证（`validate_split_patch_refine.py` 把 runtime 模块套在既有结果批上）给 132/119/4，
+但**没走完整 `SourceLocatorService.locate()`**；默认值翻转与 r3 打包都需生产路径证据。
+
+**执行**：新增 3 个验收脚本 —— `mvp/scripts/rerun_split_patch_arms.py`（off/on 双臂，只跑生产 locate，
+DirectMLBackend 硬断言，产物落独立目录 `work/spl_patch_arms/` 防覆写事故）、
+`diag_split_patch_flips.py`（逐行判据机制分解：direct/union × within/mid_in/cov）、
+`review_spl_patch_flip.py`（按 evaluate 口径选行的 12 帧读图；shot_split 拆段后两臂行数不同，不能按下标 zip）。
+
+**OFF 臂等价性**：off_2mkv/off_test1 与 2026-09-29 现役默认批**指标逐位一致、逐 ID 零翻转** ⇒
+test2/test3 的 OFF 臂复用现役默认批（`work/fastglobal_default_{case}.results.json`）。
+
+**结果（四片汇总）**：严格 **130→132（+2）** · 导出实得 **107→119（+12）** · 场景 137 持平 ·
+负例 **4→4** 持平 · 支撑 span 646→1086。**与离线组合验证（sb 130 / ss 132 / eb 107 / es 119 / fb 4 / fs 4）
+逐位一致 ⇒ runtime 接线与离线模块行为等价，离线结论可直接外推。**
+
+**翻转 14 行**：13 增 1 损；判据机制**全部 = 主 span direct**，union「编辑侧联合覆盖 + 主 span 并集」命中 **0 行**
+（"p30 靠 1799 装配命中"的担心被证伪：ON 臂命中的是 s60 子段，主 span 2002.69–2003.31）。
+9 行 mid_in/cov 实质覆盖（p02/p05/t1r14c/t1r16/t1r19/t1r20/t1r23/t1r30a/t2r01c）·
+4 行 ±2s 容差记账的亚秒级相邻（p03/p30/t1r02/t3r23）· **1 行真损失 = t3r02a**（OFF 宽 span 331–352 覆盖 GT，
+ON 窄化 338.09–339.39 丢覆盖）。
+
+**逐张读图 6 张**（`work/spl_patch_visual/`，版式 行1=[ED×3,GT0] 行2=[GT1,GT2,OFF0,OFF1] 行3=[OFF2,ON0,ON1,ON2]）：
+p05 = 真增益（碉堡内景；OFF 落山谷空镜）· p30 = 真增益（同室另一时刻 → GT 邻域，≈203s 时刻修正）·
+t1r02 = 真增益（同段落水镜头，<1s 相邻）· t1r20 = 真覆盖 · t3r23 = **打折**（巨人在 span 结束后 ≈0.4s）·
+t3r02a = **真损失**（火场另一时刻 + 丢室内大厅）。
+
+**新增硬事实 = 耗时代价**：ON 臂单片 31–44 分钟（2mkv≈42 / test1≈31 / test2≈40 / test3≈44，合计 ≈2h35m）
+vs OFF 臂 7–8 分钟（test1 实测 431.1s）⇒ **4~5×**；主开销源 = patch_refine 歧义段 top-K ±5s 局部窗
+patch+global DML 推理（本批未做单臂拆分归因）。**因此不建议无条件翻默认**。
+
+**归档**：`mvp/benchmark/user_case/semantic_signal/FINDINGS_SPLIT_PATCH_PROD_ACCEPT_20260930.md`；
+产物 `work/spl_patch_arms/{off,on}_{case}.results.json` + `metrics_{off,on}.json` + `flip_caliber.json`。
+零 `mvp/src` 改动、零 `feature_version` 变更；基线健康检查 = 后端 **455 OK**（skipped=2）。
+
+**待拍板**：两旋钮默认值三选一（(a) 维持默认关 + UI「高精度复核」开关 / (b) 只翻 `shot_split_enabled` /
+(c) 两个都翻 + 改 `PRODUCT_INTRO` 时间口径）；r3 打包（需授权）；本批 git 提交（等口令）。
+
 ## 2026-09-30（续 32 后续六）— (E) 形态4 runtime 化落地（默认关）+ 形态5 补跑收口：① 完成、② 建议搁置
 
 **① 形态4 runtime 化（用户批「先一」）**：新模块 `engine/localization/shot_split.py`
@@ -1146,3 +1581,19 @@ GT 线索 t1r08b/t1r12a 撤回（候选表反转）。`agent-context checkpoint`
 ### Notes
 
 - Created `checkpoint-2026-09-30-1947.md` checkpoint (1 modified/untracked file(s)).
+
+### Notes
+
+- Created `checkpoint-2026-10-01-1454.md` checkpoint (83 modified/untracked file(s)).
+
+### Notes
+
+- Created `checkpoint-2026-10-01-1511.md` checkpoint (86 modified/untracked file(s)).
+
+### Notes
+
+- Created `checkpoint-2026-10-01-1531.md` checkpoint (87 modified/untracked file(s)).
+
+### Notes
+
+- Created `checkpoint-2026-10-01-2123.md` checkpoint (92 modified/untracked file(s)).

@@ -1,5 +1,7 @@
 # FINDINGS — ordered_search M0 离线复现 = 判负，不进 runtime（2026-09-29 续27, E 层立项令）
 
+> **GT 版本**（2026-10-01 补登记，批量执行）：重锚定前 GT（2026-09-29 成文，截等长 105 基线时代）；判负结论（不进 runtime、不留通道）与代际无关，数字引用须注明口径。
+
 > 立项 = 用户令「先把 E 层做了」；E3 commentary_scene 前案已于 2026-09-28 判决探针关闭
 > （`FINDINGS_E3_ECC_PROBE.md`），本档 = E 层最后一项 ordered_search（`fast_timeline.ordered_search`，
 > D#173 八句 docstring + options#68 十四键字节确证）的第二套复现级工程 M0 阶段。

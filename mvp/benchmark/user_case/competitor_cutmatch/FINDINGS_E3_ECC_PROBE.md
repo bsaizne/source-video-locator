@@ -1,5 +1,7 @@
 # E3 判决探针：ECC 仿射运动校验 + 48×27 结构相关 = 不破"运动/切换不可分"天花板 ⇒ commentary_scene 复核不进 runtime（2026-09-28）
 
+> **GT 版本**（2026-10-01 补登记，批量执行）：判据探针口径（44 例已裁锚点 36 真/5 假 + ECC 结构相关腿），不套 GT 三指标；锚点属重锚定前代际，负结果（不进 runtime、通道关闭）与代际无关。
+
 > 锚点 = 44 例已裁决盲判集（逐张读图裁决, 2026-09-26）中 36 真 + 5 假（第 6 假 27.79 属 theirs_only,
 > 做决定性外验证用）; ED 侧 48×27 帧, cv2 ECC MOTION_AFFINE + LAB/Sobel/HSV 结构相关 + 帧差基线。
 > 产物 `work/ecc_boundary_probe.json`, 脚本 `mvp/scripts/probe_ecc_boundary.py`。零 `mvp/src` 改动。

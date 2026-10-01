@@ -1,5 +1,7 @@
 # ② p05/p35/p41「修正后未跟上」+ p20/p34 边界偏差 → 评测口径澄清 FINDINGS（2026-09-04）
 
+> **GT 版本**（2026-10-01 补登记，批量执行）：ground_truth_v4.json（脚本直读，✅ 确证非推断；2026-09-04 评测口径澄清）。
+
 > 性质: 纯数据评估（零 runtime 改动, 不动 ConfidenceConfig/不标定, 只澄清评测口径）
 > 脚本: mvp/scripts/measure_lenient_v4.py | 数据: work/rerun_2mkv_timelineprior.results.json + ground_truth_v4.json
 > 目的: 量化「边界偏差(±几秒容差) + 评测真值前移(旧GT=算法产物, 用户修正后前移)」对 2.mkv v4 三指标的影响,

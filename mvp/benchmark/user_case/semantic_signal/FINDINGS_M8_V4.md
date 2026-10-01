@@ -1,5 +1,7 @@
 # 原片邻接唯一性探针 M8 —— v4 GT 重跑（2026-09-04）
 
+> **GT 版本**（2026-10-01 补登记，批量执行）：v4（2026-09-01 修正）重跑版✅（CHANGELOG 2026-09-04，纯 numpy 真值/干扰互换）；对应旧口径版 FINDINGS_M8.md 已作废留档。
+
 > 性质: 研究侧重跑（零 runtime 改动, 纯 numpy 秒级）
 > 起因: FINDINGS_REVIEW_M1M8 判 M8 的 p26 行「真值/干扰方向互换, 需重算」; p38 删除; t4r01 逻辑剔除。
 > 脚本: `mvp/scripts/research_provenance_neighbor_v4.py` | 数据: `work/provenance_neighbor_results_v4.json`

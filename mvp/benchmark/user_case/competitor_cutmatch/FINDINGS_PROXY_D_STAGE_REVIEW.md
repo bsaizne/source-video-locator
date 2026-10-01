@@ -1,5 +1,7 @@
 # FINDINGS — D 段代理复现（定位）四组对照与多面复核（判卷侧，2026-09-26 续10）
 
+> **GT 版本**（2026-10-01 补登记，批量执行）：现行 139 条 verified（ground_truth_v4.json + test1-3.json，2026-09-02 定案；2026-09-30 重锚定 12 行后仍为现行基准）；文内基线 117/121/124 系当时口径，文内引用的旧基线属当时现役口径、现已过时，引用数字须注明口径代际（现行基线见 .agent/STATE.md）。〔推断级：按成文日期推定，依据 GT_VERSION_REGISTER_PROPOSAL_20260928.md〕
+
 > **定级**：代理复现（推断级），非竞品实测。**验收协议**：TODO 四层（数字 / 多模态五桶逐图 / 机制 / 口径）——
 > 用户指示「不只靠数据/GT，多方面检查」为本轮复核纪律。
 > **产物链**：`cutmatch-analysis/sandbox/run_localization.py`（参数化，test1 回归 MD5 逐字节一致）→ `sandbox/out/localization*.json` 四组
