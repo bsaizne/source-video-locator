@@ -34,6 +34,11 @@ const editedList = computed(() => {
 })
 
 const edited = ref('')
+// 快/精双模式（2026-10-02）：'precise' → refine 不传（后端 config 默认=开）；
+// 'fast' → refine:false。持久化到 localStorage，下次启动记住用户档位。
+const mode = ref<'precise' | 'fast'>(
+  localStorage.getItem('svl.analyzeMode') === 'fast' ? 'fast' : 'precise')
+watch(mode, (m) => localStorage.setItem('svl.analyzeMode', m))
 // 切项目/首次进入时，默认选该项目第一个剪辑视频
 watch([editedList, () => analysis.pinnedProjectId], () => {
   if (!editedList.value.includes(edited.value)) edited.value = editedList.value[0] ?? ''
@@ -74,6 +79,7 @@ async function run(): Promise<void> {
       edited.value,
       original.value,
       willMerge.value ? sources.value : undefined,
+      mode.value === 'fast' ? false : undefined,
     )
     results.setBatch(batch)
     router.push('/results')
@@ -127,6 +133,16 @@ function cancel(): void {
       </ul>
       <p v-if="!pinned" class="an__hint">还没有项目——先到「项目」页新建一个。</p>
       <p v-else-if="!hasSource" class="an__hint">该项目还没有源片：到项目详情页「源片库」选择或添加原片。</p>
+
+      <!-- 快/精双模式（2026-10-02）：默认高精度；快速档跳过画面深度复核两阶段，
+           实测省 ~60% 墙钟（test2 27→~11 min 级），精度略降、结果不含细拆分。 -->
+      <div v-if="pinned && hasSource" class="an__row an__row--mode">
+        <span class="an__k">模式</span>
+        <label class="an__radio"><input type="radio" value="precise" v-model="mode">
+          高精度（默认，更全面，耗时较长）</label>
+        <label class="an__radio"><input type="radio" value="fast" v-model="mode">
+          快速（省时约六成，精度略降）</label>
+      </div>
     </div>
 
     <div class="an__actions">
@@ -163,6 +179,9 @@ function cancel(): void {
 .an__field { display: flex; flex-direction: column; gap: 6px; font-size: var(--fs-xs); color: var(--fg-faint); }
 .an__k { font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: 0.04em; color: var(--fg-faint); }
 .an__hint { color: var(--fg-faint); font-size: var(--fs-sm); margin: 0; }
+.an__row--mode { flex-wrap: wrap; }
+.an__radio { display: inline-flex; align-items: center; gap: 5px;
+  font-size: var(--fs-sm); color: var(--fg-muted); cursor: pointer; }
 .an__row--source { align-items: baseline; }
 .an__tag {
   padding: 2px 8px; border-radius: var(--radius-s);

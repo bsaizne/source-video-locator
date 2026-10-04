@@ -35,6 +35,8 @@ from engine.localization.degradation_gate import (apply_degradation_gate,
                                                   fragment_warnings)
 from engine.localization.dense_start_check import dense_start_shift
 from engine.localization.patch_refine import apply_patch_refine
+from engine.localization import isc_l2_index as engine_isc_l2
+from engine.localization.isc_refine import IscScorer, apply_isc_refine
 from engine.localization.shot_split import split_results as apply_shot_split
 from engine.localization.offset_vote_prior import offset_vote_seed
 from engine.localization.temporal_repair import (find_overlap_conflicts,
@@ -54,7 +56,7 @@ from engine.segment import (ShotSegment, adjacent_distances,
                             brightness_spike_regions, drop_brightness_spike_cuts,
                             drop_flash_cuts, dynamic_min_shot, frame_mean_brightness,
                             is_flash_frame, merge_flash_segments)
-from infrastructure import paths, settings_repo
+from infrastructure import fsbrowse, paths, settings_repo
 from infrastructure.config import AppConfig, PipelineConfig, load_config
 from infrastructure.errors import (ApplicationError, DeviceError,
                                    FeatureExtractionError, IndexError)
@@ -149,6 +151,10 @@ class SourceLocatorService:
         self._edited_cache_key_by_path: dict = {}
         self._ocr_engine: OcrEngine | None = None
         self._patch_reranker: PatchReranker | None = None
+        self._isc_scorer: IscScorer | None = None
+        self._isc_l2_cache: dict = {}
+        self._isc_l2_validated: set = {}
+        self._isc_l2_sha: dict = {}
         # 会话状态（轻量；UI 自身另持状态）
         self._bundle: IndexBundle | None = None
         self._current_batch: ResultBatch | None = None
@@ -842,9 +848,14 @@ class SourceLocatorService:
                 f"检测到 {len(ps)} 个原片文件，但多原片合并未启用（source_merge.enabled=false）。"
                 "请提供单个原片文件或启用合并。")
         self._check_cancel(cancel_token)
+        merged_root = paths.merged_source_root(override=self.config.data_dir)
+        # 磁盘预检（2026-10-02 入库层四件）：copy 产物≈输入总和，动手前失败好过
+        # ffmpeg 写一半 ENOSPC 留半截文件。余量 = 输入总和 + 256MB。
+        need = sum(Path(p).stat().st_size for p in ps if Path(p).is_file())
+        fsbrowse.require_free_space(merged_root, need + 256 * 1024 * 1024,
+                                    what="多原片合并")
         merger = SourceVideoMerger(
-            self.ffmpeg.ffmpeg, self.ffmpeg.ffprobe,
-            paths.merged_source_root(override=self.config.data_dir),
+            self.ffmpeg.ffmpeg, self.ffmpeg.ffprobe, merged_root,
             timeout_s=cfgm.timeout_s, prefer_hw=cfgm.prefer_hw, crf=cfgm.crf,
             log=lambda fmt, *a: self._log.info(fmt, *a))
 
@@ -930,6 +941,11 @@ class SourceLocatorService:
         target_dir = Path(out_dir) if out_dir else (
             Path(rcfg.out_dir) if rcfg.out_dir
             else paths.rendered_root(override=self.config.data_dir))
+        # 磁盘预检（入库层四件）：按 ~7.2Mbps 视频 + 128kbps 音频估产物体积，
+        # 另加 512MB 头寸（逐段中间 MOV/PCM 也要落同一盘）。
+        est_s = sum(b - a for a, b in clips)
+        fsbrowse.require_free_space(
+            target_dir, int(est_s * 0.9e6) + 512 * 1024 * 1024, what="成片渲染输出")
         renderer = TimelineMovieRenderer(
             self.ffmpeg.ffmpeg, self.ffmpeg.ffprobe, target_dir,
             crf=rcfg.crf, preset=rcfg.preset, prefer_hw=rcfg.prefer_hw,
@@ -961,12 +977,18 @@ class SourceLocatorService:
     def locate(self, edited: str | Path, original: str | Path | IndexBundle, *,
                on_progress: ProgressCb | None = None,
                cancel_token: CancellationToken | None = None,
-               index_bundle: IndexBundle | None = None) -> ResultBatch:
-        """一步编排完整链路，返回 ``ResultBatch``（每条 Result 对应一个 edited segment）。"""
+               index_bundle: IndexBundle | None = None,
+               refine: bool | None = None) -> ResultBatch:
+        """一步编排完整链路，返回 ``ResultBatch``（每条 Result 对应一个 edited segment）。
+
+        ``refine``= 快/精双模式逐任务开关（None=config 默认；False=快速档跳过
+        切镜拆分+画面深度复核）。落日志留痕，售后/验收可按 session 过滤核对档位。
+        """
         edited = Path(edited)
         self._ensure_session()
         t0 = time.monotonic()
-        self._log.info("locate started edited=%s", edited.name)
+        self._log.info("locate started edited=%s refine=%s", edited.name,
+                       "default" if refine is None else ("on" if refine else "fast"))
         if index_bundle is not None:
             bundle = index_bundle
             orig_path = bundle.meta.source_file
@@ -1103,7 +1125,14 @@ class SourceLocatorService:
         # 段级拆分（2026-09-30 续32 形态4 runtime 化, engine/localization/shot_split.py;
         # 2026-10-01 续35 默认开）。放在全部定位/门/重排之后 = 看到最终主 span；宽 span 保全 ⇒
         # 严格口径结构性零回退；导出/渲染契约不变（仍每条结果导主 span）。
-        if getattr(self.config.pipeline, "shot_split_enabled", False):
+        # 快/精双模式（2026-10-02）：``refine`` 逐任务覆盖两个后处理旋钮
+        # （None=用 config 默认，两者默认开=高精度）；False=快速档，跳过
+        # 切镜拆分与画面深度复核（实测省 ~60% 墙钟），段循环/修复链照跑。
+        _split_on = (bool(getattr(self.config.pipeline, "shot_split_enabled", False))
+                     if refine is None else bool(refine))
+        _patch_on = (bool(getattr(self.config.pipeline, "patch_refine_enabled", False))
+                     if refine is None else bool(refine))
+        if _split_on:
             # UX-P1（2026-10-01 续35 E2E）：后处理阶段此前零进度上报 ⇒ UI 停在段循环的
             # 最后一帧百分比像卡死。切镜拆分较快，报一条阶段消息即可。
             self._notify(on_progress, ProgressStage.REFINE,
@@ -1119,7 +1148,7 @@ class SourceLocatorService:
         # patch 局部精排（2026-09-30 续32 形态6 runtime 化, engine/localization/patch_refine.py;
         # 2026-10-01 续35 默认开）。歧义段 top-K 候选各自局部窗 patch+global 融合精排再择优；
         # 老主降子 ⇒ 严格结构性零回退。
-        if getattr(self.config.pipeline, "patch_refine_enabled", False):
+        if _patch_on:
             if self._patch_reranker is None:
                 self._patch_reranker = PatchReranker(
                     resolve_weights(self.config.pipeline.patch_weights_path or None),
@@ -1149,6 +1178,47 @@ class SourceLocatorService:
                     progress=_refine_progress)
             else:
                 self._log.warning("patch refine enabled but no patch backend; skipped")
+        # ISC 第二意见局部重排（2026-10-02 续44 立项, engine/localization/isc_refine.py;
+        # 默认关）。歧义段候选 span±1.5s 窗 ISC(cos) 重扫，领先现主 ≥margin 才切（老主降子
+        # ⇒ 严格零回退）。与两旋钮语义解耦：快速档（refine=False）必跳过；config 关时即使
+        # refine=True 也不开（ISC 尚未拍板翻默认，不随高精度档隐式生效）。
+        _isc_on = (bool(getattr(self.config.pipeline, "isc_refine_enabled", False))
+                   and (refine is None or bool(refine)))
+        if _isc_on:
+            if self._isc_scorer is None:
+                self._isc_scorer = IscScorer(
+                    (self.config.pipeline.isc_refine_onnx or "").strip() or None,
+                    dml_device_id=self.config.device.dml_device_id)
+            if self._isc_scorer.ensure():
+                self._log.info("isc refine device=%s", self._isc_scorer.device)
+                n_isc_total = len(results)
+                self._notify(on_progress, ProgressStage.REFINE,
+                             current=0, total=n_isc_total,
+                             message=f"画面深度复核 0/{n_isc_total}")
+
+                def _isc_progress(done: int, total: int) -> None:
+                    self._notify(on_progress, ProgressStage.REFINE,
+                                 current=done, total=total,
+                                 message=f"画面深度复核 {done}/{total}")
+
+                results = apply_isc_refine(
+                    results, edited_path=edited, source_path=orig_path,
+                    grab_frame=self._grab_frame_cached,
+                    grab_frames=self._grab_frames_parallel,
+                    grab_grid=self._grab_grid_batch,
+                    embed_isc=self._isc_scorer.embed,
+                    embed_cls=lambda fr: self.backend.embed_frames([fr])[0],
+                    lib_times=np.asarray(bundle.times, dtype=np.float64),
+                    lib_feats=bundle.features,
+                    margin=float(getattr(self.config.pipeline, "isc_refine_margin", 0.05)),
+                    scan_radius_s=float(getattr(self.config.pipeline,
+                                                "isc_refine_scan_radius_s", 0.0)),
+                    ladder_s=float(getattr(self.config.pipeline,
+                                           "isc_refine_ladder_s", 0.0)),
+                    l2_index=self._ensure_isc_l2_index(orig_path, on_progress),
+                    log=self._log, progress=_isc_progress)
+            else:
+                self._log.warning("isc refine enabled but no ISC onnx asset; skipped")
         batch = ResultBatch(schema_version=1, original_video=str(orig_path),
                             edited_video=str(Path(edited).resolve()), results=results)
         self._current_batch = batch
@@ -2265,16 +2335,169 @@ class SourceLocatorService:
         return q
 
     def _grab_frames_parallel(self, path, times, *, max_workers: int = 4):
-        """多帧并行抓取（每帧独立 ffmpeg 进程, 线程池并发; grab 是纯 IO+解码,
-        帧结果与串行逐字节一致）。patch rerank 358 帧 spawn 占 111s(探针实测),
-        并发 4 → 逼近 /4。"""
-        from concurrent.futures import ThreadPoolExecutor
+        """多帧并行抓取。两档：
 
+        - ``pipeline.grab_window_decode=True``（2026-10-03 续46）：缓存查漏后走
+          ``FFmpegIO.grab_frames`` 窗批量解码（每时间簇一次 spawn，选帧规则与 grab_frame
+          同语义，逐字节验收见 test_ffmpeg_io）；ffmpeg spawn 次数从 O(帧数) 降到 O(簇数)。
+        - 默认 False = 续34 形态（每帧独立 ffmpeg 进程, 线程池并发; grab 是纯 IO+解码,
+          帧结果与串行逐字节一致）。patch rerank 358 帧 spawn 占 111s(探针实测), 并发 4 → 逼近 /4。
+        """
         times = list(times)
         if len(times) <= 1:
             return [self._grab_frame_cached(path, t) for t in times]
+        if bool(getattr(self.config.pipeline, "grab_window_decode", False)):
+            return self._grab_frames_window(path, times)
+        from concurrent.futures import ThreadPoolExecutor
+
         with ThreadPoolExecutor(max_workers=min(max_workers, len(times))) as ex:
             return list(ex.map(lambda t: self._grab_frame_cached(path, t), times))
+
+    def _grab_frames_window(self, path, times):
+        """窗批量路径：缓存查漏 → 一次批量解码 → 回填缓存（键与 _grab_frame_cached 一致）。"""
+        resolved = str(Path(path).resolve())
+        out: list = [None] * len(times)
+        missing: dict[float, list[int]] = {}
+        for i, t in enumerate(times):
+            key = round(float(t), 3)
+            hit = self._grab_cache.get((resolved, key))
+            if hit is not None:
+                out[i] = hit
+            else:
+                missing.setdefault(key, []).append(i)
+        if not missing:
+            return out
+        batch_fn = getattr(self.ffmpeg, "grab_frames", None)
+        if batch_fn is None:
+            # 假体/旧实现无批量接口（单测 stub、离线验证器）→ 逐帧回退（语义不变）
+            for key, idxs in missing.items():
+                frame = self._grab_frame_cached(path, key)
+                for i in idxs:
+                    out[i] = frame
+            return out
+        got = batch_fn(path, sorted(missing))
+        for t, frame in got.items():
+            key = (resolved, round(float(t), 3))
+            if len(self._grab_cache) >= 512:
+                self._grab_cache.clear()
+            self._grab_cache[key] = frame
+        for key, idxs in missing.items():
+            frame = self._grab_cache.get((resolved, key))
+            if frame is None:  # 理论不可达（grab_frames 对未满足 t 有逐帧回退）
+                frame = self._grab_frame_cached(path, key)
+            for i in idxs:
+                out[i] = frame
+        return out
+
+    def _ensure_isc_l2_index(self, source_path, on_progress=None) -> tuple | None:
+        """L2 源片 ISC 索引就绪（2026-10-04 续52 接线；2026-10-05 续53 翻默认开——
+        `pipeline.isc_l2_index_enabled` 关 = None ⇒ apply_isc_refine 走现役宽扫路径逐位不变）。
+
+        文件 = ``{isc_l2_index_dir 或 app_data_dir/isc_index}/{stem}@1.000fps.tp.isci.npz``
+        （truepts 构建）。存在且源片 sha256 匹配 → 加载；缺失/失效 → **locate 内同步重建**
+        （INDEX_BUILD 进度；一次性成本 mp4 ~5~11min/片源、mkv ~11min/137min 片，2026-10-05
+        续53 建表性能结案 FINDINGS_COST_STRUCTURE_LEVERS §5.6.6——异步构建因本进程 DML
+        并发段错误风险（续6/续43）暂不采用）。构建失败 → WARNING + None
+        （回退现役宽扫，索引是加速项非功能项）。"""
+        if not bool(getattr(self.config.pipeline, "isc_l2_index_enabled", False)):
+            return None
+        src = Path(source_path)
+        d = getattr(self.config.pipeline, "isc_l2_index_dir", "") or ""
+        root = Path(d) if d else paths.isc_index_root()
+        p = engine_isc_l2.index_path_for(src, root)
+        try:
+            st = src.stat()
+            src_ck = (str(src), st.st_mtime_ns, st.st_size)
+            sha = self._isc_l2_sha.get(src_ck)
+            if sha is None:
+                sha = engine_isc_l2.sha256_of(src)
+                self._isc_l2_sha[src_ck] = sha
+        except OSError as exc:
+            # 源片不可读/不可 stat ⇒ 索引做不了；加速项失败绝不阻塞 locate（同构建失败语义）
+            self._log.warning("isc l2 index unavailable path=%s err=%s; fallback", p, exc)
+            return None
+
+        def _load_ready() -> tuple | None:
+            got = engine_isc_l2.load_index(p)
+            if got is None:
+                return None
+            T, F, _meta = got
+            ck = (str(p), p.stat().st_mtime_ns, p.stat().st_size)
+            self._isc_l2_cache[ck] = (T, F)
+            self._log.info("isc l2 index loaded path=%s frames=%d", p.name, T.shape[0])
+            return (T, F)
+
+        ck = (str(p), p.stat().st_mtime_ns, p.stat().st_size) if p.exists() else None
+        if ck is not None:
+            hit = self._isc_l2_cache.get(ck)
+            if hit is not None and ck in self._isc_l2_validated:
+                return hit
+            if engine_isc_l2.is_valid(p, src, source_sha=sha):
+                self._isc_l2_validated.add(ck)
+                hit = self._isc_l2_cache.get(ck)
+                if hit is not None:
+                    self._log.info("isc l2 index loaded path=%s frames=%d", p.name, hit[0].shape[0])
+                    return hit
+                return _load_ready()
+            self._log.warning("isc l2 index stale path=%s; rebuild", p)
+
+        def _prog(done: int, total: int) -> None:
+            self._notify(on_progress, ProgressStage.INDEX_BUILD,
+                         current=done, total=total,
+                         message=f"正在建立画面索引（一次性）：{done}/{total}")
+
+        self._log.info("isc l2 index build started path=%s", p)
+        try:
+            T, F, _meta = engine_isc_l2.build_tp_index(
+                src, ffmpeg=self.ffmpeg, scorer=self._isc_scorer, on_frame=_prog)
+            engine_isc_l2.save_index(p, T, F, _meta)
+        except Exception as exc:
+            self._log.warning("isc l2 index build failed path=%s err=%s; fallback", p, exc)
+            return None
+        self._log.info("isc l2 index built path=%s frames=%d", p.name, T.shape[0])
+        return _load_ready()
+
+    def _grab_grid_batch(self, path, times):
+        """网格抽取抓帧（2026-10-03 续50 L1）：`pipeline.grab_grid_decode` 开时走
+        `FFmpegIO.grab_grid_times`（select 抽帧，管道量 ÷~30，实测 2.51×）；关时逐字节回落到
+        `grab_frames` 旧路径。返回 `{t: frame}`，缓存键与 `_grab_frame_cached` 一致（沿用同一
+        512 FIFO，避免同一帧被两种路径重复解码）。假体/旧实现无 `grab_grid_times` → 整体回退。
+        """
+        ts = [round(float(t), 6) for t in times]
+        if not ts:
+            return {}
+        win_fn = getattr(self.ffmpeg, "grab_frames", None)
+        if not bool(getattr(self.config.pipeline, "grab_grid_decode", False)) or win_fn is None:
+            grid_fn0 = getattr(self.ffmpeg, "grab_grid_times", None) \
+                if bool(getattr(self.config.pipeline, "grab_grid_decode", False)) else None
+            if grid_fn0 is None:
+                if win_fn is None:      # 假体/旧实现：逐帧回退（与 _grab_frames_window 同策略）
+                    return {round(float(t), 6): self._grab_frame_cached(path, t) for t in ts}
+                return win_fn(path, ts)
+        grid_fn = getattr(self.ffmpeg, "grab_grid_times", None)
+        if grid_fn is None:
+            return win_fn(path, ts)
+        resolved = str(Path(path).resolve())
+        got: dict = {}
+        missing = []
+        for t in ts:
+            hit = self._grab_cache.get((resolved, round(t, 3)))
+            if hit is not None:
+                got[t] = hit
+            else:
+                missing.append(t)
+        if missing:
+            fresh = grid_fn(path, missing)
+            for t in missing:
+                fr = fresh.get(t)
+                if fr is None:
+                    fr = self._grab_frame_cached(path, t)   # 超片尾/解码失败回退
+                got[t] = fr
+                key = (resolved, round(t, 3))
+                if len(self._grab_cache) >= 512:
+                    self._grab_cache.clear()
+                self._grab_cache[key] = fr
+        return got
 
     def _grab_frame_cached(self, path, t: float):
         """grab_frame 带进程内缓存（patch rerank/text anchor 相邻段反复抓同一候选窗帧）。

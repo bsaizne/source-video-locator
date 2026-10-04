@@ -30,10 +30,11 @@ class TaskManager:
         self._lock = threading.Lock()
 
     def submit_analyze(self, edited_path: str, original_path: str,
-                       original_paths: list[str] | None = None) -> Task:
+                       original_paths: list[str] | None = None,
+                       refine: bool | None = None) -> Task:
         """创建一个 PENDING 任务并在后台调度 worker。返回 Task（可在任何线程查）。"""
         task = Task(edited_path=edited_path, original_path=original_path,
-                    original_paths=list(original_paths or []))
+                    original_paths=list(original_paths or []), refine=refine)
         with self._lock:
             self._tasks[task.task_id] = task
         self._log("task submitted task_id=%s edited=%s original=%s originals=%s",

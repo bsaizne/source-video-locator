@@ -99,6 +99,9 @@ class InfrastructureTest(unittest.TestCase):
         self.assertEqual(cfg.pipeline.montage_min_frames, 2)      # 蒙太奇向召回侧（平衡点）
         self.assertEqual(cfg.pipeline.montage_cluster_gap_s, 15.0)
         self.assertEqual(cfg.pipeline.ranking_alpha, 0.5)
+        # 2026-10-03（续51）：宽扫粗扫网格抽取翻默认（零语义 + 1.27~1.30×，见 config 注释验收证据）
+        self.assertTrue(cfg.pipeline.grab_grid_decode)
+        self.assertTrue(cfg.pipeline.grab_window_decode)
         self.assertEqual(cfg.media.timeout_s, 600.0)
 
     def test_config_json_override(self):

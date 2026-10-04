@@ -61,7 +61,7 @@ class FakeService:
         return [SimpleNamespace(span=TimeSpan(3.1, 21.4), nq=36)]
 
     def locate(self, edited_path, original, *, on_progress=None, cancel_token=None,
-               index_bundle=None):
+               index_bundle=None, refine=None):
         self.locate_calls.append((edited_path, str(original)))
         return _sample_batch()
 

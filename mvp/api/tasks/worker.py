@@ -102,6 +102,7 @@ def run_worker(task: Task, service, *, log: LogFn | None = None) -> None:
             original,
             on_progress=on_progress,
             cancel_token=task.token,
+            refine=task.refine,
         )
     except ApplicationError as exc:
         # cancellation 由 service 以 ApplicationError 穿透（_check_cancel）。

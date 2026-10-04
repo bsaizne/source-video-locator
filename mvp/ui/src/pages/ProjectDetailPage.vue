@@ -8,6 +8,7 @@ import { formatBytes, formatDuration } from '@/utils/format'
 import { isAbsolutePath, nameWithoutExt } from '@/utils/path'
 import BaseButton from '@/components/ui/BaseButton.vue'
 import BaseIcon from '@/components/ui/BaseIcon.vue'
+import FileBrowser from '@/components/FileBrowser.vue'
 import type { Project } from '@/stores/projects'
 
 const route = useRoute()
@@ -194,6 +195,20 @@ function applyManualEdited(): void {
   if (p && project.value) project.value.editedVideos = [...project.value.editedVideos, p]
   manualEdited.value = ''
 }
+
+// --- 应用内素材浏览（入库层四件，2026-10-02）：源片库=多选按序；剪辑片=单选即加 ---
+const browseSourceOpen = ref(false)
+const browseEditedOpen = ref(false)
+function onBrowseSourcePicked(paths: string[]): void {
+  addSources(paths)
+  browseSourceOpen.value = false
+}
+function onBrowseEditedPicked(paths: string[]): void {
+  const proj = project.value
+  const clean = paths.filter(Boolean)
+  if (proj && clean.length) proj.editedVideos = [...proj.editedVideos, ...clean]
+  browseEditedOpen.value = false
+}
 </script>
 
 <template>
@@ -253,7 +268,13 @@ function applyManualEdited(): void {
           <div class="pd__pickrow">
             <BaseButton icon="film" @click="chooseSource">选择单个源片</BaseButton>
             <BaseButton v-if="hasMulti" icon="plus" @click="chooseSources">添加多个源片…</BaseButton>
+            <BaseButton icon="folder" @click="browseSourceOpen = !browseSourceOpen">
+              {{ browseSourceOpen ? '收起浏览' : '浏览选择…' }}
+            </BaseButton>
           </div>
+          <!-- 应用内素材浏览（入库层四件：盘符/自然排序/白名单/磁盘剩余） -->
+          <FileBrowser v-if="browseSourceOpen" :multi="true"
+                       @picked="onBrowseSourcePicked" @close="browseSourceOpen = false" />
 
           <ol v-if="lib.length" class="pd__list">
             <li v-for="(s, i) in lib" :key="s" class="pd__asset">
@@ -308,6 +329,13 @@ function applyManualEdited(): void {
                    @keyup.enter="applyManualEdited" />
             <BaseButton variant="primary" @click="applyManualEdited">添加</BaseButton>
           </div>
+          <div class="pd__pickrow">
+            <BaseButton icon="folder" @click="browseEditedOpen = !browseEditedOpen">
+              {{ browseEditedOpen ? '收起浏览' : '浏览选择剪辑片…' }}
+            </BaseButton>
+          </div>
+          <FileBrowser v-if="browseEditedOpen" :multi="false"
+                       @picked="onBrowseEditedPicked" @close="browseEditedOpen = false" />
           <div v-for="e in project.editedVideos" :key="e" class="pd__asset">
             <BaseIcon name="film" :size="14" />
             <span class="mono">{{ e }}</span>

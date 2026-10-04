@@ -3,6 +3,7 @@ import type {
   ConnectionStatus,
   DevicePreference,
   DeviceSettingsJson,
+  FsBrowseResult,
   IndexMetaJson,
   IndexStatus,
   MediaInfoJson,
@@ -41,6 +42,10 @@ export interface ServiceAPI {
   getIndexMeta(originalPath: string): Promise<IndexMetaJson | null>
   // ffprobe 元数据（项目卡/详情页展示真实时长与分辨率）。后端 GET /api/media/info。
   getMediaInfo(path: string): Promise<MediaInfoJson>
+
+  // 素材入库浏览（GET /api/fs/browse，2026-10-02 入库层四件）：
+  // path='' → 「此电脑」盘符列表；目录 → 子目录 + 视频白名单（自然排序，后端做）。
+  browseFs(path: string): Promise<FsBrowseResult>
 
   // 多原片入库前物理合并（POST /api/source/merge，2026-09-29 video.concat 移植）。
   // ≥2 段才有效：后端 <2 返回 400。产物是稳定命名缓存文件，可直接当单原片索引/定位。
@@ -90,10 +95,13 @@ export interface ServiceAPI {
 
   // ---- async task lifecycle (WS real-time progress) ----
   // `originalPaths` ≥2 时后端 worker 会先把它们物理合并再建索引（多原片入库）。
+  // `refine`= 快/精双模式（2026-10-02）：undefined=后端默认（高精度）；
+  // false=快速档（跳过切镜拆分+画面深度复核，实测省 ~60% 墙钟）。
   startAnalyzeTask(
     editedPath: string,
     originalPath: string,
     originalPaths?: string[],
+    refine?: boolean,
   ): Promise<{ task_id: string }>
   getTask(taskId: string): Promise<TaskJson>
   cancelTask(taskId: string): Promise<void>

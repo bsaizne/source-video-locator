@@ -71,6 +71,34 @@ foreach ($f in @($patchOnnx, $patchData)) {
 }
 Write-Host "== patch ONNX 资产就位（图 + 同名外部权重） ==" -ForegroundColor Green
 
+# ISC 第二意见 ONNX（2026-10-03 续44 翻默认；isc_refine.py IscScorer）。
+# 图 1.6MB + 外部权重 209MB（独立文件，与 DINOv2 不共享）。二进制不入 git（GitHub 100MB 上限），
+# 构建时从源目录拷入 + asset.json sha256 fail-fast（同 patch 口径）。
+$iscDir = Join-Path $ui 'resources\models\isc_ft_v107'
+$iscOnnx = Join-Path $iscDir 'isc_ft_v107.onnx'
+$iscData = Join-Path $iscDir 'isc_ft_v107.onnx.data'
+if (-not ((Test-Path $iscOnnx) -and (Test-Path $iscData))) {
+    $isrc = if ($env:SVL_ISC_MODEL_SOURCE) { $env:SVL_ISC_MODEL_SOURCE } else {
+        Join-Path $benchmark 'work\isc21_weights_ortho_probe'
+    }
+    if (-not ((Test-Path (Join-Path $isrc 'isc_ft_v107.onnx')) -and (Test-Path (Join-Path $isrc 'isc_ft_v107.onnx.data')))) {
+        throw "ISC ONNX 资产缺失: $isrc（设 SVL_ISC_MODEL_SOURCE 指向含 isc_ft_v107.onnx[.data] 的目录；再生成 = mvp/scripts/export_isc_onnx.py）"
+    }
+    Write-Host "== -> 复制 ISC ONNX 资产: $isrc ==" -ForegroundColor Cyan
+    New-Item -ItemType Directory -Force -Path $iscDir | Out-Null
+    Copy-Item (Join-Path $isrc 'isc_ft_v107.onnx') $iscOnnx -Force
+    Copy-Item (Join-Path $isrc 'isc_ft_v107.onnx.data') $iscData -Force
+}
+$iscWant = (Get-Content (Join-Path $iscDir 'asset.json') -Raw -Encoding UTF8 | ConvertFrom-Json).sha256
+foreach ($f in @($iscOnnx, $iscData)) {
+    $leaf = Split-Path $f -Leaf
+    $exp = $iscWant.$leaf
+    if (-not $exp) { throw "ISC asset.json 缺 $leaf 的 sha256 条目（fail-fast）" }
+    $got = (Get-FileHash $f -Algorithm SHA256).Hash.ToLower()
+    if ($got -ne $exp) { throw "ISC 资产 sha256 不符: $leaf 期望 $exp 实得 $got" }
+}
+Write-Host "== ISC ONNX 资产就位（图 + 外部权重 209MB） ==" -ForegroundColor Green
+
 Write-Host "== [1/4] 渲染层构建 (vite) ==" -ForegroundColor Cyan
 npm run build
 if ($LASTEXITCODE -ne 0) { throw "renderer build failed" }

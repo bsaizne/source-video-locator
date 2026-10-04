@@ -61,6 +61,8 @@ class Task:
     # 多原片输入（2026-09-29 video.concat 移植）：≥2 时 worker 先合并再定位；
     # 合并产物回写 original_path，下游（结果/导出/预览）仍单原片口径。
     original_paths: list[str] = field(default_factory=list)
+    # 快/精双模式（2026-10-02）：None=config 默认（高精度）；False=快速档。
+    refine: bool | None = None
     # 渲染任务参数（out_dir / 置信门槛 / 吸附），由 routes.tasks 传入、worker 消费。
     render_params: dict = field(default_factory=dict)
     # 渲染任务的目标结果批（内存对象，不参与序列化；worker 用它渲染，

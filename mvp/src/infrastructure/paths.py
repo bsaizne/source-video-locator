@@ -74,3 +74,11 @@ def rendered_root(*, override: str | Path | None = None) -> Path:
 def dinov2_dml_asset_dir(*, override: str | Path | None = None) -> Path:
     """冻结 DINOv2 CLS-384 的 DirectML ONNX 资产目录。"""
     return ensure_dir(models_root(override=override) / "dinov2_cls_384")
+
+
+def isc_index_root(*, override: str | Path | None = None) -> Path:
+    """L2 源片 ISC 索引根目录（2026-10-04 续52：``{stem}@{fps:.3f}fps.tp.isci.npz``）。
+
+    与 CLS ``index`` 同族：产品派生产物进 app data，删除可由「残留清理」统一管理。
+    """
+    return ensure_dir(app_data_dir(override=override) / "isc_index")

@@ -47,6 +47,20 @@ describe('HttpServiceAdapter async tasks', () => {
     expect(task_id).toBe('abc')
   })
 
+  it('startAnalyzeTask 双模式：refine 只在显式选择时进 body（2026-10-02）', async () => {
+    const f = vi.fn().mockResolvedValue(res({ task_id: 'x' }))
+    vi.stubGlobal('fetch', f)
+    await adapter.startAnalyzeTask('D:/e.mp4', 'D:/o.mkv', undefined, false)
+    expect(JSON.parse(String((f.mock.calls[0] as [string, RequestInit])[1].body)))
+      .toEqual({ edited_path: 'D:/e.mp4', original_path: 'D:/o.mkv', refine: false })
+    await adapter.startAnalyzeTask('D:/e.mp4', 'D:/o.mkv', undefined, true)
+    expect(JSON.parse(String((f.mock.calls[1] as [string, RequestInit])[1].body))).toHaveProperty('refine', true)
+    // 不传 → body 逐字不含 refine（后端 config 默认=高精度）
+    await adapter.startAnalyzeTask('D:/e.mp4', 'D:/o.mkv')
+    expect(JSON.parse(String((f.mock.calls[2] as [string, RequestInit])[1].body)))
+      .not.toHaveProperty('refine')
+  })
+
   it('getTask GETs /api/tasks/{id}', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(res({ task_id: 'abc', status: 'completed' })))
     const t = await adapter.getTask('abc')

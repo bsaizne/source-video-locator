@@ -330,6 +330,70 @@ class PipelineConfig:
     # 2026-10-01 续35 翻默认开（用户拍板）：离线 9/9 读图确证 + 生产双臂 13 增 1 损；
     # 续34 整条 locate 全字段逐位一致 + 高精度全片实测 ≈18 min（test1）。
     patch_refine_enabled: bool = True
+    # ISC 第二意见局部重排（2026-10-02 续44 立项 runtime 化，engine/localization/isc_refine.py）：
+    # 歧义段候选自身 span±1.5s 窗 ISC(cos) 重扫，领先现主 ≥margin 才切（老主降子 ⇒ 严格零回退）。
+    # 立项证据 = FINDINGS_ORTHOGONAL_BACKBONE_PROBE_20261002 §9（139 例扩验证核心桶 44/63 vs
+    # dino 37/63；独家增量 11 干净 + 1 边界；t1r30a 型两臂一致错 ⇒ 只当 tiebreaker 不当主判据）。
+    # **2026-10-03 翻默认开（用户拍板）**：生产路径四片双臂验收 PASS（严格 133→134 · 导出实得
+    # 125→128 · 场景/负例持平 · 翻转 3/139 全真增益零回退，详见同档 §10）；打包资产 =
+    # resources/models/isc_ft_v107（209MB，SVL_ISC_ONNX 注入，缺 = 整体跳过不报错）。
+    # 已知上限：候选提案来自 CLS 聚簇 ⇒ p20/p34 型 CLS 真盲案例救不到（门控 v2 = 提案放宽到
+    # 检索 top-N）；t2r03b 无候选段不救。快速档（refine=False）跳过。
+    isc_refine_enabled: bool = True
+    isc_refine_margin: float = 0.05
+    isc_refine_onnx: str = ""
+    # v2 宽幅扫描（2026-10-03 续45 实现 / 续46 翻默认开，用户拍板）：以现主为中心 ±radius
+    # 粗扫（2s）+ top-3 粗峰细化，峰作为虚拟候选进同一 margin 门——破「CLS 真盲 ⇒ 聚簇
+    # 提案框死第二意见视野」（p20/p34 型）。**验收 PASS 证据** = FINDINGS_ORTHOGONAL_BACKBONE
+    # _PROBE_20261002 §11：严格 134→136（p20/p34 获救，MISS6 缺口 6→4）· 导出实得 128→131 ·
+    # 场景/负例持平 · 翻转 3 条全真增益、churn 2 行无损失、无自信错恶化。代价 = 宽扫
+    # ~150 embeds/歧义段，四片合计 +88min（续46 窗批量解码已对冲一部分）。radius=90 覆盖
+    # 扩验证 far 桶全部独家增益（p34 off 82s/p09 81.8s）。快速档跳过（同 isc_refine_enabled）。
+    isc_refine_scan_radius_s: float = 90.0
+    # v3 阶梯宽扫（2026-10-03 续48）：0 < ladder < radius 时先扫 ±ladder 内圈，阶段内已有
+    # 峰过 margin 门即收工，否则扩 ±radius 外圈——p20 型（7s）一阶段命中、p34 型（82s）
+    # 内圈无过门峰必触发扩展 ⇒ radius90 能救的阶梯全救，多数段省外圈粗扫。预期宽扫成本
+    # -60~70%（drift/aligned 段占多数）。**默认 0.0 = 现役全域扫行为**（ladder 关时单阶段
+    # 与 v2 逐位同）；待四片回归（OFF=v2 现役批，严格 136/导出 131 零回退 + p20/p34 必保 +
+    # 计时对比）后由用户拍板再翻。
+    isc_refine_ladder_s: float = 0.0
+    # L2 源片 ISC 索引宽扫（2026-10-04 续52 立项 / **2026-10-05 续53 翻默认开，用户拍板**）：
+    # 开 = 宽扫粗排从「2s 网格逐点抓帧+嵌入」换成「源片 ISC 索引（1s 网格特征表，一次构建）
+    # matmul 排序」，top-K 峰仍走真帧局部精扫（形态 B：top-5 ±4s，探针实测见
+    # FINDINGS_COST_STRUCTURE_LEVERS_20261003 §5.6.2/5.6.3）。
+    # **翻默认 PASS 证据**：① 四片双臂 A/B（续52-F）提速 1.375/1.339/1.630/1.381× 合计 **1.44×**，
+    # 三指标 136/131/138/4·9 与基线逐项一致零回退（差异 15/309 行，置信 15/15 不变）；
+    # ② 常态链（续52-G）：`data/isc_index/` + sha256 失效判定 + locate 内同步自动构建，
+    # 复验四片新 on 臂与验收臂 strip 后 0 差异；③ 建表性能结案（续53）：目标网格按最后
+    # 视频帧 pts 截断，test1-om(mkv) 重建 5.01×（3198→638s，12.9 帧/s）且与验收索引
+    # times/feats **逐字节相等** —— 一次性建表成本 = mp4 ~5~11min / mkv ~11min/137min 片
+    # （§5.6.6；旧「mkv +53min」口径作废）。索引文件 = ``isc_l2_index_dir`` 下
+    # ``{stem}@1.000fps.tp.isci.npz``（runtime 自动构建；`build_isc_index.py --sampling
+    # truepts` 同一实现）。**回退路径** = 本旋钮置 False（逐位回到现役 v2 宽扫，索引文件
+    # 留存无害）；缺索引/构建失败 = 自动回退现役宽扫并留 WARNING。ladder 与 L2 互斥：
+    # L2 开时 ladder 忽略。
+    isc_l2_index_enabled: bool = True
+    isc_l2_index_dir: str = ""
+    # 窗批量抓帧解码（2026-10-03 续46）：locate 后处理的抓帧从「每帧 spawn 一次 ffmpeg」
+    # 改为「每时间簇一次 spawn 窗解码」（-copyts+showinfo PTS 对齐，选帧规则与 grab_frame
+    # 同语义）。**2026-10-03 翻默认开（用户拍板做续46）**：零语义证据 = 单测逐字节一致
+    # （synthetic a1.mp4）+ 真实 2.mkv 132 帧逐字节一致 + test1 全片 locate strip(result_id)
+    # 55 段逐位一致（信封同）；提速 = 微基准 1.73× / test1 整条 locate 21.5→16.0min = 1.34×
+    # （work/grab_window_ab/）。前提：-copyts 不可省（无它时间轴重置 ⇒ 差一帧，实测）。
+    grab_window_decode: bool = True
+    # 网格抽取抓帧（2026-10-03 续50 L1）：宽扫粗扫改走 FFmpegIO.grab_grid_times（select 抽帧）。
+    # 实测（test1-om t0=1382.5 / 180s 窗 / 2s 网格 / 91 点）27.9s → 11.1s = **2.51×**，
+    # 79/91 逐字节同帧、其余 ≤1 源帧，ISC cos mean 0.997 / min 0.922（work/grab_pipe_ab/）。
+    # 剩余成本 = 解码地板（同窗纯解码 8.5s = 21× 实时）⇒ 更深的降本要看续50 L2（源片索引）。
+    # **2026-10-03（续51）翻默认 True（用户拍板选项 B）**，验收证据：
+    #   ① 帧级逐字节等价（安全网后：4 组生产相位网格 0 差异，300s@1s=300/300、180s@2s=90/90）；
+    #   ② test1 整条 locate 逐字段 0 差异（46.2→36.4min = **1.27×**）；
+    #   ③ 2mkv 双新臂逐字段 0 差异（53.8→41.3min = **1.30×**）；
+    #   ④ 四片三指标逐项一致（严格 136/139 · 导出 131 · 场景 138 · 负例 4/9；支撑 1103→1108）；
+    #   ⑤ 未归因项 = test2 3 行 / test3 5 行 **LOW 置信** span 形状差异（不移动任何指标），
+    #      fresh 双新臂在后台跑完后归因补记（work/isc_grid_ab/）。
+    # 旧路径仍可一键回退：grab_grid_decode=False（或快速档另有开关）。
+    grab_grid_decode: bool = True
     confidence: ConfidenceConfig = field(default_factory=ConfidenceConfig)
     seq_align: SeqAlignConfig = field(default_factory=SeqAlignConfig)
 

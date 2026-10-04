@@ -42,7 +42,8 @@ def create_task(req: AnalyzeTaskRequest, ctx: AppContext = Depends(get_context))
         )
     # ≥2 段原片：original_path 置空，由 worker 合并后回写（2026-09-29 video.concat 移植）。
     single = "" if len(sources) > 1 else sources[0]
-    task = tm.submit_analyze(req.edited_path, single, original_paths=sources)
+    task = tm.submit_analyze(req.edited_path, single, original_paths=sources,
+                             refine=req.refine)
     return {"task_id": task.task_id}
 
 

@@ -17,6 +17,7 @@ const REASONS: Record<string, string> = {
   manual_override: '用户手动覆盖确认',
   no_candidates: '未找到候选',
   no_span: '未定位到区间',
+  no_evidence: '未找到足够定位证据',
   text_card_not_in_source: '黑底文字卡 / 片尾标识——非源片内容',
   // conf_v2 并行通道（竞品四项加权置信，默认关）
   insufficient_samples: '采样证据不足',

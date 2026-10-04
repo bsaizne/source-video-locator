@@ -1,0 +1,36 @@
+{
+  "name": "isc_ft_v107",
+  "model": "ISC21 descriptor track 1st (lyakaap/ISC21-Descriptor-Track-1st) tf_efficientnetv2_m.in21k_ft_in1k + GeM(p=1) + fc256 + BN + L2",
+  "feature_version": "isc_ft_v107@512_l2_256d",
+  "opset": 17,
+  "input": {
+    "name": "input",
+    "shape": [
+      1,
+      3,
+      512,
+      512
+    ],
+    "dtype": "float32"
+  },
+  "output": {
+    "name": "emb",
+    "shape": [
+      "N",
+      256
+    ],
+    "dtype": "float32"
+  },
+  "backend_compatibility": [
+    "directml",
+    "cpu"
+  ],
+  "consumed_by": "engine/localization/isc_refine.py IscScorer (SVL_ISC_ONNX)",
+  "preprocess": "BGR->RGB, resize 512x512 cubic, /255, mean=std=(0.5,0.5,0.5), NCHW",
+  "weights_note": "gem(p=1.0) 重写为 ReduceMean 后 DML 可授权（原始 avg_pool+pow 形态 E_INVALIDARG）；外部权重独立 209MB，与 DINOv2 无共享。",
+  "source": "2026-10-03 从 work/isc21_weights_ortho_probe/ 入册（pth 源= tier2 归档 isc_ft_v107.pth.tar，官方 release v1.0.1）；再生成脚本 = mvp/scripts/export_isc_onnx.py",
+  "sha256": {
+    "isc_ft_v107.onnx": "9fc9569ae4dbd8c42eef3bc958b25bddf183ab6544c50fba578fb52d25049e06",
+    "isc_ft_v107.onnx.data": "647a53ff3fd6b49e1ad33ba6bf531fb34cf804737430ddf46b4f6f169c056455"
+  }
+}

@@ -55,7 +55,7 @@ class FakeMergeService:
         return {"merged_path": "D:/merged/merged_2_ab12cd34ef5a_copy.mp4",
                 "mode": "copy", "reused": False, "duration_s": 100.0}
 
-    def locate(self, edited_path, original_path, *, on_progress=None, cancel_token=None):
+    def locate(self, edited_path, original_path, *, on_progress=None, cancel_token=None, refine=None):
         self.locate_calls.append((str(edited_path), str(original_path)))
         return _sample_batch()
 

@@ -5,6 +5,7 @@
 import type {
   AlternativeJson,
   BackendInfoJson,
+  FsBrowseResult,
   IndexMetaJson,
   IndexValidationJson,
   MediaInfoJson,
@@ -211,4 +212,47 @@ export function mockIndexBuildSteps(total = 100): Array<{ stage: 'INDEX_BUILD'; 
     { stage: 'INDEX_BUILD', current: 100, total, message: 'writing index' },
     { stage: 'INDEX_BUILD', current: 100, total, message: 'index ready' },
   ]
+}
+
+// ---------------------------------------------------------------- 素材入库浏览
+// GET /api/fs/browse 的 Mock 形态（入库层四件，2026-10-02）。假树与后端语义一致：
+// 自然排序、白名单过滤（.txt 不出现）、parent='' 回「此电脑」。
+const MOCK_FS: Record<string, FsBrowseResult> = {
+  '': {
+    kind: 'root', path: '', parent: null, entries: [],
+    drives: [
+      { name: 'C:', path: 'C:\\', label: '系统', total_bytes: 512e9, free_bytes: 120e9 },
+      { name: 'D:', path: 'D:\\', label: '素材', total_bytes: 2048e9, free_bytes: 900e9 },
+    ],
+  },
+  'C:\\': {
+    kind: 'dir', path: 'C:\\', parent: '', entries: [
+      { name: 'Users', path: 'C:\\Users', is_video: false },
+      { name: 'demo.mp4', path: 'C:\\demo.mp4', is_video: true, size_bytes: 12e6 },
+    ], drives: [], free_bytes: 120e9, total_bytes: 512e9,
+  },
+  'D:\\': {
+    kind: 'dir', path: 'D:\\', parent: '', entries: [
+      { name: '素材库', path: 'D:\\素材库', is_video: false },
+      { name: 'clip2.mp4', path: 'D:\\clip2.mp4', is_video: true, size_bytes: 340e6 },
+      { name: 'clip10.mp4', path: 'D:\\clip10.mp4', is_video: true, size_bytes: 512e6 },
+    ], drives: [], free_bytes: 900e9, total_bytes: 2048e9,
+  },
+  'D:\\素材库': {
+    kind: 'dir', path: 'D:\\素材库', parent: 'D:\\', entries: [
+      { name: '第2集.mkv', path: 'D:\\素材库\\第2集.mkv', is_video: true, size_bytes: 4.2e9 },
+      { name: '第10集.mkv', path: 'D:\\素材库\\第10集.mkv', is_video: true, size_bytes: 4.6e9 },
+    ], drives: [], free_bytes: 900e9, total_bytes: 2048e9,
+  },
+}
+
+export function mockFsBrowse(path: string): FsBrowseResult {
+  const key = path.trim()
+  const hit = MOCK_FS[key]
+  if (!hit) {
+    const err = new Error('not_found')
+    err.name = 'FsNotFound'
+    throw err
+  }
+  return hit
 }

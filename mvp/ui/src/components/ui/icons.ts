@@ -7,6 +7,9 @@ export interface IconPath {
 
 const S = {
   home: 'M3 11.5 12 4l9 7.5M5.5 10.5V20h4v-5h5v5h4v-9.5',
+  // 素材入库浏览（FileBrowser）用：盘符 = 横置硬盘，刷新 = 环形箭头
+  drive: 'M4 8h16a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-6a2 2 0 0 1 2-2ZM6 16h.01M10 16h4',
+  refresh: 'M20 11a8 8 0 1 0-2.3 6.1M20 5v6h-6',
   folder: 'M3 6.5A1.5 1.5 0 0 1 4.5 5h4l2 2h9A1.5 1.5 0 0 1 21 8.5V17a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z',
   film: 'M4 6h16v12H4zM4 10h16M4 14h16M8 6v12M16 6v12',
   search: 'M10.5 4a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13ZM15 15l4.5 4.5',

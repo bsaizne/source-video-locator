@@ -53,8 +53,9 @@ class FakeService:
         self.mode = mode
         self.locate_calls: list[tuple] = []
 
-    def locate(self, edited_path, original_path, *, on_progress=None, cancel_token=None):
+    def locate(self, edited_path, original_path, *, on_progress=None, cancel_token=None, refine=None):
         self.locate_calls.append((edited_path, str(original_path), cancel_token))
+        self.last_refine = refine
         if self.mode == "fail":
             raise LocatorError("boom")
         if on_progress is not None:
@@ -119,6 +120,13 @@ class WorkerSuccessTest(TaskApiTestBase):
         self.assertEqual(task.stage, TaskStage.FINISHED)
         self.assertEqual(task.result["schema_version"], 1)
         self.assertEqual(len(self.fake.locate_calls), 1)
+
+    def test_refine_passthrough_to_locate(self):
+        # 快/精双模式（2026-10-02）：submit_analyze(refine) 必须原样到达 service.locate
+        self.tm.submit_analyze("D:/e.mp4", "D:/o.mkv", refine=False)
+        self.assertIs(self.fake.last_refine, False)
+        self.tm.submit_analyze("D:/e2.mp4", "D:/o.mkv")
+        self.assertIsNone(self.fake.last_refine)   # 不传 = config 默认
 
 
 class WorkerExceptionTest(TaskApiTestBase):

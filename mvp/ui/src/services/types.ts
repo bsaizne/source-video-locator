@@ -145,6 +145,33 @@ export interface SourceMergeJson {
   duration_s: number | null
 }
 
+// Mirror of GET /api/fs/browse (mvp/api/routes/fsbrowse.py — 素材入库浏览,
+// 竞品 web.file_api.browser 四件：盘符/自然排序/白名单/磁盘剩余)。后端已完成
+// 自然排序与白名单过滤；前端只渲染，不再排序。
+export interface FsDriveJson {
+  name: string
+  path: string
+  label: string
+  total_bytes: number
+  free_bytes: number
+}
+export interface FsEntryJson {
+  name: string
+  path: string
+  is_video: boolean
+  size_bytes?: number
+}
+export interface FsBrowseResult {
+  kind: 'root' | 'dir'
+  path: string
+  /** 上一级；'' = 回「此电脑」；null = 无上级 */
+  parent: string | null
+  drives: FsDriveJson[]
+  entries: FsEntryJson[]
+  free_bytes?: number
+  total_bytes?: number
+}
+
 // A query unit (edited-side shot). numpy `feats`/`times` stay on the backend;
 // the UI only needs the span + a label.
 export interface ShotSegmentJson {

@@ -18,7 +18,7 @@ from infrastructure.logging import configure_logging, get_logger, set_session_id
 
 from .dependencies import get_context
 from .session import build_channel, resolve_session_token, session_middleware
-from .routes import analysis, health, index, logs, media, preview, progress, results, settings, source, tasks
+from .routes import analysis, fsbrowse, health, index, logs, media, preview, progress, results, settings, source, tasks
 
 _log = get_logger("api")
 
@@ -69,7 +69,7 @@ def create_app() -> FastAPI:
     # 路由
     for r in (health.router, index.router, analysis.router, results.router, tasks.router,
               progress.router, preview.router, settings.router, logs.router, media.router,
-              source.router):
+              source.router, fsbrowse.router):
         app.include_router(r)
 
     # 异常处理

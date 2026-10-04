@@ -12,3 +12,5 @@ resources/backend/ffprobe.exe
 resources/models/dinov2_cls_384/dinov2_cls_384.onnx
 resources/models/dinov2_cls_384/dinov2_cls_384.onnx.data
 resources/models/dinov2_cls_patch/dinov2_cls_patch.onnx.data
+resources/models/isc_ft_v107/isc_ft_v107.onnx
+resources/models/isc_ft_v107/isc_ft_v107.onnx.data

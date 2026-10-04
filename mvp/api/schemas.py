@@ -50,6 +50,9 @@ class AnalyzeTaskRequest(BaseModel):
     edited_path: str = ""
     original_path: str = ""
     original_paths: list[str] = []   # 多原片（≥2 触发合并, 2026-09-29 video.concat 移植）
+    # 快/精双模式（2026-10-02）：None=config 默认（高精度）；False=快速档
+    # （跳过切镜拆分+画面深度复核）。透传 Task.refine → worker → service.locate。
+    refine: bool | None = None
 
 
 class RenderTaskRequest(BaseModel):

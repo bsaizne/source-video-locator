@@ -72,6 +72,9 @@ if (app.isPackaged) {
   // 整条定位慢 2.6~3.9x（2026-10-01 打包态归因：包内 device=cpu / 源码树 device=dml）。
   backendConfig.spawnEnv.SVL_PATCH_ONNX = path.join(
     process.resourcesPath, 'models', 'dinov2_cls_patch', 'dinov2_cls_patch.onnx')
+  // ISC 第二意见 ONNX（2026-10-03 续44 翻默认）。缺它 isc_refine 整体跳过（config 默认开）。
+  backendConfig.spawnEnv.SVL_ISC_ONNX = path.join(
+    process.resourcesPath, 'models', 'isc_ft_v107', 'isc_ft_v107.onnx')
 }
 
 const backend = new BackendManager({

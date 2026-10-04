@@ -62,6 +62,14 @@ class ApplicationError(LocatorError):
     user_message = "任务未能完成，请重试；若反复出现请下载日志发给支持人员。"
 
 
+class DiskSpaceError(LocatorError):
+    """磁盘预检失败（2026-10-02 入库层四件）：合并/渲染动手前目标盘剩余不足。"""
+
+    code = "LOC-1108"
+    user_message = ("磁盘空间不足，请清理出足够空间后重试"
+                    "（可在文件「浏览」面板查看各盘剩余容量）。")
+
+
 def public_error(exc: BaseException) -> dict:
     """把任意异常转成对外错误体：稳定码 + 用户话术 + 技术细节。"""
     code = str(getattr(exc, "code", "") or "") or "LOC-9999"

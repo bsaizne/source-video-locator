@@ -105,13 +105,14 @@ export const useAnalysisStore = defineStore('analysis', () => {
     }
   }
 
-  async function runLocate(edited: string, original: string, originalPaths?: string[]) {
+  async function runLocate(edited: string, original: string, originalPaths?: string[],
+                           refine?: boolean) {
     ensureSubscribed()
     running.value = true
     error.value = null
     idleSteps()
     try {
-      const { task_id } = await service.startAnalyzeTask(edited, original, originalPaths)
+      const { task_id } = await service.startAnalyzeTask(edited, original, originalPaths, refine)
       activeTaskId.value = task_id
       const batch = await pollTaskUntilDone(task_id)
       steps.value = steps.value.map((s) => (s.status === 'error' ? s : { ...s, status: 'done' }))

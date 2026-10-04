@@ -9,6 +9,7 @@ import {
   mockIndexBuildSteps,
   mockIndexMeta,
   mockIndexValidation,
+  mockFsBrowse,
   mockMediaInfo,
   mockResultBatch,
   mockSegments,
@@ -20,6 +21,7 @@ import type {
   ConnectionStatus,
   DevicePreference,
   DeviceSettingsJson,
+  FsBrowseResult,
   IndexMetaJson,
   IndexStatus,
   IndexValidationJson,
@@ -125,6 +127,13 @@ export class MockServiceAdapter implements ServiceAPI {
 
   async getMediaInfo(_path: string): Promise<MediaInfoJson> {
     return mockMediaInfo()
+  }
+
+  // 素材入库浏览（Mock）：假树语义与后端一致（自然排序/白名单/parent=''）。
+  // 未知道具抛 Error('not_found')，面板按普通错误显示。
+  async browseFs(path: string): Promise<FsBrowseResult> {
+    await sleep(60, this.token)
+    return mockFsBrowse(path)
   }
 
   // 多原片合并（Mock）：与后端一样拒绝 <2 段，便于 UI 契约测试覆盖两条分支。
@@ -268,10 +277,12 @@ export class MockServiceAdapter implements ServiceAPI {
     editedPath: string,
     originalPath: string,
     originalPaths?: string[],
+    refine?: boolean,
   ): Promise<{ task_id: string }> {
     void editedPath
     void originalPath
     void originalPaths
+    void refine   // Mock 无真实后处理，档位仅保持签名一致
     const task: TaskJson = {
       task_id: 'mock-task-0001',
       status: 'pending',

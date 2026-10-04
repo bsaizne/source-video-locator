@@ -25,6 +25,7 @@ import type {
   DevicePreference,
   DeviceSettingsJson,
   DeviceType,
+  FsBrowseResult,
   IndexStatus,
   IndexValidationJson,
   MediaInfoJson,
@@ -190,6 +191,15 @@ export class HttpServiceAdapter implements ServiceAPI {
     )
   }
 
+  // 素材入库浏览 GET /api/fs/browse（盘符/目录/白名单视频；自然排序在后端做）。
+  // 404/403 是浏览期正常事件（目录被删/无权限），request() 统一话术抛出、面板捕获显示。
+  async browseFs(path: string): Promise<FsBrowseResult> {
+    return this.request<FsBrowseResult>(
+      `/api/fs/browse?path=${encodeURIComponent(path)}`,
+      { method: 'GET' },
+    )
+  }
+
   async getIndexMeta(_originalPath: string): Promise<IndexStatus['indexMeta']> {
     return this.lastIndexStatus?.indexMeta ?? null
   }
@@ -347,12 +357,15 @@ export class HttpServiceAdapter implements ServiceAPI {
     editedPath: string,
     originalPath: string,
     originalPaths?: string[],
+    refine?: boolean,
   ): Promise<{ task_id: string }> {
     const sources = (originalPaths ?? []).map((p) => p.trim()).filter(Boolean)
-    const body =
+    const body: Record<string, unknown> =
       sources.length > 1
         ? { edited_path: editedPath, original_path: '', original_paths: sources }
         : { edited_path: editedPath, original_path: originalPath }
+    // 双模式：只在显式选择时携带（undefined → 后端 config 默认=高精度）
+    if (refine !== undefined) body.refine = refine
     return this.request<{ task_id: string }>('/api/tasks/analyze', {
       method: 'POST',
       body: JSON.stringify(body),

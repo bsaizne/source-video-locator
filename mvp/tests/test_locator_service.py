@@ -240,6 +240,50 @@ class SourceLocatorServiceTest(unittest.TestCase):
         self.assertIsInstance(batch.results[0].confidence.level, ConfidenceLevel)
 
 
+class RefineModeTest(unittest.TestCase):
+    """快/精双模式（2026-10-02）：``locate(refine=...)`` 逐任务覆盖后处理旋钮。
+
+    快速档（refine=False）必须**不发**「拆分多镜头段」消息（切镜拆分被跳过）；
+    默认/显式 True 走 config 默认（开）应看到该消息。patch 精排在假体下因缺
+    重排资产自动跳过，不进入断言。
+    """
+
+    def _messages(self, **kw):
+        bundle, orig, _ = _continuous_bundle()
+        q = _l2(orig[20:30] + 1e-3 * np.random.RandomState(1).randn(10, 384).astype(np.float32))
+
+        class _Back:
+            def embed_frames(self, frames, batch_size=8):
+                return q
+
+            def device_name(self):
+                return "cpu"
+
+        class _Ffmpeg:
+            def iter_frames(self, path, fps, *, start=None, end=None,
+                            scale=None, meta=None):
+                for i in range(q.shape[0]):
+                    yield (i / fps, np.zeros((8, 8, 3), dtype=np.uint8))
+
+            def grab_frame(self, path, t):
+                return np.zeros((8, 8, 3), dtype=np.uint8)
+
+        msgs: list[str] = []
+        srv = SourceLocatorService(ffmpeg=_Ffmpeg(), backend=_Back())
+        srv.locate("edited.mp4", "dummy.mkv", index_bundle=bundle,
+                   on_progress=lambda ev: msgs.append(ev.message), **kw)
+        return msgs
+
+    def test_default_runs_shot_split(self):
+        self.assertTrue(any("拆分多镜头段" in m for m in self._messages()))
+
+    def test_fast_mode_skips_shot_split(self):
+        self.assertFalse(any("拆分多镜头段" in m for m in self._messages(refine=False)))
+
+    def test_explicit_precise_equals_default(self):
+        self.assertTrue(any("拆分多镜头段" in m for m in self._messages(refine=True)))
+
+
 class PersistenceTest(unittest.TestCase):
     def test_result_from_dict_roundtrip(self):
         r = Result(edited=TimeSpan(1.0, 2.0), original=TimeSpan(3.0, 4.0),
@@ -461,5 +505,78 @@ class OutOfScopeMomentTest(unittest.TestCase):
         center = (res[0].original.start + res[0].original.end) / 2
         self.assertGreaterEqual(center, 40.0)
         self.assertLessEqual(center, 58.0)
+
+class GrabGridBatchTest(unittest.TestCase):
+    """`_grab_grid_batch`（续50 L1 接线）：旋钮开关 / 接口缺省 / 超片尾回退三条路径。"""
+
+    class _FF:
+        def __init__(self, with_grid=True):
+            self.calls = []
+            if with_grid:
+                self.grab_grid_times = self._grid
+            self.grab_frames = self._win
+
+        def _grid(self, path, times):
+            self.calls.append(("grid", list(times)))
+            return {round(float(t), 6): ("grid", float(t)) for t in times}
+
+        def _win(self, path, times):
+            self.calls.append(("win", list(times)))
+            return {round(float(t), 6): ("win", float(t)) for t in times}
+
+    def _stub(self, grid_on=True, with_grid=True, miss=()):
+        from types import SimpleNamespace
+        svc = SimpleNamespace()
+        svc.config = SimpleNamespace(pipeline=SimpleNamespace(grab_grid_decode=grid_on))
+        ff = self._FF(with_grid=with_grid)
+        if miss:
+            orig = ff.grab_grid_times
+
+            def _g(path, times):
+                got = orig(path, times)
+                for t in list(got):
+                    if float(t) in miss:
+                        got.pop(t)
+                return got
+
+            ff.grab_grid_times = _g
+        svc.ffmpeg = ff
+        svc._grab_cache = {}
+        svc._grab_frame_cached = lambda p, t: ("single", float(t))
+        return svc
+
+    def test_off_uses_window_path(self):
+        svc = self._stub(grid_on=False)
+        got = SourceLocatorService._grab_grid_batch(svc, "p", [0.0, 2.0, 4.0])
+        self.assertEqual(sorted(got), [0.0, 2.0, 4.0])
+        self.assertEqual(svc.ffmpeg.calls[0][0], "win")
+
+    def test_on_uses_grid_path_and_caches(self):
+        svc = self._stub(grid_on=True)
+        got = SourceLocatorService._grab_grid_batch(svc, "p", [10.0, 12.0])
+        self.assertEqual(got[10.0], ("grid", 10.0))
+        self.assertEqual(svc.ffmpeg.calls[0][0], "grid")
+        self.assertEqual(len(svc._grab_cache), 2)
+        svc.ffmpeg.calls.clear()
+        again = SourceLocatorService._grab_grid_batch(svc, "p", [10.0, 12.0])
+        self.assertEqual(svc.ffmpeg.calls, [])          # 二次全命中缓存
+        self.assertEqual(again[12.0], ("grid", 12.0))
+
+    def test_missing_interface_falls_back(self):
+        svc = self._stub(grid_on=True, with_grid=False)
+        SourceLocatorService._grab_grid_batch(svc, "p", [1.0])
+        self.assertEqual(svc.ffmpeg.calls[0][0], "win")
+
+    def test_grid_miss_falls_back_to_single(self):
+        svc = self._stub(grid_on=True, miss=(2.0,))
+        got = SourceLocatorService._grab_grid_batch(svc, "p", [0.0, 2.0])
+        self.assertEqual(got[2.0], ("single", 2.0))
+        self.assertEqual(got[0.0], ("grid", 0.0))
+
+
+if __name__ == "__main__":
+    unittest.main()
+
+# --- 续50 追加区（放在 main 之后以保证文件尾部追加安全） ---
 
 

@@ -174,7 +174,7 @@ class RenderRouteTest(unittest.TestCase):
         """回归锁：新增 kind 字段不得改变既有分析任务的对外形态。"""
 
         class AnalyzeSvc:
-            def locate(self, edited, original, *, on_progress=None, cancel_token=None):
+            def locate(self, edited, original, *, on_progress=None, cancel_token=None, refine=None):
                 return _sample_batch()
 
         svc = AnalyzeSvc()
