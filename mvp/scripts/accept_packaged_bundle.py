@@ -23,8 +23,10 @@ BENCH = Path(r"D:\claudework\benchmark")
 VENV_PY = Path(r"D:\claudework\video-dedup-tool\.venv\Scripts\python.exe")
 RES = BENCH / "mvp" / "ui" / "release" / "win-unpacked" / "resources"
 PATCH_DIR = RES / "models" / "dinov2_cls_patch"
+ISC_DIR = RES / "models" / "isc_ft_v107"
 # 合成素材冒烟：venv 直跑约 20s；CPU torch 回退实测 78.5s。阈值取中间，判「有没有回退」。
-SMOKE_WALL_S = 45.0
+# 2026-10-03 续44 ISC 翻默认：冒烟额外跑 ISC 重扫（EffNetV2-M@512），阈值放宽到 75s。
+SMOKE_WALL_S = 75.0
 
 fails: list[str] = []
 
@@ -64,8 +66,24 @@ def main() -> int:
             check("sha256 %s" % fname, f.exists() and sha256(f) == digest,
                   "" if f.exists() else "文件缺失")
 
+    # ISC 第二意见资产（2026-10-03 续44 翻默认；缺 = isc_refine 整体跳过，精度回退到续44 前）
+    isc_manifest = ISC_DIR / "asset.json"
+    check("ISC 资产清单在位", isc_manifest.exists(), str(isc_manifest))
+    isc_graph = ISC_DIR / "isc_ft_v107.onnx"
+    isc_data = ISC_DIR / "isc_ft_v107.onnx.data"
+    check("ISC 图在位", isc_graph.exists(),
+          "%s bytes" % (isc_graph.stat().st_size if isc_graph.exists() else "-"))
+    check("ISC 外部权重在位", isc_data.exists(),
+          "%s bytes" % (isc_data.stat().st_size if isc_data.exists() else "-"))
+    if isc_manifest.exists() and isc_graph.exists() and isc_data.exists():
+        isc_want = json.loads(isc_manifest.read_text(encoding="utf-8")).get("sha256", {})
+        for fname, digest in isc_want.items():
+            f = ISC_DIR / fname
+            check("sha256 %s" % fname, f.exists() and sha256(f) == digest,
+                  "" if f.exists() else "文件缺失")
+
     # 用与 Electron 主进程相同的接法起包内后端，跑合成素材冒烟
-    env = {**os.environ, "SVL_PATCH_ONNX": str(graph)}
+    env = {**os.environ, "SVL_PATCH_ONNX": str(graph), "SVL_ISC_ONNX": str(isc_graph)}
     tmp_data = BENCH / "work" / "pkg_attr" / "accept_data"
     cmd = [str(VENV_PY), str(BENCH / "mvp" / "scripts" / "attr_packaged_headless.py"),
            "syn", "1.0", str(tmp_data), "packaged"]
@@ -83,6 +101,8 @@ def main() -> int:
               "wall=%.1fs" % summary.get("wall_s", -1))
         check("精排在 GPU（未回退 CPU torch）", "patch reranker device=dml" in text,
               "出现 device=cpu 即为静默降级" if "patch reranker device=cpu" in text else "")
+        check("ISC 第二意见在 GPU", "isc refine device=dml" in text,
+              "出现 device=cpu 即 ISC 降级" if "isc refine device=cpu" in text else "")
         check("冒烟耗时在阈值内", summary.get("wall_s", 1e9) <= SMOKE_WALL_S,
               "%.1fs <= %.1fs" % (summary.get("wall_s", 1e9), SMOKE_WALL_S))
         check("定位出结果", summary.get("segments", 0) > 0, "segments=%s" % summary.get("segments"))
