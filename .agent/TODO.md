@@ -10,6 +10,22 @@
 
 ## P0 — Current
 
+> **▶ 2026-10-05（续53 补三）— E2E 抓到「第二次分析必崩」真缺陷 + 修复；r8 定稿**
+> E2E test1（打包态 headless）抓到续52-G 潜伏崩溃：`_isc_l2_validated` 被初始化为 `{}`（dict），
+> 「加载已存在有效索引」分支 `.add` 即崩 = 用户第二次分析同一原片必崩（当时四片全走重建分支漏测）。
+> 修复 = `set()` + 2 回归测试 + worker 异常堆栈落 tasks logger（此前 no-op 无从归因）。
+> 重验：后端 **523 OK** · E2E **PASS**（24.3min/55 段/L2 加载 8221 帧/DML）· accept **FAILED=0** ·
+> zip 0 缺漏 · 启动冒烟 PASS。**r8 zip 已重打定稿**；release = r7 + r8。
+> runtime 功能确认全过（fsbrowse/L2 翻默认行为证据/GPU/PYZ/注入）。**等口令**：git 提交（续53 修复）。
+> 未改 GT / 未 bump feature_version。
+
+> **▶ 2026-10-05（续53 补二）— git 三笔推送 + r8 出包验收全过；release 只留 r7+r8**
+> git `199c010..6fcf399` 三笔已推 origin/master（feat 产品代码 / chore 研究脚本 / docs 档案）。
+> r8 = `Video-Locator-win-x64-20261005r8.zip`（981MB）：accept **FAILED=0** + zip 逐文件 0 缺漏 +
+> 启动冒烟 PASS。r6 已删，release 现役 = r7（回滚）+ r8（最新）。⚠️ r7 的 .zip 实为 tar 流（解包
+> 用 tar 工具）。**下一步**：r8 真机端到端复核（顺带看 L2 首跑画面索引构建进度与时间口径观感）；
+> mkv 建表异步化 / 代际差点位穷举（下批）。未改 GT / 未 bump feature_version。
+
 > **▶ 2026-10-05（续53 补一）— L2 翻默认已执行（用户口令「1」）：`isc_l2_index_enabled=True` 生效**
 > config 翻默认（证据链+回退路径入注释）· 回归锁翻转 · DECISIONS 2026-10-05 落账 ·
 > PRODUCT_INTRO 口径同步（高精度全片 45~60min → **27~43min**；一次性画面索引 5~11min/部原片）·

@@ -63,7 +63,30 @@
 
 ## Current Task
 
-> **▶ 2026-10-05（续53 补一）— L2 翻默认已执行（用户拍板口令「1」）：`isc_l2_index_enabled=True` 生效【下个对话从这里读起】**
+> **▶ 2026-10-05（续53 补三）— E2E 抓到「第二次分析必崩」真缺陷 + 修复；r8 定稿【下个对话从这里读起】**
+> ① **r8 包 runtime 功能确认全过**（探针 `probe_pkg_runtime_features.py`）：fsbrowse 路由 ·
+   L2 翻默认行为证据（syn 中自动建索引）· patch/ISC GPU · PYZ 模块齐 · main.js 注入齐。
+> ② **E2E 抓到续52-G 潜伏崩溃**：`_isc_l2_validated` 初始化成 `{}`（dict）⇒ `.add` 即崩——
+   只命中「加载已存在有效索引」分支（续52-G 复验全走重建故漏测）⇒ **用户第二次分析同一原片必崩**。
+   归因靠补的可诊断性修复（worker 异常堆栈落 tasks logger；此前 no-op）。venv 复现 PASS 的
+   矛盾由双索引根（Local 无索引走建表）解释。
+> ③ **修复**：`set()` + 2 回归测试 + worker 堆栈留痕。后端 **523 OK**；E2E 第 4 轮 **PASS**
+   （24.3min/55 段/L2 加载 8221 帧分支/DML）；accept **FAILED=0**；zip 0 缺漏；启动冒烟 PASS。
+   **r8 zip 已重打定稿**（04:36，981MB）；release = r7（回滚）+ r8（现役）。
+> **等口令**：git 提交（续53 修复三件 + 新探针 2 个）/ r8 真机 UI 全链复核（可选，headless E2E 已过）。
+> 未改 GT / 未 bump feature_version。
+
+> **▶ 2026-10-05（续53 补二）— git 三笔推送 + r8 出包验收全过；release 只留 r7+r8**
+> git `199c010..6fcf399`（feat 7c6e485 / chore ee4c58a / docs 6fcf399）已推 origin/master，工作区清零。
+> **r8 = `Video-Locator-win-x64-20261005r8.zip`（981MB）**：accept **FAILED=0**（资产 sha256 全对 +
+> 包内 backend headless 冒烟 49.6s + DML/精排/ISC 全 GPU + 定位出段）+ zip 完整性（testzip OK、
+> 与 win-unpacked 逐文件 0 缺漏）+ Electron 壳启动冒烟 PASS。r6 已删；**release 现役 = r7（回滚）+ r8**。
+> ⚠️ 留痕：r7 的 .zip 实为 tar 流（无 PK 头，解包用 tar 工具）；r8 为真 zip（1.8GB→981MB 系压缩率）。
+> **待办**：真机端到端复核（r8 包上跑一条真实成片全链，顺带核对 L2 翻默认后的首跑画面索引构建
+> 进度文案与 27~43min 口径观感）；mkv 建表异步化（解耦）/ 代际差精确点位穷举（下批）。
+> 未改 GT / 未 bump feature_version。
+
+> **▶ 2026-10-05（续53 补一）— L2 翻默认已执行（用户拍板口令「1」）：`isc_l2_index_enabled=True` 生效**
 > `config.py` 翻默认（证据链+回退路径入注释）· 回归锁翻转（`test_default_knob_on`）·
 > DECISIONS 2026-10-05（续53）落账 · PRODUCT_INTRO 口径同步（高精度全片 45~60min →
 > **27~43min**，新增一次性画面索引 5~11min/部原片）· 顺带修 `_ensure_isc_l2_index`
@@ -2342,4 +2365,4 @@ test3 27.79 与 2026-09-26 border_review 独立裁决逐点吻合）; test2 **�
 
 ## Last Updated
 
-2026-10-05 01:50（续53 补一：L2 翻默认已执行 + stat/sha 保护补齐；等口令 = git 提交 / r8 重打）
+2026-10-05 04:45（续53 补三：E2E 抓到并修复「第二次分析必崩」；r8 定稿重验全过）

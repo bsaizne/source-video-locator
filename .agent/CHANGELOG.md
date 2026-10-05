@@ -1,5 +1,42 @@
 # CHANGELOG
 
+## 2026-10-05（续53 补三）— E2E 抓到续52-G 潜伏崩溃（第二次分析必崩）+ 修复 + r8 重验全过
+
+- **runtime 功能确认（r8 包内 backend，探针 `probe_pkg_runtime_features.py`）**：health/DirectML
+  生效 · `/api/fs/browse`（续41）在包内可响应 · **L2 翻默认行为证据**（syn 定位中日志
+  `isc l2 index build started/built` ⇒ 旋钮默认开已在包内生效）· patch/ISC 均 GPU ·
+  PYZ 模块表含 isc_l2_index/isc_refine/fsbrowse · main.js 含 SVL_ISC_ONNX/SVL_PATCH_ONNX 注入。
+- **E2E 抓到真崩溃**：test1 全链（打包态 headless）在 isc_refine 入口崩 LOC-9999。归因路径：
+  worker 异常细节进 no-op logger（无堆栈）→ venv 复现 PASS 判打包特异 → 补堆栈留痕后拿到
+  **根因 = `_isc_l2_validated` 被初始化为 `{}`（dict），`.add(ck)` 即 AttributeError**
+  （续52-G 引入；只命中「**加载已存在的有效索引**」分支——续52-G 复验四片全走重建分支故漏测；
+  venv 复现因索引根不同（无 SVL_DATA_DIR ⇒ Local 下无索引）走了建表分支而 PASS，双根目录对齐后矛盾解除）。
+  **影响面 = 用户第二次分析同一部原片必崩**，E2E 价值确证。
+- **修复**：① `set()`（+2 回归测试：有效索引加载不重建不崩 · 字段类型锁）；② worker 兜底异常
+  现带 `traceback.format_exc()` 落 tasks logger（dependencies.py 传入，此前 no-op = LOC-9999 无从归因）。
+- **重验**：后端全套 **523 OK (skipped=2)**；E2E 第 4 轮 **PASS**（wall=1459.4s=24.3min ·
+  55 段 · `isc l2 index loaded frames=8221` 走加载分支 · DirectML）；accept **FAILED=0**；
+  zip 0 缺漏 + testzip OK；Electron 启动冒烟 PASS。**r8 zip 已重打（04:36，981MB）**。
+- 已知留痕：accept 首跑与刚结束的 E2E 后端进程竞态可致 syn 臂误报 rc=1（手动复跑即过，
+  非包缺陷）。未改 GT / 未 bump feature_version。
+
+## 2026-10-05（续53 补二）— git 三笔提交推送 + r8 出包验收全过；旧包只留 r7
+
+- **git 提交推送（用户口令）**：三笔 `199c010..6fcf399 → origin/master`——
+  7c6e485 feat(mvp) 续41~续53 产品代码+测试+资产（45 文件）· ee4c58a chore(research)
+  探针/脚本+findings 归档 · 6fcf399 docs(agent) 交接 checkpoint。工作区清零。
+- **r8 出包**：`mvp/ui/release/Video-Locator-win-x64-20261005r8.zip`（981MB，zip 条目 7078，
+  testzip 无损坏，与 win-unpacked 目录逐文件比对 **0 缺漏**；win-unpacked 1.8GB）。
+  `accept_packaged_bundle.py` **FAILED=0**（CLS/patch/ISC 资产 sha256 全对 + 包内 backend
+  headless 冒烟 49.6s ≤75s + DirectML 生效 + 精排/ISC 均 GPU + 定位出段）；Electron 壳
+  启动冒烟 PASS（backend.exe 子进程正常拉起）。
+- **删旧包**：r6 zip 已删；**release 目录现役 = r7（回滚）+ r8（最新）**。
+- **留痕（包格式发现）**：r7 的 `.zip` 实为 **tar 流**（文件头无 PK magic，当初 tar 打包
+  后缀误用 zip）⇒ 1677MB ≈ 未压缩体积；r8 改为真 zip（Compress-Archive Optimal），
+  1.8GB→981MB 系压缩率差异非内容缺失。解包 r7 用 tar、r8 用 zip 工具。
+- r8 相对 r7 的内容增量 = 续42~续53 全部（ISC 第二意见+宽扫+L2 翻默认、L1 两级翻默认、
+  入库层四件、建表性能结案、UI 修复、售后三件等）。未改 GT / 未 bump feature_version。
+
 ## 2026-10-05（续53 补一）— L2 源片画面索引宽扫翻默认开（用户拍板口令「1」）
 
 - **落地**：`config.py` `isc_l2_index_enabled` False→True（注释写全证据链与回退路径）+
