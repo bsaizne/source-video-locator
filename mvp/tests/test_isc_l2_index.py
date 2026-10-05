@@ -226,5 +226,77 @@ class IscL2IndexStoreTest(unittest.TestCase):
             self.assertFalse(isc_l2_index.is_valid(p, src))
 
 
+class EnsureL2IndexServiceTest(unittest.TestCase):
+    """回归锁（2026-10-05，r8 打包态 E2E 抓到的真崩溃）：service 对「**已存在的有效索引**」
+    走 is_valid=True 分支时 `_isc_l2_validated.add(ck)` 必须可用——该字段曾被初始化为
+    `{}`（dict），`.add` 即 AttributeError ⇒ 用户第二次分析同一部原片必崩（续52-G 起潜伏，
+    因当时四片全部走「重建」分支而漏测）。fake 掉磁盘/哈希/FFmpeg 依赖，只测分支逻辑。"""
+
+    def test_existing_valid_index_loaded_not_rebuilt(self):
+        import tempfile
+        import types
+        from pathlib import Path as _Path
+
+        import app.locator_service as ls_mod
+
+        with tempfile.TemporaryDirectory() as td:
+            td = _Path(td)
+            src = td / "src.bin"
+            src.write_bytes(b"source-bytes")
+            root = td / "isc_index"
+            root.mkdir()
+            T = np.arange(5.0)
+            F = np.zeros((5, 256), dtype=np.float32)
+            idx_p = isc_l2_index.index_path_for(src, root)
+            isc_l2_index.save_index(idx_p, T, F, {"schema": "isc_l2_index_v1",
+                                                  "source_sha256": "cafe"})
+
+            srv = ls_mod.SourceLocatorService.__new__(ls_mod.SourceLocatorService)
+            srv._log = types.SimpleNamespace(info=lambda *a, **k: None,
+                                             warning=lambda *a, **k: None)
+            srv._isc_l2_cache = {}
+            srv._isc_l2_validated = set()      # 回归点：必须是 set（曾是 {} ⇒ .add 崩）
+            srv._isc_l2_sha = {}
+            srv.config = types.SimpleNamespace(
+                pipeline=types.SimpleNamespace(isc_l2_index_enabled=True,
+                                               isc_l2_index_dir=str(root)))
+            calls = {"sha": 0, "build": 0}
+
+            def fake_sha(p, chunk=1 << 22):
+                calls["sha"] += 1
+                return "cafe"
+
+            import infrastructure.paths as paths_mod
+            orig_root = paths_mod.isc_index_root
+            paths_mod.isc_index_root = lambda **kw: root      # service 模块内按名字引用
+            orig_is_valid = isc_l2_index.is_valid
+            orig_sha = isc_l2_index.sha256_of
+            orig_build = isc_l2_index.build_tp_index
+            isc_l2_index.is_valid = lambda *a, **k: True
+            isc_l2_index.sha256_of = fake_sha
+            isc_l2_index.build_tp_index = lambda *a, **k: calls.__setitem__(
+                "build", calls["build"] + 1)
+            try:
+                got = srv._ensure_isc_l2_index(str(src))
+            finally:
+                paths_mod.isc_index_root = orig_root
+                isc_l2_index.is_valid = orig_is_valid
+                isc_l2_index.sha256_of = orig_sha
+                isc_l2_index.build_tp_index = orig_build
+            self.assertIsNotNone(got)
+            self.assertTrue(np.array_equal(got[0], T))
+            self.assertTrue(np.array_equal(got[1], F))
+            self.assertEqual(calls["build"], 0)            # 有效索引 ⇒ 不重建
+            self.assertEqual(len(srv._isc_l2_validated), 1)  # .add 生效（回归点）
+
+    def test_validated_field_is_a_set(self):
+        # 字段初始化回归锁：`_isc_l2_validated` 必须是 set（2026-10-05 曾为 {} ⇒ .add 崩）
+        import app.locator_service as ls_mod
+        srv = ls_mod.SourceLocatorService()
+        self.assertIsInstance(srv._isc_l2_validated, set)
+        self.assertIsInstance(srv._isc_l2_cache, dict)
+        self.assertIsInstance(srv._isc_l2_sha, dict)
+
+
 if __name__ == "__main__":
     unittest.main()

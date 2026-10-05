@@ -17,6 +17,7 @@ from fastapi import Depends
 
 from app.locator_service import SourceLocatorService
 from domain import ResultBatch
+from infrastructure.logging import get_logger
 
 from .services.preview_service import PreviewService
 from .tasks import TaskManager
@@ -39,9 +40,13 @@ class AppContext:
 @lru_cache
 def get_context() -> AppContext:
     """首次调用才构造 service（惰性、廉价；不加载模型/不建索引）。TaskManager 复用
-    同一 service 实例，避免双份后端。"""
+    同一 service 实例，避免双份后端。worker 异常细节走 tasks logger（2026-10-05 修复：
+    此前无 log ⇒ worker 兜底转换的 LOC-9999 例外细节无处可查，打包态 E2E 失败无从归因；
+    TaskManager._log 是裸调用约定 ⇒ 传适配器而非 Logger 对象）。"""
     service = SourceLocatorService()
-    return AppContext(service=service, task_manager=TaskManager(service))
+    tasks_log = get_logger("tasks")
+    return AppContext(service=service,
+                      task_manager=TaskManager(service, log=lambda *a, **k: tasks_log.info(*a, **k)))
 
 
 def get_locator_service(ctx: AppContext = Depends(get_context)) -> SourceLocatorService:

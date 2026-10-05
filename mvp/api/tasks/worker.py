@@ -11,6 +11,7 @@ DINO 逐帧进度（需后续 service hook）。
 """
 from __future__ import annotations
 
+import traceback
 from typing import Callable
 
 from app.models import ProgressEvent, ProgressStage
@@ -117,7 +118,9 @@ def run_worker(task: Task, service, *, log: LogFn | None = None) -> None:
     except Exception as exc:  # noqa: BLE001 — worker 必须兜住一切，转为 failed
         pub = public_error(exc)
         task.mark_failed(f"{pub['message']}（{pub['code']}）")
-        log("task %s failed [%s] %s: %s", task.task_id, pub["code"], type(exc).__name__, exc)
+        # 堆栈必须留痕（2026-10-05：r8 打包态 E2E 失败时只有一行异常串，无堆栈无从归因）
+        log("task %s failed [%s] %s: %s\n%s", task.task_id, pub["code"],
+            type(exc).__name__, exc, traceback.format_exc())
     else:
         result = batch.to_dict() if hasattr(batch, "to_dict") else batch
         task.mark_completed(result)

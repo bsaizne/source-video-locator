@@ -153,7 +153,7 @@ class SourceLocatorService:
         self._patch_reranker: PatchReranker | None = None
         self._isc_scorer: IscScorer | None = None
         self._isc_l2_cache: dict = {}
-        self._isc_l2_validated: set = {}
+        self._isc_l2_validated: set = set()
         self._isc_l2_sha: dict = {}
         # 会话状态（轻量；UI 自身另持状态）
         self._bundle: IndexBundle | None = None
