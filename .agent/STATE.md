@@ -69,7 +69,10 @@
 > 跳 ProjectDetailPage 自选素材（HomePage/ProjectsPage 两入口同口径；2026-09-29 断链根源随流程
 > 删除而消失）；③ store 新增 `removeEditedVideo` + 剪辑列表行加同款 ×删除按钮；④ `.pd__pickrow`
 > 加 flex+gap。门禁：vitest **136 全绿** · 双 typecheck 干净；纯 UI 层零后端改动。明细 CHANGELOG 续57。
-> **待拍板/等口令**：git 提交（续54~续57）/ 翻默认三旋钮（各需三片双臂）/ r9 出包 / UI 真机复核。
+> **✅ git 已提交推送**（2026-10-06 续57，用户口令「先提交」）：`2d2c993..1a697ec` 三笔 =
+> `6fae6a7` fix(mvp) 续55~56 源码+测试 · `f78e0f2` chore(scripts) 探针+FINDINGS ·
+> `1a697ec` feat(ui) 续57 + docs(agent) 档案。工作区清零。
+> **待拍板/等口令**：翻默认三旋钮（各需三片双臂）/ r9 出包 / UI 真机复核。
 
 > **▶ 2026-10-06（续56）— other 桶网格接线落地：test1 双臂 1.132× 零语义【下个对话从这里读起】**
 > **做了什么**（按续55「下一刀候选」执行，源码已改未提交）：新旋钮 `pipeline.rerank_grid_grab`

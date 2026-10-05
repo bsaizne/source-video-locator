@@ -23,8 +23,10 @@
 > **验证**：test1 同脚本双臂（`work/rerank_grid_ab/`）off 1601.0 → on 1413.7s = **1.132×**，
 > strip 55 段 **0 差异** + 信封一致 ⇒ 端到端零语义；与账单预期吻合（other 桶 294.4s≈22%）。
 > 续54~56 干净双臂最大一刀。单测 +7 · 后端全套 **540 OK (skipped=2)**。明细 FINDINGS §5.12。
-> **等口令**：git 提交（续54~续56）/ 翻默认三旋钮（`patch_refine_grid` · `cluster_workers` ·
-> `rerank_grid_grab`，各自还需三片双臂）/ r9 出包。
+> **等口令**：~~git 提交（续54~续57）~~ **已提交推送**（`2d2c993..1a697ec` 三笔：fix(mvp) 源码+测试 /
+> chore(scripts) 探针+FINDINGS / feat(ui)+docs(agent)，工作区清零）。
+> 剩：翻默认三旋钮（`patch_refine_grid` · `cluster_workers` · `rerank_grid_grab`，各自还需三片双臂）/
+> r9 出包 / UI 真机复核。
 > 未改 GT / 未 bump feature_version / 现役默认态行为不变。
 
 > **▶ 2026-10-06（续55）— `%.6f` 缺陷修复 + 三刀提速（并集才是主力）：现役默认态 19~31min**
