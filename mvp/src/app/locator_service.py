@@ -168,7 +168,8 @@ class SourceLocatorService:
         if self._ffmpeg is None:
             self._ffmpeg = FFmpegIO(
                 self.config.media.ffmpeg_path, self.config.media.ffprobe_path,
-                timeout_s=self.config.media.timeout_s)
+                timeout_s=self.config.media.timeout_s,
+                cluster_workers=int(getattr(self.config.media, "cluster_workers", 1) or 1))
         return self._ffmpeg
 
     @property
@@ -1172,6 +1173,9 @@ class SourceLocatorService:
                     results, edited_path=edited, source_path=orig_path,
                     grab_frame=self._grab_frame_cached,
                     grab_frames=self._grab_frames_parallel,
+                    grab_grid=self._grab_grid_batch,
+                    refine_grid=bool(getattr(self.config.pipeline,
+                                             "patch_refine_grid", False)),
                     embed_dual=self._patch_reranker.frame_dual,
                     lib_times=np.asarray(bundle.times, dtype=np.float64),
                     lib_feats=bundle.features, log=self._log,
@@ -1216,6 +1220,8 @@ class SourceLocatorService:
                     ladder_s=float(getattr(self.config.pipeline,
                                            "isc_refine_ladder_s", 0.0)),
                     l2_index=self._ensure_isc_l2_index(orig_path, on_progress),
+                    refine_grid=bool(getattr(self.config.pipeline,
+                                             "isc_refine_grid_refine", False)),
                     log=self._log, progress=_isc_progress)
             else:
                 self._log.warning("isc refine enabled but no ISC onnx asset; skipped")
@@ -1946,7 +1952,16 @@ class SourceLocatorService:
             half = int(cfg.patch_v2_radius_s // cfg.patch_v2_stride_s)
             ts = [max(0.0, round(cur_mid + k * cfg.patch_v2_stride_s, 2))
                   for k in range(-half, half + 1)]
-            frames = self._grab_frames_parallel(Path(bundle.meta.source_file), ts)
+            src_path = Path(bundle.meta.source_file)
+            if bool(getattr(cfg, "rerank_grid_grab", False)) \
+                    and getattr(self.ffmpeg, "grab_grid_times", None) is not None:
+                # 续55 下一刀（pipeline.rerank_grid_grab，默认关）：近场池是等差整数秒网格
+                # ⇒ 网格抽取只传目标帧（现役窗解码搬全跨度 25fps 帧）。漏帧由 _grab_grid_batch
+                # 逐帧回退（含缓存），与窗路径选帧同语义。
+                got = self._grab_grid_batch(src_path, ts)
+                frames = [got.get(t) for t in ts]
+            else:
+                frames = self._grab_frames_parallel(src_path, ts)
             main_frame = self._grab_frame_cached(Path(bundle.meta.source_file), cur_mid)
         except Exception:
             return None
@@ -2010,8 +2025,15 @@ class SourceLocatorService:
             scored = []
             for kind, a, b in windows:
                 # 4 帧/窗:字牌等文字镜头可能只有 1-2s,稀疏采样会整窗错过(实测教训)
-                w_frames = self._grab_frames_parallel(
-                    orig, self._rep_times(max(0.0, a - 2.0), b + 2.0, 4))
+                w_times = self._rep_times(max(0.0, a - 2.0), b + 2.0, 4)
+                if bool(getattr(cfg, "rerank_grid_grab", False)) \
+                        and getattr(self.ffmpeg, "grab_grid_times", None) is not None:
+                    # 续55 下一刀（pipeline.rerank_grid_grab，默认关）：源窗 4 个均匀点
+                    # 走网格抽取（管道只传 4 帧），漏帧逐帧回退。
+                    w_got = self._grab_grid_batch(orig, w_times)
+                    w_frames = [w_got.get(t) for t in w_times]
+                else:
+                    w_frames = self._grab_frames_parallel(orig, w_times)
                 c_lines = filter_watermark(ocr.lines(w_frames))
                 scored.append((text_similarity(q_lines, c_lines), kind, a, b))
             main_sim = next(s for s, k, _, _ in scored if k == "main")

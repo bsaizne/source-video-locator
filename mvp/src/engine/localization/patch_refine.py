@@ -67,6 +67,8 @@ def apply_patch_refine(results: Sequence[Result], *, edited_path, source_path,
                        lib_times: np.ndarray, lib_feats: np.ndarray,
                        log: logging.Logger | None = None,
                        grab_frames: Callable | None = None,
+                       grab_grid: Callable | None = None,
+                       refine_grid: bool = False,
                        progress: Callable[[int, int], None] | None = None) -> list[Result]:
     """对歧义段做 patch 局部精排；其余原样返回。不修改入参对象。
 
@@ -74,6 +76,11 @@ def apply_patch_refine(results: Sequence[Result], *, edited_path, source_path,
     ``_grab_frames_parallel``）。抓帧是纯 IO+解码、与 embed 顺序无关，故先并行批量抓、
     再主线程串行 ``embed_dual``（DML session 非线程安全）——帧内容与顺序不变 ⇒ 输出逐位
     一致。缺省 None 时回退逐帧 ``grab_frame``（单测/离线验证器同规格）。
+
+    ``refine_grid`` + ``grab_grid``（2026-10-05 续54 补二，默认关）：**候选精扫窗**改走网格
+    抽取（select 只吐网格帧 ⇒ 管道搬运量 ÷~源帧率×步长）。本仓真实窗形状（test1 账单 134 个
+    窗，跨度恰 9.00s、步长恰 1.0s）micro A/B = **2.28×，120/120 点逐字节同帧**（非整数秒步长
+    由 ``MIN_GRID_STEP_S``/``max_pts_lag`` 护栏逐帧回退 ⇒ 语义不变）。关 = 旧路径逐位不变。
 
     ``progress(done, total)``（可选，2026-10-01 续35 E2E UX-P1）：逐段进度回调。精排是
     定位链路最慢的后处理（每歧义段 ±5s 窗 × 多候选 × patch+global DML），此前全程静默
@@ -84,6 +91,18 @@ def apply_patch_refine(results: Sequence[Result], *, edited_path, source_path,
         if grab_frames is not None:
             return grab_frames(path, times)
         return [grab_frame(path, t) for t in times]
+
+    def _grab_source_grid(ts):
+        """候选精扫窗取帧（续54 补二）：开旋钮且 ``grab_grid`` 在位 ⇒ 网格抽取，
+        未覆盖的点逐帧回退（与 ``isc_refine._embed_missing_grid`` 同策略）。"""
+        if not (refine_grid and grab_grid is not None):
+            return _grab_many(source_path, ts)
+        got = grab_grid(source_path, ts)
+        out = []
+        for t in ts:
+            fr = got.get(round(float(t), 6))
+            out.append(fr if fr is not None else _grab_many(source_path, [t])[0])
+        return out
 
     out: list[Result] = []
     n_refine = n_switch = 0
@@ -125,11 +144,24 @@ def apply_patch_refine(results: Sequence[Result], *, edited_path, source_path,
         eval_mids = [m for m in dict.fromkeys(eval_mids) if m is not None]
         best_score, best_mid = -1.0, None
         main_score = None
+        # 续55：非网格形态下把本段所有候选窗并成**一次**抓帧请求（各窗仍按 gap/span
+        # 自然分成独立簇）⇒ 簇间可并发解码（media.cluster_workers）。纯调度变更：每个目标
+        # 的选帧仍是 first_ge、与所在批的组成无关 ⇒ 帧与分数逐位一致。网格形态**不并集**：
+        # select 表达式按「簇起点 + 统一步长」生成，只服务单一相位，多相位并集会让目标
+        # 落在窗口中间而静默拿到晚 ≤0.5s 的帧（护栏抓不到）⇒ 逐候选各自网格调用。
+        grids: dict[float, list[float]] = {}
         for mid in eval_mids:
             g0, g1 = max(0.0, mid - REFINE_WIN_S), mid + REFINE_WIN_S
             n = max(6, int((g1 - g0) * REFINE_FPS))
-            grid = [g0 + (g1 - g0) * (i + 0.5) / n for i in range(n)]
-            frames = _grab_many(source_path, grid)
+            grids[mid] = [g0 + (g1 - g0) * (i + 0.5) / n for i in range(n)]
+        frames_by_t: dict[float, np.ndarray] = {}
+        if not (refine_grid and grab_grid is not None):
+            all_ts = sorted({t for g in grids.values() for t in g})
+            frames_by_t = dict(zip(all_ts, _grab_many(source_path, all_ts)))
+        for mid in eval_mids:
+            grid = grids[mid]
+            frames = ([frames_by_t[t] for t in grid] if frames_by_t
+                      else _grab_source_grid(grid))
             peak_s = -1.0
             for frame in frames:
                 c, pp = embed_dual(frame)

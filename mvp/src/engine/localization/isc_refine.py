@@ -121,6 +121,7 @@ def apply_isc_refine(results: Sequence[Result], *, edited_path, source_path,
                      grab_frames: Callable | None = None,
                      grab_grid: Callable | None = None,
                      l2_index: tuple[np.ndarray, np.ndarray] | None = None,
+                     refine_grid: bool = False,
                      progress: Callable[[int, int], None] | None = None) -> list[Result]:
     """对歧义段做 ISC 第二意见局部重排；其余原样返回。不修改入参对象。
 
@@ -128,6 +129,12 @@ def apply_isc_refine(results: Sequence[Result], *, edited_path, source_path,
     （select 抽帧，管道量 ÷~30）。**只用在宽扫粗扫**（``coarse_ts`` 本就是 2s 均匀网格）；
     候选窗/细化窗的相位非网格对齐，继续走 ``grab_frames`` 以免选帧偏移。缺省 = 全走旧路径。
 
+    ``refine_grid``（2026-10-05 续54，默认关）：**精扫细化窗**（top-K 峰 ±``WIDE_REFINE_S``
+    的 ``fine_ts``）也走 ``grab_grid``——精扫采样点本就是 ``ISC_STEP=1s`` 步长网格（与
+    coarse 同契约：select 超集 + first_ge 配对 ⇒ 帧与 ``grab_frame`` 逐字节一致），窗口
+    4s 内只转换/传 4 帧（管道量 ÷~24；续54 窗探针实测精扫窗成本 ~90% 在 10bit→bgr24
+    转换+全分辨率管道，非解码）。采样点间距 <1s（候选贴近源片头等边缘情形）时
+    ``grab_grid_times`` 自动回落旧路径（``MIN_GRID_STEP_S`` 护栏），语义不变。
 
     ``embed_isc(frame) -> np.ndarray(256,)``（L2）；``embed_cls(frame) -> np.ndarray``
     （现役 CLS，用于候选提案与歧义门）。``grab_frames``/``progress`` 语义与
@@ -214,13 +221,37 @@ def apply_isc_refine(results: Sequence[Result], *, edited_path, source_path,
                     fr = _grab_many(source_path, [t])[0]
                 cache[t] = np.asarray(embed_isc(fr), dtype=np.float64)
 
-        def _score_mid(mid: float) -> float:
+        def _embed_missing_refine(ts):
+            """精扫细化窗取帧（续54）：refine_grid 开且 grab_grid 可用 ⇒ 网格抽取
+            （fine_ts 本就是 1s 步长网格，select+first_ge 与 grab_frame 同帧同契约；
+            关 = 旧路径 grab_frames 逐位不变）。"""
+            if refine_grid and grab_grid is not None:
+                _embed_missing_grid(ts)
+            else:
+                _embed_missing(ts)
+
+        def _mid_ts(mid: float) -> list[float]:
+            """评分窗采样点（与 _score_mid 同一公式；1s 步长 + 0.5 相位，round 3 位）。"""
             lo = max(0.0, mid - w / 2 - ISC_TOL_S)
             hi = mid + w / 2 + ISC_TOL_S
             n = max(2, int(np.ceil((hi - lo) / ISC_STEP)))
-            ts = sorted({round(lo + (hi - lo) * (i + 0.5) / n, 3) for i in range(n)})
+            return sorted({round(lo + (hi - lo) * (i + 0.5) / n, 3) for i in range(n)})
+
+        def _score_mid(mid: float) -> float:
+            ts = _mid_ts(mid)
             _embed_missing(ts)
             return max(float(np.mean([cache[t] @ q for q in q_isc])) for t in ts)
+
+        def _preembed_mids(mids) -> None:
+            """打分目标点批量预取（2026-10-05 续54）：把多个 mid 的评分窗采样点并成一次
+            ``grab_frames`` 调用（union → 按间距自然聚簇 ⇒ 更少 spawn）。**纯调度变更**：
+            采样点集合与 first_ge 选帧契约不变 ⇒ 帧与分数逐位一致（续54 计时账单：
+            窗抓帧 892s/61%，~4600 目标摊在大量小窗、每窗 spawn 固定开销 ~1s 是主体）。"""
+            ts_all: set[float] = set()
+            for mid in mids:
+                ts_all.update(_mid_ts(mid))
+            if ts_all:
+                _embed_missing(sorted(ts_all))
 
         # v2 宽幅扫描（续45）：±radius 粗扫 → top-3 粗峰细化 → 虚拟候选。
         # v3 阶梯（2026-10-03 续48，``ladder_s`` > 0）：先 ±ladder_s 内圈，阶段内已有峰过
@@ -244,7 +275,7 @@ def apply_isc_refine(results: Sequence[Result], *, edited_path, source_path,
                     n_f = max(2, int(np.ceil((rhi - rlo) / ISC_STEP)))
                     fine_ts = sorted({round(rlo + (rhi - rlo) * (i + 0.5) / n_f, 3)
                                       for i in range(n_f)})
-                    _embed_missing(fine_ts)
+                    _embed_missing_refine(fine_ts)
                     best_t = max(fine_ts, key=_s)
                     picked.append(best_t)
                     taken.append(best_t)
@@ -278,7 +309,7 @@ def apply_isc_refine(results: Sequence[Result], *, edited_path, source_path,
                         n_f = max(2, int(np.ceil((rhi - rlo) / ISC_STEP)))
                         fine_ts = sorted({round(rlo + (rhi - rlo) * (i + 0.5) / n_f, 3)
                                           for i in range(n_f)})
-                        _embed_missing(fine_ts)
+                        _embed_missing_refine(fine_ts)
                         best_t = max(fine_ts, key=_s)
                         picked.append(best_t)
                         taken.append(best_t)
@@ -305,6 +336,7 @@ def apply_isc_refine(results: Sequence[Result], *, edited_path, source_path,
                         break  # 内圈已有过门峰 ⇒ 不扩展外圈
         eval_mids = eval_mids + [m for m in wide_mids if m not in eval_mids]
 
+        _preembed_mids(eval_mids)                  # 续54：批量预取后再打分（逐位一致）
         scores = {m: _score_mid(m) for m in eval_mids}
         main_key = min(eval_mids, key=lambda m: abs(m - main_mid))
         main_score = scores[main_key]

@@ -68,7 +68,8 @@ def _src_index(mode):
 
 
 class IscL2IndexTest(unittest.TestCase):
-    def _run(self, *, l2_index, isc_mode="switch", margin=0.05, grab_grid=None):
+    def _run(self, *, l2_index, isc_mode="switch", margin=0.05, grab_grid=None,
+             refine_grid=False):
         lib_t, lib_f = _lib()
 
         def grab(path, t):
@@ -94,7 +95,8 @@ class IscL2IndexTest(unittest.TestCase):
             [_mk_result()], edited_path="x", source_path="y", grab_frame=grab,
             embed_isc=_make_isc(isc_mode), embed_cls=embed_cls, lib_times=lib_t,
             lib_feats=lib_f, margin=margin, scan_radius_s=90.0,
-            grab_frames=None, grab_grid=counting_grid, l2_index=l2_index)
+            grab_frames=None, grab_grid=counting_grid, l2_index=l2_index,
+            refine_grid=refine_grid)
         return out[0], grabbed
 
     def test_default_knob_on(self):
@@ -102,6 +104,23 @@ class IscL2IndexTest(unittest.TestCase):
         # —— 四片 A/B 1.44× 三指标零回退 + 常态链等价 + 建表性能结案 5.01×）。
         # 回退路径 = config 置 False（逐位回现役 v2 宽扫）。
         self.assertTrue(load_config().pipeline.isc_l2_index_enabled)
+
+    def test_grid_refine_knob_default_off(self):
+        # 回归锁（2026-10-05 续54）：精扫细化窗网格抽取默认关
+        self.assertFalse(load_config().pipeline.isc_refine_grid_refine)
+
+    def test_grid_refine_off_keeps_legacy_grab(self):
+        # 默认关：L2 精扫细化窗不走 grab_grid（逐位回现役路径）
+        _r, grabbed = self._run(l2_index=_src_index("switch"), refine_grid=False)
+        self.assertEqual(grabbed["grid"], 0)
+
+    def test_grid_refine_on_uses_grid_for_fine_ts(self):
+        # 开：精扫细化窗（fine_ts 1s 网格）走 grab_grid，且选中峰与旧路径一致
+        r_off, _ = self._run(l2_index=_src_index("switch"), refine_grid=False)
+        r_on, grabbed = self._run(l2_index=_src_index("switch"), refine_grid=True)
+        self.assertGreaterEqual(grabbed["grid"], 1)
+        self.assertTrue(r_on.result_id.endswith("-iscw"))          # 同判（result_id 含随机批次 UUID，只比后缀）
+        self.assertEqual(r_on.original, r_off.original)
 
     def test_l2_switches_to_true_peak(self):
         r, _ = self._run(l2_index=_src_index("switch"))

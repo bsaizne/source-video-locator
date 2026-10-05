@@ -183,5 +183,62 @@ class PromotionTest(unittest.TestCase):
         self.assertEqual((r.original.start, r.original.end), (1788.0, 1797.0))
 
 
+class _RerankGridFfmpeg:
+    """真实（非 MagicMock）假 ffmpeg：grab_frames/grab_grid_times 都按逐帧 grab_frame
+    构造（字节等价），并记录网格调用——供 rerank_grid_grab 接线互验。"""
+
+    def __init__(self):
+        self.grid_calls = []
+
+    def grab_frame(self, path, t, *, scale=None):
+        f = np.zeros((16, 16, 3), dtype=np.uint8)
+        f[0, 0, 0] = 1
+        return f
+
+    def grab_frames(self, path, times, **k):
+        return {round(float(t), 6): self.grab_frame(path, t) for t in times}
+
+    def grab_grid_times(self, path, times, **k):
+        ts = sorted({round(float(t), 6) for t in times})
+        self.grid_calls.append(ts)
+        return {t: self.grab_frame(path, t) for t in ts}
+
+    def iter_frames(self, *a, **k):
+        yield from ()
+
+
+class RerankGridGrabTextAnchorTest(unittest.TestCase):
+    """续55 下一刀（pipeline.rerank_grid_grab，默认关）：字牌锚定源窗网格抽取接线。"""
+
+    def _run(self, knob_on):
+        svc, r = PromotionTest()._result()
+        ff = _RerankGridFfmpeg()
+        svc._ffmpeg = ff
+        svc._ocr_engine = _FakeOcr([
+            ["WHAT is YOUR NAME?"],          # 查询段
+            ["we are not allowed contact"],  # 主窗 1788-1797
+            ["WHAT IS YOUR NAME"],           # 子窗 1809-1813
+            ["my name is drasa"],            # 子窗 1875-1884
+        ])
+        cfg = svc.config.pipeline
+        cfg.rerank_grid_grab = knob_on
+        svc._apply_text_anchor([r], Path("x.mp4"), "y.mkv", cfg=cfg)
+        return (r.original.start, r.original.end), ff.grid_calls
+
+    def test_default_off_never_calls_grid(self):
+        span, grid_calls = self._run(knob_on=False)
+        self.assertEqual(span, (1809.0, 1813.0))
+        self.assertEqual(grid_calls, [], "rerank_grid_grab=False 时不得走网格路径")
+
+    def test_on_uses_grid_and_same_result(self):
+        """旋钮开 = 3 个源窗各一次网格调用（4 均匀点），晋级决策与关闭臂一致。"""
+        span_on, grid_calls = self._run(knob_on=True)
+        span_off, _ = self._run(knob_on=False)
+        self.assertEqual(span_on, span_off)
+        self.assertEqual(len(grid_calls), 3)
+        for ts in grid_calls:
+            self.assertEqual(len(ts), 4)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -75,6 +75,46 @@ class FFmpegIOTest(unittest.TestCase):
         self.assertTrue(np.array_equal(self.io.grab_frame(SYNTH, 0.5), batch[0.5]))
         self.assertTrue(np.array_equal(self.io.grab_frame(SYNTH, 3.0), batch[3.0]))
 
+    # ---- 续55：簇间并发解码（media.cluster_workers，默认 1 = 现役串行）----
+
+    def test_cluster_parallel_equals_serial_and_single(self):
+        """零语义：多簇并发与串行逐簇结果逐字节一致，且都等于单帧 grab_frame。"""
+        serial = FFmpegIO(ffmpeg=FFMPEG, ffprobe=FFPROBE, cluster_workers=1)
+        par = FFmpegIO(ffmpeg=FFMPEG, ffprobe=FFPROBE, cluster_workers=4)
+        times = [0.5, 1.5, 4.8]          # 0.5/1.5 同簇（间隔≤4s），4.8 自成第二簇
+        a = serial.grab_frames(SYNTH, times)
+        b = par.grab_frames(SYNTH, times)
+        self.assertEqual(sorted(a.keys()), sorted(b.keys()))
+        for t in times:
+            self.assertTrue(np.array_equal(a[round(t, 6)], b[round(t, 6)]),
+                            f"并发簇与串行簇帧不一致 t={t}")
+            self.assertTrue(np.array_equal(self.io.grab_frame(SYNTH, t), b[round(t, 6)]),
+                            f"并发簇帧与单帧 grab 不一致 t={t}")
+
+    def test_cluster_parallel_keeps_failure_fallback(self):
+        """某簇解码失败时，并发路径同样逐帧回退（与串行版语义一致），其他簇不受影响。"""
+        par = FFmpegIO(ffmpeg=FFMPEG, ffprobe=FFPROBE, cluster_workers=4)
+        real = par._decode_window
+
+        def boom(path, ts_sorted, **kw):
+            if ts_sorted and ts_sorted[0] >= 4.0:
+                raise MediaError("synthetic cluster failure")
+            return real(path, ts_sorted, **kw)
+
+        par._decode_window = boom
+        times = [0.5, 1.5, 4.8]
+        got = par.grab_frames(SYNTH, times)
+        self.assertEqual(sorted(got.keys()), [0.5, 1.5, 4.8])
+        for t in times:
+            self.assertTrue(np.array_equal(self.io.grab_frame(SYNTH, t), got[round(t, 6)]),
+                            f"失败簇回退后帧不一致 t={t}")
+
+    def test_cluster_workers_default_one(self):
+        """默认构造 = 串行（现役行为逐位不变）。"""
+        self.assertEqual(FFmpegIO(ffmpeg=FFMPEG, ffprobe=FFPROBE).cluster_workers, 1)
+        self.assertEqual(FFmpegIO(ffmpeg=FFMPEG, ffprobe=FFPROBE, cluster_workers=0)
+                         .cluster_workers, 1)
+
     def test_clip_precision(self):
         out = Path(tempfile.mkdtemp()) / "c.mp4"
         r = self.io.extract_clip(SYNTH, 1.0, 3.0, out)

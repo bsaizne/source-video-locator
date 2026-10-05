@@ -25,6 +25,10 @@ class MediaConfig:
     ffmpeg_path: str | Path | None = None
     ffprobe_path: str | Path | None = None
     timeout_s: float = 600.0
+    # 窗批量抓帧的簇间并发度（2026-10-05 续55）：一次 grab_frames 内多个时间簇各自一个
+    # ffmpeg 进程，互不依赖 ⇒ 可并发。1 = 现役串行（逐位不变）。定位全程 ~680 簇、CPU 侧
+    # 抓帧占 78% 而本机 12 核闲置 ⇒ 待 test1 同脚本双臂 A/B 验收后再决定是否翻默认。
+    cluster_workers: int = 1
 
 
 @dataclass
@@ -374,6 +378,29 @@ class PipelineConfig:
     # L2 开时 ladder 忽略。
     isc_l2_index_enabled: bool = True
     isc_l2_index_dir: str = ""
+    # 精扫细化窗网格抽取（2026-10-05 续54，默认关）：isc_refine 的 top-K 峰 ±2s 细化窗
+    # 采样点本就是 ISC_STEP=1s 网格 ⇒ 开 = 走 grab_grid select 抽取（与宽扫粗扫同契约，
+    # 帧与 grab_frame 逐字节一致；采样点间距 <1s 时 MIN_GRID_STEP_S 护栏自动回落）。
+    # 动机 = 续54 窗探针（work/hwaccel_probe/probe_hwaccel_window.json）：精扫窗成本 ~90%
+    # 在 10bit→bgr24 转换+全分辨率管道（非解码，硬解实测反而 0.42×），网格抽取让 4s 窗
+    # 只转换/传 4 帧 ⇒ 管道 ÷~24，估算全链 -15~20%（计时账单 work/locate_timing/）。
+    # 回退路径 = 本旋钮置 False（逐位回现役）。待 test1 双臂 A/B（预期 strip 逐字段 0 差异）
+    # + 计时后由用户拍板再翻。
+    isc_refine_grid_refine: bool = False
+    # patch 精排候选窗网格抽取（2026-10-05 续54 补二，默认关）：patch_refine 每候选 ±5s
+    # 精排窗的采样点是 REFINE_FPS=1s 均匀网格 ⇒ 开 = 走 FFmpegIO.grab_grid_times（select
+    # 只吐网格帧，其余照抄续50 契约），关 = 现役逐帧窗解码路径。micro 探针待做。
+    patch_refine_grid: bool = False
+    # 主循环重排窗网格抽取（2026-10-06 续55 下一刀，默认关）：locate 主循环里 patch_refine
+    # 之外的两处源片重排窗抓帧 —— ① patch v2 近场池（`_patch_nearfield_rescue`，±30s@4s
+    # 均匀网格，跨度中位 ~28s/步长恰 4.0s 整数秒）② 字牌锚定源窗（`_apply_text_anchor`，
+    # 每窗 4 个 `_rep_times` 均匀点）。两者都是等差整数秒锚点 ⇒ 开 = 走 grab_grid select 抽取
+    # （管道只传目标帧；现役窗解码要搬全跨度 25fps 帧，4s 步长下管道量 ÷~100）。关 = 逐位回
+    # 现役 `_grab_frames_parallel` 路径。计时账单归因（FINDINGS §5.8 分桶）：other 桶
+    # 294.4s=22%（test1 1332s 全链），本旋钮即该桶的网格形态接线。
+    # 与 `patch_refine_grid` 语义解耦（一个=patch_refine 阶段候选窗，一个=主循环重排窗），
+    # 各自独立 A/B 独立拍板。回退路径 = 本旋钮置 False。
+    rerank_grid_grab: bool = False
     # 窗批量抓帧解码（2026-10-03 续46）：locate 后处理的抓帧从「每帧 spawn 一次 ffmpeg」
     # 改为「每时间簇一次 spawn 窗解码」（-copyts+showinfo PTS 对齐，选帧规则与 grab_frame
     # 同语义）。**2026-10-03 翻默认开（用户拍板做续46）**：零语义证据 = 单测逐字节一致

@@ -113,6 +113,86 @@ class PatchV2Test(unittest.TestCase):
         self.assertIsNone(out)
 
 
+class _GridFfmpeg(_FakeFfmpeg):
+    """带 grab_grid_times 的假 ffmpeg：记录网格调用，返回值 = 逐帧 grab_frame 的 dict
+    （构造上与逐帧路径逐字节一致 ⇒ 网格路径与非网格路径结果可互验）。"""
+
+    def __init__(self):
+        self.grid_calls = []
+
+    def grab_grid_times(self, path, times, **k):
+        ts = sorted({round(float(t), 6) for t in times})
+        self.grid_calls.append(ts)
+        return {t: self.grab_frame(path, t) for t in ts}
+
+
+def _adopt_case(knob_on, ffmpeg=None):
+    """test_adopt_when_margin_large_and_near 同场景（查询=B, 主定位=A, 近场 13s=B）。"""
+    srv = SourceLocatorService(ffmpeg=ffmpeg or _FakeFfmpeg(), backend=object())
+    vec_a, vec_b, vec_o = _vec(1), _vec(2), _vec(3)
+    srv._patch_reranker = _FakeRR(vec_a, vec_b, vec_o)
+    srv.config.pipeline.patch_v2_enabled = True
+    srv.config.pipeline.patch_v2_radius_s = 30.0
+    srv.config.pipeline.patch_v2_stride_s = 4.0
+    srv.config.pipeline.patch_v2_margin = 0.08
+    srv.config.pipeline.rerank_grid_grab = knob_on
+    shot = ShotSegment(span=TimeSpan(11.0, 13.0),
+                       feats=np.tile(vec_b, (4, 1)), times=np.array([11.0, 11.5, 12.0, 12.5]))
+    return srv, shot
+
+
+class RerankGridGrabTest(unittest.TestCase):
+    """续55 下一刀（pipeline.rerank_grid_grab，默认关）：近场池网格抽取接线。"""
+
+    def test_default_off_never_calls_grid(self):
+        """旋钮关（默认）= grab_grid_times 一次不调，采纳结果与非网格路径一致。"""
+        ff = _GridFfmpeg()
+        srv, shot = _adopt_case(knob_on=False, ffmpeg=ff)
+        out = srv._patch_nearfield_rescue(shot, _FakeBundle(), Path("edited.mp4"),
+                                          (8.0, 10.0), srv.config.pipeline)
+        self.assertIsNotNone(out)
+        self.assertEqual(ff.grid_calls, [], "rerank_grid_grab=False 时不得走网格路径")
+
+    def test_on_uses_grid_and_same_result(self):
+        """旋钮开 = 近场池走网格抽取，采纳决策与关闭臂逐字段一致（零语义）。"""
+        out_by_mode = []
+        for knob_on in (False, True):
+            ff = _GridFfmpeg()
+            srv, shot = _adopt_case(knob_on=knob_on, ffmpeg=ff)
+            out = srv._patch_nearfield_rescue(shot, _FakeBundle(), Path("edited.mp4"),
+                                              (8.0, 10.0), srv.config.pipeline)
+            out_by_mode.append(out)
+        self.assertIsNotNone(out_by_mode[1])
+        self.assertEqual(out_by_mode[0], out_by_mode[1])
+
+    def test_on_grid_gets_all_nearfield_points(self):
+        """近场池（±30s@4s=15 点）一次网格调用拿全；负值锚点被 max(0,·) 削成 0.0 去重后
+        剩 11 个不同点（真实现内部再聚簇，逐点都有帧）。"""
+        ff = _GridFfmpeg()
+        srv, shot = _adopt_case(knob_on=True, ffmpeg=ff)
+        srv._patch_nearfield_rescue(shot, _FakeBundle(), Path("edited.mp4"),
+                                    (8.0, 10.0), srv.config.pipeline)
+        self.assertEqual(len(ff.grid_calls), 1)
+        self.assertEqual(ff.grid_calls[0], sorted(set(ff.grid_calls[0])))
+        self.assertEqual(len(ff.grid_calls[0]), 11)
+        self.assertTrue(all(t >= 0.0 for t in ff.grid_calls[0]))
+
+    def test_on_grid_missing_frame_falls_back(self):
+        """网格结果漏帧（超片尾/解码失败）⇒ _grab_grid_batch 逐帧回退，不丢点不抛错。"""
+
+        class _HoleyGrid(_GridFfmpeg):
+            def grab_grid_times(self, path, times, **k):
+                got = super().grab_grid_times(path, times, **k)
+                got.pop(round(17.0, 6), None)      # 近场池必含 17s（主定位 9s + 4s×2）
+                return got
+
+        srv, shot = _adopt_case(knob_on=True, ffmpeg=_HoleyGrid())
+        out = srv._patch_nearfield_rescue(shot, _FakeBundle(), Path("edited.mp4"),
+                                          (8.0, 10.0), srv.config.pipeline)
+        self.assertIsNotNone(out)
+        self.assertTrue(13.0 <= (out[0] + out[1]) / 2 <= 15.0)
+
+
 class _StubBackend:
     def __init__(self, dtype, dname):
         self._dtype, self._dname = dtype, dname

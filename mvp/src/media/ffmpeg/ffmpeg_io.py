@@ -51,15 +51,34 @@ class FFmpegIO:
     """Injected-binary video I/O. Never hard-codes a machine-specific path."""
 
     def __init__(self, ffmpeg: str | Path | None = None,
-                 ffprobe: str | Path | None = None, *, timeout_s: float = 600.0):
+                 ffprobe: str | Path | None = None, *, timeout_s: float = 600.0,
+                 cluster_workers: int = 1):
         self.ffmpeg, self.ffprobe = resolve_binaries(ffmpeg, ffprobe)
         self.timeout_s = timeout_s
+        # 簇级并行解码（2026-10-05 续55）：一次批量抓帧里的多个时间簇互相独立
+        # （每簇一个 ffmpeg 进程，选帧只依赖本簇起点之后的解码）⇒ 可并发。
+        # **默认 1 = 现役串行逐簇**，>1 由 ``media.cluster_workers`` 开（待双臂验收再翻）。
+        self.cluster_workers = max(1, int(cluster_workers))
+        # metadata 实例级缓存（2026-10-05 续54）：``_decode_window`` 每 spawn 调一次
+        # metadata（实测 ~0.08s/次，定位全程 ~800 次 spawn ⇒ ~66s 纯 ffprobe 开销）。
+        # 媒体文件元数据在运行期不变 ⇒ 按 (路径, size, mtime_ns) 缓存，安全。
+        self._metadata_cache: dict[tuple, VideoMetadata] = {}
 
-    # ------------------------------------------------------------------ #
-    # Metadata
-    # ------------------------------------------------------------------ #
     def metadata(self, path: str | Path) -> VideoMetadata:
-        return metadata_from(Path(path), str(self.ffprobe), timeout=self.timeout_s)
+        p = Path(path)
+        try:
+            st = p.stat()
+            ck = (str(p), st.st_size, st.st_mtime_ns)
+        except OSError:
+            ck = None
+        if ck is not None:
+            hit = self._metadata_cache.get(ck)
+            if hit is not None:
+                return hit
+        info = metadata_from(p, str(self.ffprobe), timeout=self.timeout_s)
+        if ck is not None:
+            self._metadata_cache[ck] = info
+        return info
 
     # ------------------------------------------------------------------ #
     # Frame sampling (streaming)
@@ -203,17 +222,34 @@ class FFmpegIO:
             else:
                 clusters.append([t])
         got: dict[float, np.ndarray] = {}
-        for cl in clusters:
+
+        def _run_cluster(cl):
             flt = filters(cl[0]) if callable(filters) else filters
             try:
-                got.update(self._decode_window(path, cl, filters=flt, size=size,
-                                               match=match, passthrough=passthrough,
-                                               max_pts_lag=max_pts_lag))
+                return self._decode_window(path, cl, filters=flt, size=size,
+                                           match=match, passthrough=passthrough,
+                                           max_pts_lag=max_pts_lag)
             except MediaError:
-                pass  # 逐帧回退（下 loop 统一补）
-            for t in cl:
-                if t not in got:
-                    got[t] = self.grab_frame(path, t, scale=size)
+                return None      # 该簇整体失败 → 簇内目标走下方逐帧回退
+
+        # 簇间并发（media.cluster_workers>1；默认 1 = 现役串行逐簇，逐位不变）。
+        # 各簇目标互不相交 ⇒ 合并顺序无关；失败隔离与逐帧回退语义同串行版。
+        if self.cluster_workers > 1 and len(clusters) > 1:
+            from concurrent.futures import ThreadPoolExecutor
+
+            with ThreadPoolExecutor(
+                    max_workers=min(self.cluster_workers, len(clusters))) as ex:
+                for res in ex.map(_run_cluster, clusters):
+                    if res:
+                        got.update(res)
+        else:
+            for cl in clusters:
+                res = _run_cluster(cl)
+                if res:
+                    got.update(res)
+        for t in uniq:
+            if t not in got:
+                got[t] = self.grab_frame(path, t, scale=size)
         return got
 
     def grab_grid(self, path: str | Path, t0: float, step: float, n: int, *,
@@ -257,7 +293,7 @@ class FFmpegIO:
         改为「锚定簇起点的绝对窗口」：选中每个 [lo+k*step, lo+(k+1)*step) 窗口内的**第一帧**，
         窗口由绝对时间决定 ⇒ 误差不累积（每点 ≤1 源帧）。
         """
-        return ("select='isnan(prev_selected_t)+gt(floor((t-%g)/%g),floor((prev_selected_t-%g)/%g))'"
+        return ("select='isnan(prev_selected_t)+gt(floor((t-%.6f)/%.6f),floor((prev_selected_t-%.6f)/%.6f))'"
                 % (lo, step, lo, step))
     def grab_grid_times(self, path: str | Path, times, *, step: float | None = None,
                         size: tuple[int, int] | None = None,
