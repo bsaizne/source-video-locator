@@ -50,6 +50,29 @@ CASES = {
     "test3": (r"D:\ProjectXIXI\test3\test3-ed.mp4", r"D:\ProjectXIXI\test3\test3-om.mp4"),
 }
 ACC: dict = {}
+# 续54 补：当前阶段名（后处理三段是同步串行 ⇒ 用于把抓帧/嵌入账单按阶段归因）
+STAGE = {"name": "other"}
+# 续54 补：逐次抓帧目标清单（离线复算「并集合并 / 去重」能省多少 spawn 与解码秒数）
+WINDOWS_LOG: list = []
+
+
+def _count_clusters(uniq: list) -> int:
+    """与 FFmpegIO.grab_frames 同口径的聚簇数（max_gap 4s / max_span 40s）。"""
+    if not uniq:
+        return 0
+    n, c0, prev = 1, uniq[0], uniq[0]
+    for t in uniq[1:]:
+        if t - prev <= 4.0 and t - c0 <= 40.0:
+            prev = t
+        else:
+            n += 1
+            c0 = prev = t
+    return n
+
+
+def _span_s(uniq) -> float:
+    u = sorted(float(t) for t in uniq)
+    return round(u[-1] - u[0], 3) if len(u) > 1 else 0.0
 
 
 def _add(key: str, dt: float, n: int = 0) -> None:
@@ -58,15 +81,33 @@ def _add(key: str, dt: float, n: int = 0) -> None:
     cur["n"] += n
 
 
-def _wrap(mod, name: str, key: str, count_arg=None):
-    """把模块级函数包成计时版（不改行为；异常原样抛出）。"""
+def _add_stage(base: str, dt: float, **counts) -> None:
+    """按「阶段 × 计量项」记账（key = base@stage），counts 逐项累加到 .n/<字段>。"""
+    key = "%s@%s" % (base, STAGE["name"])
+    cur = ACC.setdefault(key, {"s": 0.0, "n": 0})
+    cur["s"] += dt
+    cur["n"] += 1
+    for k, v in counts.items():
+        cur[k] = cur.get(k, 0) + v
+
+
+def _wrap(mod, name: str, key: str, count_arg=None, stage_name=None):
+    """把模块级函数包成计时版（不改行为；异常原样抛出）。
+
+    ``stage_name`` 非空时进入该阶段期间把 STAGE 切过去（抓帧/嵌入账单据此归因），
+    嵌套调用时恢复外层值。
+    """
     orig = getattr(mod, name)
 
     def _timed(*a, **kw):
         t0 = time.monotonic()
+        prev = STAGE["name"]
+        if stage_name:
+            STAGE["name"] = stage_name
         try:
             return orig(*a, **kw)
         finally:
+            STAGE["name"] = prev
             n = 0
             if count_arg is not None and len(a) > count_arg:
                 try:
@@ -96,9 +137,9 @@ def main() -> int:
              cfg.pipeline.isc_refine_scan_radius_s), flush=True)
 
     # --- 模块级阶段 ---
-    _wrap(LS, "split_results", "stage.shot_split")
-    _wrap(LS, "apply_patch_refine", "stage.patch_refine")
-    _wrap(LS, "apply_isc_refine", "stage.isc_refine")
+    _wrap(LS, "apply_shot_split", "stage.shot_split", stage_name="shot_split")
+    _wrap(LS, "apply_patch_refine", "stage.patch_refine", stage_name="patch_refine")
+    _wrap(LS, "apply_isc_refine", "stage.isc_refine", stage_name="isc_refine")
     # --- 服务方法级阶段 ---
     for meth, key in (("analyze_edited_video", "stage.analyze_edited"),
                       ("_embed_dense_query", "stage.embed_dense_query")):
@@ -125,9 +166,36 @@ def main() -> int:
             _add("embed.dinov2", time.monotonic() - t0, len(frames))
 
     srv.backend.embed_frames = _embed_frames
-    # 抓帧：源片 vs 编辑片
+    # --- 窗 spawn 级记账（续54）：grab_frames/_decode_window 次数·目标数·墙钟 ---
+    import media.ffmpeg as _mf
+    _orig_gf = _mf.FFmpegIO.grab_frames
+    _orig_dw = _mf.FFmpegIO._decode_window
+
+    def _gf_timed(self, path, times, **kw):
+        t0 = time.monotonic()
+        try:
+            return _orig_gf(self, path, times, **kw)
+        finally:
+            uniq = sorted({round(float(t), 6) for t in times})
+            WINDOWS_LOG.append({"stage": STAGE["name"], "file": Path(str(path)).name,
+                                "targets": uniq})
+            _add_stage("grab.frames_calls", time.monotonic() - t0,
+                       targets=len(uniq), clusters=_count_clusters(uniq))
+
+    def _dw_timed(self, path, ts_sorted, **kw):
+        t0 = time.monotonic()
+        try:
+            return _orig_dw(self, path, ts_sorted, **kw)
+        finally:
+            _add_stage("grab.window_spawns", time.monotonic() - t0,
+                       targets=len(ts_sorted),
+                       span_s=_span_s(ts_sorted))
+
+    _mf.FFmpegIO.grab_frames = _gf_timed
+    _mf.FFmpegIO._decode_window = _dw_timed
+    # 抓帧：源片 vs 编辑片（⚠️ orig 变量已被上方 _wrap 循环占用 ⇒ 从 CASES 重取）
     orig_cached = srv._grab_frame_cached
-    src_key = str(Path(orig).resolve())
+    src_key = str(Path(CASES[args.case][1]).resolve())
 
     def _grab(path, t):
         t0 = time.monotonic()
@@ -161,8 +229,37 @@ def main() -> int:
 
     srv._grab_grid_batch = _grab_grid
 
+    # --- 逐帧嵌入记账（续54 补）：按帧对象 id 去重 ⇒ 重复嵌入比例（合并/缓存的收益上界）---
+    from engine.localization.isc_refine import IscScorer as _ISC      # noqa: E402
+    from engine.localization.patch_rerank import PatchReranker as _PR  # noqa: E402
+    EMBED_SEEN: dict = {}
+
+    def _wrap_embed(cls, meth, key):
+        orig_m = getattr(cls, meth)
+
+        def _t(self, frame, *a, **kw):
+            t0 = time.monotonic()
+            try:
+                return orig_m(self, frame, *a, **kw)
+            finally:
+                k = "%s@%s" % (key, STAGE["name"])
+                cur = ACC.setdefault(k, {"s": 0.0, "n": 0})
+                cur["s"] += time.monotonic() - t0
+                cur["n"] += 1
+                seen = EMBED_SEEN.setdefault(k, set())
+                if id(frame) in seen:
+                    cur["dup"] = cur.get("dup", 0) + 1
+                else:
+                    seen.add(id(frame))
+                    cur["distinct"] = cur.get("distinct", 0) + 1
+
+        setattr(cls, meth, _t)
+
+    _wrap_embed(_PR, "frame_dual", "embed.patch_dual")
+    _wrap_embed(_ISC, "embed", "embed.isc")
+
     t_all = time.monotonic()
-    batch = srv.locate(edited, orig)
+    batch = srv.locate(edited, CASES[args.case][1])
     total = time.monotonic() - t_all
     ACC["TOTAL"] = {"s": total, "n": len(batch.results)}
     # ISC embed 计数（由 isc_refine 内部调用）
@@ -171,14 +268,19 @@ def main() -> int:
 
     OUT.mkdir(parents=True, exist_ok=True)
     rep = {"case": args.case, "grid": args.grid, "total_s": round(total, 1),
-           "segments": len(batch.results), "acc": {k: {"s": round(v["s"], 1), "n": v["n"]}
-                                                  for k, v in ACC.items()}}
+           "segments": len(batch.results),
+           "acc": {k: {kk: (round(vv, 1) if isinstance(vv, float) else vv)
+                       for kk, vv in v.items()} for k, v in ACC.items()}}
     print("\n=== 阶段账单（%.1fs / %d 段）===" % (total, len(batch.results)))
     for k, v in sorted(rep["acc"].items(), key=lambda kv: -kv[1]["s"]):
         print("  %-24s %8.1fs  %5.1f%%  n=%d" % (k, v["s"], 100.0 * v["s"] / max(1e-9, total), v["n"]))
     out = Path(args.out) if args.out else (OUT / ("timing_%s_grid%s.json" % (args.case, args.grid)))
     out.write_text(json.dumps(rep, ensure_ascii=False, indent=1), encoding="utf-8")
-    print("saved %s" % out)
+    wout = out.with_name(out.stem.replace("timing_", "windows_") + ".jsonl")
+    with wout.open("w", encoding="utf-8") as fh:
+        for rec in WINDOWS_LOG:
+            fh.write(json.dumps(rec) + "\n")
+    print("saved %s (+ %s, %d 次抓帧调用)" % (out, wout.name, len(WINDOWS_LOG)))
     print("ALL_DONE", flush=True)
     return 0
 
