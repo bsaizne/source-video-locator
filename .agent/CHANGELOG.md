@@ -1,5 +1,194 @@
 # CHANGELOG
 
+## 2026-10-06（续57）— UI 真机反馈四件：卡片溢出 / 新建直进构建页 / 剪辑可删 / 按钮间距
+
+- **① 首页卡片路径溢出**：`ProjectCard.vue` 根因 = grid 子项默认 `min-width:auto`，长绝对路径把
+  按钮撑出网格轨道（卡内 ellipsis 失效）⇒ `.pcard` 加 `min-width:0`；顺带「剪辑」行改只显示
+  文件名（basename，与源片行口径一致）。
+- **② 新建项目直进构建页**：`useCreateProject.ts` 重写——删掉「先弹原生对话框选剪辑视频再跳转」
+  （该流程同时是 2026-09-29 editedVideos 断链的根源），HomePage/ProjectsPage 两入口统一为
+  直接创建空项目 → 跳 ProjectDetailPage，素材在构建页自选（桌面态原生对话框入口不损失）。
+  `projectsMedia.test.ts` 旧流程 3 项断言合并重写为 1 项（含「桌面桥在位也不得弹对话框」锁）。
+- **③ 剪辑视频可删除**：`stores/projects.ts` 新增 `removeEditedVideo(id, path)`（deep watch
+  自动持久化）；`ProjectDetailPage.vue` 剪辑列表每行加与源片库同款 `pd__rm` ×按钮 + 路径
+  ellipsis/title（此前只能加不能删）。
+- **④ 按钮行间距**：`.pd__pickrow` 加 `display:flex; gap:10px; flex-wrap:wrap`（源片三按钮/
+  合并行/手动粘贴行统一生效）。
+- **门禁**：vitest **136 全绿**（净 -2：旧流程 3 项→1 项）· 双 typecheck 干净。纯展示/流程层，
+  零后端/API 契约改动，零 feature_version。
+
+## 2026-10-06（续56）— other 桶网格接线落地（新旋钮 `rerank_grid_grab`，test1 双臂 1.132× 零语义）
+
+- **执行续55「下一刀候选」**：计时账单分桶里 `other` 294.4s=22%（locate 主循环 patch_refine
+  之外的源片抓帧）＝ ① patch v2 近场池（±30s@4.0s 均匀网格，windows 账单步长 4.0s 占绝对主导、
+  锚点全整数秒）② 字牌锚定源窗（每窗 4 个 `_rep_times` 均匀点）。两者等差整数秒 ⇒ 网格抽取
+  最契合（现役窗解码搬全跨度 25fps 帧，4s 步长下管道量 ÷~100）。
+- **落地**：新旋钮 `pipeline.rerank_grid_grab`（**默认关**，与 `patch_refine_grid` 语义解耦、
+  独立 A/B 独立拍板）。开 = 两调用点走 `_grab_grid_batch`（`%.6f` 修复后的同帧契约；漏帧
+  逐帧回退；`max(0,·)` 削出的重复 0.0 锚点由 dict 去重，语义不变）；关 = 逐位回
+  `_grab_frames_parallel`。`config.py` 注释含证据与回退路径。
+- **验证**：test1 同脚本紧邻双臂（`work/rerank_grid_ab/`，DML 断言）off **1601.0s** →
+  on **1413.7s** = **1.132×**，strip(result_id) **55 段 0 差异 + 信封一致** ⇒ 端到端零语义；
+  与账单预期吻合（other 桶 22% ⇒ 1.13~1.16×）。**续54~56 干净双臂最大一刀**
+  （`patch_refine_grid` 1.068× / `cluster_workers` 1.071×）。
+- **门禁**：单测 +7（近场池 4 + 字牌 2 + config 默认锁 1）；后端全套 **540 OK (skipped=2)**。
+- **产物**：`mvp/scripts/probe_rerank_grid_ab.py`（同脚本双臂探针，支持 `--case` 四片）+
+  `work/rerank_grid_ab/{off,on}.results.json, ab_summary.json`。
+- **待拍板**：git 提交（续54~续56）/ 翻默认三旋钮（各需三片双臂）/ r9 出包。
+  未改 GT / 未 bump feature_version / 现役默认态行为不变。
+
+## 2026-10-05（续55）— 账单换位到「解码跨度」+ `%.6f` 真缺陷修复 + 三项提速（test1 21.5→18.0min）
+
+- **起因（用户问「跑一片多少时间/不是用 GPU 吗/下一刀」）**：给计时探针加**阶段归因**
+  （`probe_locate_stage_timing.py`：窗 spawn/抓帧/逐帧嵌入都按 `@stage` 记账 + 逐次抓帧目标清单
+  `windows_*.jsonl`），并写离线复算器 `analyze_window_merge.py`（以「每段抓编辑片查询帧」为段边界）。
+- **账单（test1 1332.1s，默认态 L2 on + grid on）**：窗 spawn **680 次摊在 561 次调用**（≈1.2 簇/调用）；
+  拟合成本 = **~0.17s/次固定 + 0.164s/解码秒**（由 isc 0.92s@4.6s、patch 1.12s@6.3s、other 1.77s@9.75s 三点解出）
+  ⇒ 续54 之后瓶颈已从「spawn 次数」换位到「解码秒数/管道搬运」。
+  **CPU 抓帧 1043s = 78%；DML 推理合计 ~239s = 18%**（`embed.dinov2` 35.1 + `frame_dual` 128.8 + ISC 75.2）。
+  ⚠️ **更正续54 的「GPU 仅 2.4%」**：那只数了 `backend.embed_frames` 一个入口，没枚举 patch/ISC 两个逐帧入口。
+- **假读数留痕**：用 `id(frame)` 统计「重复嵌入」得 dup=1463/2130，看着支持嵌入缓存；按 `round(t,3)`
+  键实测同段重复率 **0.00** ⇒ 前者是 numpy 对象释放后 id 被复用造成的假信号。**嵌入去重方向关闭（有据）**。
+- **真缺陷（`%.6f` 修复）**：`FFmpegIO._grid_select_expr` 以 `%g` 打印簇起点与步长 ⇒ 三位小数被截成
+  两位（3638.351 → 3638.35），select 窗口起点系统性偏离目标 ≤0.005s。后果不是「整格跳位」
+  （那会被 `max_pts_lag=0.5` 护栏抓住），而是**偏差 <0.5s 的「晚一个源帧」分配被静默接受**。
+  - 证据 = 跨源合成 micro（`probe_patch_grid_shape.py --mode synth`，30 窗 × 4 片 = 1200 点，
+    形状 = 生产 patch 窗：三位小数起点 + 步长恰 1.0s + 10 点）：修复前 **test2 1/300 · 2mkv 6/300 ·
+    test3 6/300 不同帧**（test1 0/300，那片锚点相位本就对齐，所以 test1 上看不出来）；
+    改 `%.6f` 后 **四片 1200/1200 逐字节同帧**，且 grid/base = 1.86~3.29×。
+  - 影响面 = 所有带小数锚点的网格调用（宽扫粗扫 `round(wlo+i*2,3)`、isc/patch 精扫、L2 建表）。
+    **L2 已入库索引标签全为整数秒 ⇒ 不受截断影响，无需重建索引**（实测 times 无一小数）。
+  - 端到端零语义（修复无旋钮、直接生效，故按改动前默认态产物对照）：test1 **0/55** ·
+    test2 **0/67** · test3 **0/103** · 2mkv **0/84**（`work/spawn_consolidation_regress/postfix_*`，
+    参照 = 续54补 的默认态臂；新臂墙钟 1384.2/2423.4/2499.9/1971.9s 与参照比 0.94~1.20× 属跨 run 噪声）。
+- **三项提速**：
+  1. **新旋钮 `pipeline.patch_refine_grid`（默认 False）** = patch 候选精排窗走网格抽取
+     （`_grab_source_grid`，漏点逐帧回落）。micro 真实形状 2.28×、120/120 同帧 ⇒
+     test1 同脚本双臂 `probe_patch_grid_ab.py`：**1384.2 → 1296.0s = 1.068×**，strip **0 差异**。
+     与账单一致：patch 窗桶 172.4s÷2.28 ≈ 省 75s ≈ 全链 +6%。
+  2. **`patch_refine` 段内候选窗并集（无旋钮）** = 一段所有候选窗并成一次 `grab_frames`
+     请求（各窗仍按 gap/span 自然成独立簇）⇒ 目的给 (3) 提供可并发的多簇调用。
+     **网格形态刻意不并集**：select 表达式按「簇起点 + 统一步长」生成，只服务单一相位，
+     多相位并集会让目标落在窗口中间 ⇒ 静默拿到晚 ≤0.5s 的帧（护栏抓不到）。
+     零语义验证 = test1 与并集前同代码臂（`work/patch_grid_ab/off.results.json`）**0/55 差异**。
+  3. **新配置 `media.cluster_workers`（默认 1 = 现役串行逐簇）** + `FFmpegIO.grab_frames`
+     簇间 `ThreadPoolExecutor` 并发（`_run_cluster` 内 MediaError ⇒ 返回 None，逐帧回退语义不变）。
+     test1 同脚本双臂 `probe_perf_ab.py --knob media.cluster_workers=4`：**1155.4 → 1078.9s = 1.071×**，
+     strip **0 差异**（`work/perf_ab/cl4.*`）。
+- **现役耗时口径**：test1 = **18.0 分钟**（本会话开始 21.5min）。⚠️ 同代码态跨 run 实测
+  1155.4 / 1287.3 / 1384.2s ⇒ **方差 ±18%**，大于既往 ±10% 口径 ⇒ 提速数字只认同脚本双臂。
+- **口径同步**：`PRODUCT_INTRO.md` 高精度全片 27~43min → **21~40min**（四片实测 21.5/31.3/38.0/40.3，
+  并写明同条件对照 test1 27.9→21.5 = 1.30×）。⚠️ 更正当日口头汇报两条：
+  ①「打包态比实验室 +10%」不成立（r8 打包 E2E test1 24.3min 与同代码态实验室 27.9min 同量级，
+  1.56× 属 r3 时代已过期）；②「test2 回归 0/67」曾在**尚未出数**时被我说成已完成 —— 已当场更正，
+  档案无污染，真数据随后于 21:45 落地。
+- **门禁**：后端全套 **534 OK (skipped=2)**（+8 = patch 网格 3 · 并集 2 · 簇并发 3）。
+  未改 GT / 未 bump feature_version / 未 git 提交 / 新旋钮均保持默认关。
+- **下一步**：① 三片回归验「并集（无旋钮）+ cluster_workers」；② d3d12va 硬解窗实测
+  （`probe_hwaccel_window.py --hwaccel d3d12va`，本机 AMD 独显唯一未测入口）；
+  ③ 若并行成立，接「other 桶」（逐段 patch 重排窗 294.4s=22%，跨度中位 24.8s/步长 4s，
+  网格形态最契合）；④ 翻默认与 git 提交等口令。
+
+### 续55 补 — 硬解穷尽（d3d12va / dxva2 判负）+ 簇并行双臂 PASS（2026-10-05 23:43）
+
+- **d3d12va（本机 AMD 独显唯一未测入口）= 本 build 解不出帧**：三片各 6 窗，
+  `hw 可用窗 0/6` + `md5 0/6`；单窗真实 stderr = `[hevc] hardware accelerator failed to decode picture`。
+  ⇒ 探针汇总里那个 **31~148× 是空输出造成的假速度，不成立**。同批有意义的两列 = 解码地板：
+  test1 sw 3.94 vs hw 5.07（**0.78×**）· 2mkv 2.20 vs 3.31（**0.66×**）· test2 4.00 vs 5.17（**0.77×**）
+  ⇒ 即便出帧，硬解本身也不比软解快。
+- **dxva2（同族旧版）= 同样 0/6 出帧**，地板更差：4.98 vs 9.89s（0.50×）· 2.6 vs 6.8s（0.38×）·
+  4.49 vs 9.5s（0.47×）。
+- **AMD 侧三条入口就此穷尽**：d3d11va 能出帧但续54 实测净 **0.42×**；d3d12va / dxva2 不出帧且地板
+  更慢 ⇒ **硬解方向关闭（有据）**；要回本必须改形态（帧不回 CPU 的 GPU 前处理链，重构级）。
+  macOS `videotoolbox` 仍未测（H3 机器上做）。产物 `work/hwaccel_probe/probe_hwaccel_window_{d3d12va,dxva2}.json`。
+- **簇并行双臂 PASS**：`probe_perf_ab.py --case test1 --knob media.cluster_workers=4`
+  ⇒ off **1155.4s** / on **1078.9s** = **1.071×**，`strip(result_id)` 逐字段 **0 差异**、
+  信封一致、55 段。test1 现役（含本批并集，workers 仍默认 1）= **19.3min**，开并行 = **18.0min**。
+- **并集的零语义已单独核**：`work/perf_ab/cl4.off.results.json`（并集后）vs
+  `work/patch_grid_ab/off.results.json`（并集前、同代码态）= 55 段 **0 差异** + 信封一致。
+  ⚠️ 并集的**速度**贡献无法与噪声分离（同代码态跨 run 实测 1155.4/1287.3/1384.2s ⇒ ±18%），
+  故不报并集百分比，只报「同脚本双臂」那一对的 1.071×。
+- **运行中**：段内并集三片回归（`run_union.log`，参照 = 本批 postfix 臂 2423.4/2499.9/1971.9s）。
+- 未改 GT / 未 bump feature_version / 两新旋钮仍默认关 / 未 git 提交。
+
+### 续55 补二 — 并集三片 PASS 且推翻早先判断：现役默认态 19~31 分钟（2026-10-06 00:28）
+
+- **三片回归**（`work/spawn_consolidation_regress/union_*`；参照 = 本会话同代码态 postfix 臂，
+  唯一差量 = 段内并集）：
+
+  | 片 | 并集后 | 参照 | 比值 | strip 差异 |
+  |---|---|---|---|---|
+  | test2 | **1862.8s**（31.0min） | 2423.4s | **1.223×** | **0/67** |
+  | test3 | **1861.6s**（31.0min） | 2499.9s | **1.298×** | **0/103** |
+  | 2mkv | **1407.2s**（23.5min） | 1971.9s | **1.333×** | **0/84** |
+
+  ⇒ `all_identical=True` ⇒ **并集零语义四片全成立**（test1 另有「与并集前臂 0/55 + 信封一致」对照）。
+- ⚠️ **更正上一条里写下的判断**：「并集的速度贡献无法与噪声分离 ⇒ 不报并集百分比」是按 **test1**
+  的形状统计推的（那片同段候选窗目标重复率 0.00、并集解码跨度 845→682s）。另三片候选窗
+  **重叠度高** ⇒ 并集实测省 **1.22~1.33×**，是本批最大的一刀。
+  **教训入档：单片窗口形状统计不能外推成成套结论；形状类判断必须跨片实测。**
+- **现役默认态耗时**（含 `%.6f` 修复 + 段内并集；`patch_refine_grid` / `cluster_workers` 仍默认关）：
+  **test1 19.3 · 2mkv 23.5 · test2 31.0 · test3 31.0 分钟 ⇒ 19~31min**
+  （本会话开始时同四片 21.5 / 31.3 / 38.0 / 40.3 ⇒ 一天内约 **1.3×**，且结果逐字段未变）。
+  `PRODUCT_INTRO.md`「快」章已同步 21~40 → **19~31 分钟**。
+- **口径标注（如实）**：上表三对是**跨 run** 对照（参照臂为本会话内刚测的同代码态臂；三片同向、
+  幅度一致 ⇒ 方向可信，幅度按 ±18% 方差读）；严格「同脚本紧邻双臂」的干净数字仍只有
+  `cluster_workers` **1.071×** 与 `patch_refine_grid` **1.068×** 两对。
+- 未改 GT / 未 bump feature_version / 未 git 提交。
+
+## 2026-10-05（续54）— 定位侧提速：窗 spawn 账单定瓶颈 + 三件合并优化（零语义 1.30×）
+
+- **起因（用户问「首次速度/定位侧/GPU 承担 CPU」）**：计时探针（`probe_locate_stage_timing.py`
+  更新：shot_split 目标修正 + 新增窗 spawn 级记账）给出精确定位账单——**窗抓帧 892s = 61%**，
+  ~4600 目标摊在大量小窗，每窗 spawn 固定开销 ~1s（spawn+seek+解码 0.6s + Python 读帧等 0.4s）
+  是主体；GPU 嵌入仅 2.4%。
+- **路径 A（硬解）实证判负（超持续47）**：`probe_hwaccel_window.py` 实测 d3d11va 窗解码
+  **反而 0.42×**（逐帧回传开销 > 解码收益；单帧模式 3× 慢 = D3D11 初始化 ~0.2-0.5s/spawn）。
+  ⚠️ 探针修出关键 ffmpeg 知识：**`-copyts + -t` = 0 帧**（copyts 下 -t 按原始时间轴裁剪；
+  产品用 copyts 时从不配 -t，靠目标满足后 terminate）——续54 首轮探针数据全部作废重测。
+  ⚠️ 机制层好消息留档：续47 机制探针证实**统一转换链（hw 解码→format=mid→bgr24）与产品
+  软解逐字节一致**（8-bit/10-bit 全过）⇒ 像素契约并非不可保，仅性能不成立。
+- **三件落地（全部零语义，test1 三方 strip 逐字节全等）**：
+  ① `isc_refine` 打分批量预取 `_preembed_mids`（`_mid_ts` 抽公式）——每段 6~8 个评分窗
+  spawn 合并为 1~2 个；② `FFmpegIO.metadata` 实例级缓存（按路径+size+mtime，省 0.08s×~800）；
+  ③ 精扫细化窗网格抽取（新旋钮 `isc_refine_grid_refine` **默认关**——fine_ts 本就是 1s 网格，
+  同 first_ge 契约；实测单独收益≈0 因成本在 spawn 数，保留作管道减负基建）+4 单测。
+- **验证**：后端全套 **526 OK (skipped=2)**；A/B（同脚本同条件双臂）off 1671.0s → 新 off
+  **1287.3s = 1.30×**（on 1265.5s）；三方 strip（合并前基线/新 off/新 on）**逐字节全等**。
+  保守口径：跨脚本运行方差 ±10%+，四片回归后方能定最终数字。产物 `work/grid_refine_ab/`
+  （v1 基线存 `.v1`）+ `work/locate_timing/` + `work/hwaccel_probe/probe_hwaccel_window.json`。
+- 未改 GT / 未 bump feature_version / 未提交。翻默认项：无（consolidation 无旋钮直接生效，
+  grid_refine 维持默认关待用户拍板）。
+
+### 续54 补 — 四片零语义回归 = PASS（2026-10-05 18:28，用户口令「跑三片回归」）
+
+- **必要性**：窗 spawn 合并 + metadata 缓存**无旋钮、直接生效** ⇒ test1 之外三片必须自证零语义。
+- **新脚本** `mvp/scripts/probe_spawn_consolidation_regress.py`：现役默认态直跑（`load_config()` 不
+  改任何旋钮）+ `assert isinstance(srv.backend, DirectMLBackend)` 硬断言 +
+  strip(`result_id`) 逐行比对 + 墙钟。参照臂 = `work/isc_l2_ab/on_<case>.results.json`
+  （续52-G 常态链复验产物 = 续54 改动**之前**的现役默认态）。
+- **结果**（test2 → test3 → 2mkv 顺序跑，独占 GPU ~1.9h）：
+
+  | 片 | 新臂墙钟 | 段数 | strip 差异 | 对照参照臂（跨 run） |
+  |---|---|---|---|---|
+  | test2 | 2277.9s (38.0min) | 67 | **0/67** | 1.21× |
+  | test3 | 2416.4s (40.3min) | 103 | **0/103** | 1.17× |
+  | 2mkv | 1875.4s (31.3min) | 84 | **0/84** | 1.29× |
+
+  启动日志逐片确证 `BACKEND=DirectMLBackend l2=True grid=True grid_refine=False`；
+  索引全部命中入库目录（无重建）。
+- **结论**：合并前 test1 三方全等 + 本批三片逐字节全等 ⇒ **四片逐字节全等**，故三指标
+  136/131/138/4·9 **自动成立，无需重跑**。**提速口径**：干净数字只报 test1 **1.30×**（同脚本双臂）；
+  本批 1.17~1.29× 系跨 run，参照臂墙钟含 GPU 争用（同批 test1 参照臂 4662.5s vs 干净 1671.0s），
+  仅作物级参考。PRODUCT_INTRO 27~43min 口径仍覆盖（38.0/40.3/31.3/21.5min）。
+- 产物 `work/spawn_consolidation_regress/`（`{case}.results.json` + `regress_summary.json` + `run_all.log`）；
+  明细 `FINDINGS_COST_STRUCTURE_LEVERS_20261003.md` §5.7。未改 GT / 未 bump feature_version / 未提交。
+- **口径同步（用户令「改吧」）**：`mvp/docs/PRODUCT_INTRO.md`「快」章高精度全片定位 27~43min →
+  **21~40min**（四片实测 21.5/31.3/38.0/40.3min，标注同素材同条件 test1 27.9→21.5 = 1.30×）。
+  ⚠️ **更正当日口头汇报**：我先前说「打包态比实验室 +10%」不成立——r8 打包 E2E test1 24.3min
+  vs 同代码态实验室 27.9min，打包与实验室在同一量级（跨 run 方差 ±10% 内），旧 1.56× 结论属
+  r3 时代（后端 DML 未生效）已过期。
+
 ## 2026-10-05（续53 补三）— E2E 抓到续52-G 潜伏崩溃（第二次分析必崩）+ 修复 + r8 重验全过
 
 - **runtime 功能确认（r8 包内 backend，探针 `probe_pkg_runtime_features.py`）**：health/DirectML
@@ -761,3 +950,37 @@ win-unpacked 01:38 全新构建，BUILD_EXIT=0）。
 - Created `checkpoint-2026-10-05-0012.md` checkpoint (90 modified/untracked file(s)).
 
 - Created `checkpoint-2026-10-05-0012.md` checkpoint (89 modified/untracked file(s)).
+
+### Notes
+
+- Created `checkpoint-2026-10-05-1625.md` checkpoint (11 modified/untracked file(s)).
+
+### Notes
+
+- Created `checkpoint-2026-10-05-1628.md` checkpoint (12 modified/untracked file(s)).
+
+## 2026-10-06
+
+### Added
+
+- None.
+
+### Modified
+
+- Updated `.agent/STATE.md` last-updated timestamp.
+
+### Fixed
+
+- None.
+
+### Removed
+
+- None.
+
+### Notes
+
+- Created `checkpoint-2026-10-06-0118.md` checkpoint (26 modified/untracked file(s)).
+
+- Created `checkpoint-2026-10-06-0118.md` checkpoint (25 modified/untracked file(s)).
+
+- Created `checkpoint-2026-10-06-0114.md` checkpoint (24 modified/untracked file(s)).

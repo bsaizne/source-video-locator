@@ -11,7 +11,7 @@ import BaseIcon from '@/components/ui/BaseIcon.vue'
 const router = useRouter()
 const projects = useProjectsStore()
 const session = useSessionStore()
-const { createProjectViaPicker } = useCreateProject()
+const { createProject } = useCreateProject()
 
 const recent = computed(() => projects.projects.slice(0, 6))
 
@@ -27,8 +27,9 @@ function openProject(id: string): void {
 }
 
 async function newProject(): Promise<void> {
-  const p = await createProjectViaPicker()
-  if (p) router.push(`/projects/${p.id}`)
+  // 2026-10-06：不再先弹对话框选剪辑视频——直接建空项目跳构建页，素材在构建页自选。
+  const p = await createProject()
+  router.push(`/projects/${p.id}`)
 }
 
 onMounted(() => {

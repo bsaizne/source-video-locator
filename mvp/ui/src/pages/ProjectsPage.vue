@@ -7,7 +7,7 @@ import BaseButton from '@/components/ui/BaseButton.vue'
 
 const router = useRouter()
 const projects = useProjectsStore()
-const { createProjectViaPicker } = useCreateProject()
+const { createProject } = useCreateProject()
 
 function open(id: string): void {
   projects.selectProject(id)
@@ -15,8 +15,9 @@ function open(id: string): void {
 }
 
 async function create(): Promise<void> {
-  const p = await createProjectViaPicker()
-  if (p) router.push(`/projects/${p.id}`)
+  // 2026-10-06：直接建空项目跳构建页，素材在构建页自选（与首页新建同口径）。
+  const p = await createProject()
+  router.push(`/projects/${p.id}`)
 }
 </script>
 

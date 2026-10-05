@@ -135,6 +135,12 @@ function removeSource(path: string): void {
   void projects.refreshSourceMeta(proj.id)
 }
 
+function removeEdited(path: string): void {
+  const proj = project.value
+  if (!proj) return
+  projects.removeEditedVideo(proj.id, path)
+}
+
 const MODE_LABEL: Record<string, string> = {
   copy: '流复制（不重编码）',
   transcode: '重编码合并',
@@ -338,7 +344,10 @@ function onBrowseEditedPicked(paths: string[]): void {
                        @picked="onBrowseEditedPicked" @close="browseEditedOpen = false" />
           <div v-for="e in project.editedVideos" :key="e" class="pd__asset">
             <BaseIcon name="film" :size="14" />
-            <span class="mono">{{ e }}</span>
+            <span class="mono pd__asset-path" :title="e">{{ e }}</span>
+            <button class="pd__rm" title="移除剪辑视频" @click.stop="removeEdited(e)">
+              ×
+            </button>
           </div>
         </section>
       </div>
@@ -360,7 +369,8 @@ function onBrowseEditedPicked(paths: string[]): void {
 .pd__drop { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 28px; border: 1px dashed var(--border-strong); border-radius: var(--radius-m); color: var(--fg-muted); cursor: pointer; }
 .pd__drop:hover { border-color: var(--accent); color: var(--fg); }
 .pd__drop--source { cursor: default; }
-.pd__pickrow { margin-top: 10px; }
+/* 2026-10-06 用户反馈：三个选择按钮贴在一起 ⇒ 按钮行统一 flex+gap（合并行/手动粘贴行同为横排按钮组）。 */
+.pd__pickrow { margin-top: 10px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .pd__manual { display: flex; gap: 8px; align-items: center; }
 .pd__manual-input { flex: 1; background: var(--panel-2); border: 1px solid var(--border-strong); border-radius: var(--radius-s); color: var(--fg); font-size: var(--fs-sm); padding: 6px 10px; min-width: 0; }
 .pd__asset { display: flex; align-items: center; gap: 8px; padding: 8px 0; color: var(--fg); font-size: var(--fs-sm); }

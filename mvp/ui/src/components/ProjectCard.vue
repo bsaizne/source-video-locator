@@ -18,6 +18,12 @@ const sourceLabel = computed(() => {
   if (lib.length >= 2) return `${lib.length} 段原片（待合并）`
   return basename(p.sourceVideo) || '未选择源片'
 })
+const editedLabel = computed(() => {
+  const list = props.project.editedVideos
+  if (!list.length) return '—'
+  // 卡片只显示文件名（完整绝对路径在详情页可见）；多个用「, 」连接。
+  return list.map((p) => basename(p) || p).join(', ')
+})
 const durationLabel = computed(() =>
   props.project.sourceDuration > 0 ? formatDuration(props.project.sourceDuration) : '—',
 )
@@ -49,7 +55,7 @@ const STATUS_LABEL: Record<string, string> = {
     <div class="pcard__name">{{ project.name }}</div>
     <div class="pcard__meta mono">{{ sourceLabel }}</div>
     <div class="pcard__meta"><span class="faint">时长</span> {{ durationLabel }}</div>
-    <div class="pcard__meta"><span class="faint">剪辑</span> {{ project.editedVideos.length ? project.editedVideos.join(', ') : '—' }}</div>
+    <div class="pcard__meta"><span class="faint">剪辑</span> {{ editedLabel }}</div>
     <div class="pcard__foot">
       <span class="faint">上次分析</span>
       <span>{{ project.lastAnalysis ?? '—' }}</span>
@@ -71,6 +77,9 @@ const STATUS_LABEL: Record<string, string> = {
   font-family: inherit;
   cursor: pointer;
   transition: background var(--motion-2), border-color var(--motion-2), transform var(--motion-2);
+  /* 网格子项默认 min-width:auto：长绝对路径会把按钮撑出网格轨道（卡内省略号随之失效）。
+     min-width:0 恢复收缩 ⇒ meta 行的 nowrap+ellipsis 真正生效。 */
+  min-width: 0;
 }
 .pcard:hover {
   background: var(--card-hover);

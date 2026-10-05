@@ -174,6 +174,13 @@ export const useProjectsStore = defineStore('projects', () => {
     syncEffectiveSource(p)
   }
 
+  /** 移除一条剪辑视频（2026-10-06 用户反馈：剪辑列表此前只能加不能删）。 */
+  function removeEditedVideo(id: string, path: string): void {
+    const p = requireProject(id)
+    if (!p) return
+    p.editedVideos = p.editedVideos.filter((x) => x !== path)
+  }
+
   /** 合并完成：记录留痕 + 生效原片改指合并产物（下游索引/定位/导出维持单原片口径）。 */
   function applyMerge(id: string, res: SourceMergeJson): void {
     const p = requireProject(id)
@@ -278,6 +285,7 @@ export const useProjectsStore = defineStore('projects', () => {
     addSourceVideos,
     setSourceVideos,
     removeSourceVideo,
+    removeEditedVideo,
     applyMerge,
     clearMerge,
     absoluteSources,

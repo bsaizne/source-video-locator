@@ -1,6 +1,6 @@
 // 项目元数据链路（GET /api/media/info 接线）单元测试。
 // 覆盖：utils/path 口径、projects store 的 updateProject/refreshSourceMeta、
-// useCreateProject 的"先选文件后建项目"交互（含取消不建、无桥降级、元数据异步回填）。
+// useCreateProject 的"直接建空项目跳构建页"交互（2026-10-06：不再先弹对话框选片）。
 // 服务层走默认 MockServiceAdapter（vitest 环境 VITE_BACKEND_MODE 未设 → mock）。
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
@@ -67,38 +67,21 @@ describe('useCreateProject', () => {
     vi.unstubAllGlobals()
   })
 
-  it('无桌面桥（浏览器 dev）→ 创建空源片项目，不写假文件名', async () => {
+  it('新建项目 = 直接创建空项目（2026-10-06：不再先弹对话框选剪辑视频，素材在构建页自选）', async () => {
     const projects = useProjectsStore()
-    const { createProjectViaPicker } = useCreateProject()
-    const p = await createProjectViaPicker()
-    expect(p).not.toBeNull()
-    expect(p!.sourceVideo).toBe('')
-    expect(p!.name).toBe('未命名项目 1')
-    expect(projects.projects).toHaveLength(1)
-  })
-
-  it('桌面桥取消 → 返回 null 且不创建项目', async () => {
-    const projects = useProjectsStore()
-    vi.stubGlobal('window', { desktop: { openFile: vi.fn().mockResolvedValue(null) } })
-    const { createProjectViaPicker } = useCreateProject()
-    const p = await createProjectViaPicker()
-    expect(p).toBeNull()
-    expect(projects.projects).toHaveLength(0)
-  })
-
-  it('桌面桥选中文件 → 项目名=文件名去扩展名、异步回填真实时长', async () => {
+    // 即便桌面桥在位也不得弹对话框：openFile 若被调用即失败。
     vi.stubGlobal('window', {
-      desktop: { openFile: vi.fn().mockResolvedValue('D:\\movies\\大片 2014.mkv') },
+      desktop: { openFile: vi.fn().mockRejectedValue(new Error('不得弹对话框')) },
     })
-    const { createProjectViaPicker } = useCreateProject()
-    const p = await createProjectViaPicker()
-    expect(p).not.toBeNull()
-    expect(p!.name).toBe('大片 2014')
-    // 真机验收 2026-09-29 回归锁: 对话框选的是**剪辑视频**——必须进 editedVideos
-    // （分析页下拉数据源），且不得污染 sourceVideo（旧实现写反导致下拉恒空、开始分析永禁）。
-    expect(p!.editedVideos).toEqual(['D:\\movies\\大片 2014.mkv'])
-    expect(p!.sourceVideo).toBe('')
-    // fire-and-forget 的元数据回填：等待微任务队列冲刷完成。
-    await vi.waitFor(() => expect(p!.sourceDuration).toBe(8310))
+    const { createProject } = useCreateProject()
+    const p = await createProject()
+    expect(p.sourceVideo).toBe('')
+    expect(p.editedVideos).toEqual([])
+    expect(p.name).toBe('未命名项目 1')
+    expect(projects.projects).toHaveLength(1)
+
+    const p2 = await createProject()
+    expect(p2.name).toBe('未命名项目 2')
+    expect(projects.projects).toHaveLength(2)
   })
 })
