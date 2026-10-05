@@ -16,7 +16,8 @@
 > 修复 = `set()` + 2 回归测试 + worker 异常堆栈落 tasks logger（此前 no-op 无从归因）。
 > 重验：后端 **523 OK** · E2E **PASS**（24.3min/55 段/L2 加载 8221 帧/DML）· accept **FAILED=0** ·
 > zip 0 缺漏 · 启动冒烟 PASS。**r8 zip 已重打定稿**；release = r7 + r8。
-> runtime 功能确认全过（fsbrowse/L2 翻默认行为证据/GPU/PYZ/注入）。**等口令**：git 提交（续53 修复）。
+> runtime 功能确认全过（fsbrowse/L2 翻默认行为证据/GPU/PYZ/注入）。~~等口令：git 提交~~
+> **已提交推送**（`6fcf399..3f42e65` 三笔，工作区清零）。剩：r8 真机 UI 全链复核（可选）。
 > 未改 GT / 未 bump feature_version。
 
 > **▶ 2026-10-05（续53 补二）— git 三笔推送 + r8 出包验收全过；release 只留 r7+r8**
