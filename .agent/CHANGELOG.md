@@ -1294,3 +1294,126 @@ win-unpacked 01:38 全新构建，BUILD_EXIT=0）。
   （`BACKEND_LISTEN <host> <port>`、task `to_dict` 含 `result`、`/api/index` 返回 `IndexResponse`、
   设备行文本 `backend selected=mps`）。首次真跑即在 CI 里。
 - 本地门禁：workflow YAML 可解析（三 job）· 脚本 py_compile 通过。
+
+## 2026-10-06（续61 补六）— mac 包体门槛三轮转正 + LOC-1107 第二处（ISC 片尾越界）收口到解码层
+
+### 门槛三轮 dispatch 的实录（#26 / #27 / #28，全在真 macOS runner 上）
+
+- **#26 红**（step15）：`FileNotFoundError: .../Contents/Resources/backend/backend` —— 门槛脚本自己的 bug：
+  给 `Popen` 同时传**相对** argv[0] 与**相对** `cwd`，POSIX 先切 cwd 再解析路径 ⇒ 前面 `is_file()`
+  全 True 却死在启动。已 `resolve()` 绝对化，并把 Popen 包成 FAIL 而非裸 traceback。
+- **#27 红**（step15）：两条 locate 终态 **LOC-1107**，进度停在 97.0（= ISC 精扫段）。
+  这轮不是脚本问题：本地用**同款合成素材**（20s lavfi 原片 + 末 6s 剪辑）在 Windows+DML 复现，
+  traceback = `isc_refine.py:314 → 231 → 206 → 154 → grab_frames:255 → grab_frame:177`，
+  `grab_frame returned no frame at t=20.500`（原片 20.0s）⇒ **跨平台真缺陷**。
+- **#28 绿**：`FAILED=0` 全项 PASS（图+`.data` 双 sha · BACKEND_LISTEN · health 200 ·
+  无令牌 401 · 建索引 `device=mps frames=20` · locate 完成结果段=1 · **中文路径**同样完成 ·
+  `backend selected=mps`），step16 publish 才放行 ⇒ `mac-alpha` 上的包从"构建成功即发布"
+  变成"过包体功能验收才发布"。mac zip 现 913,591,283 B（含 patch/ISC 权重）。
+
+### 我上一轮的判断错在哪（更正留痕）
+
+补第一处（patch_refine）时我在 commit/档案里写过"其他网格调用方按构造在界内"——**错**：
+`isc_refine` 的 `rhi = t0 + WIDE_REFINE_S(2s)` 与粗扫窗同样无片尾边界，近场池(±radius)、
+字牌锚定同理。教训 = 修掉一处同类缺陷后不得宣称"其余界内"，必须枚举同型调用点。
+
+### 修法（第一版：解码层预钳制 —— 已被下面的严格惰性版替换）
+
+- `FFmpegIO._decodable_cap(info)` = 容器时长 − 1 帧（元数据不可信 ⇒ None ⇒ 不兜底）；
+- `grab_frame`：`t > cap` 钳到 cap（不再抛）；
+- `grab_frames`：目标先钳制再聚类，返回时**按原始请求值补别名键**；
+- 测试 +2（真实 `a1.mp4`）：越界 `grab_frame` 不抛；批量口保留原始键且片内逐位不变。
+
+### ⚠️ 更正留痕（同轮内两次自我修正）
+
+**① 我把 r11 的读数读错过一次**：`work/r11_arm/run_arm.py` 双臂跑完只打
+`[done] ... segments=0`，而 `segments` 取的是 `result.results` 长度 —— 任务 **failed** 时它同样是 0。
+我据此写成"r11 = completed 但 0 段 ⇒ 说明预钳制改了本来能成功的请求"，**错**。实测
+`work/pkg_attr/headless_short20.summary.json`：r11 = `task_status=failed`、
+`task_error=…LOC-1107`。⇒ r11/r12 的 0↔1 差异就是**兜底救活了过去会抛的请求**，与我最初的
+"构造性零语义"推理**不冲突**；预钳制版本的实际风险是另一件事（下条）。
+脚本已改：`[done]` 同时打 `status`/`err`，`package` 字段不再硬编码 "r4" 而是按实测
+backend.exe 的 `sha256[:16] + size + mtime` 生成（双臂归因必须有包身份抓手）。
+
+**② 预钳制仍有实质风险，故改成严格惰性**：`cap = 时长 − 1/fps` 只是末帧 pts 的**下界估计**，
+真实末帧常更靠后 ⇒ `t ∈ (cap, 时长]` 本来**能取到正确帧**的请求会被先钳到 cap 处的另一帧
+（换帧→换分→可能换段）。本机 20s 素材上没观测到这种替换，但它不可证伪 ⇒ 不该留在生产里。
+
+### 修法（现役 = 严格惰性）
+
+- 删掉 `grab_frame`/`grab_frames` 里一切**预先**钳制：目标一律按原始 t 解码，簇划分与帧选择逐位不变；
+- 只在 `grab_frame` 的「stdout 不足一帧」分支（过去 = 直接抛 `MediaError`）里兜底：
+  若 `t > cap` ⇒ 调 `_grab_last_frame()` 解片尾 ~2 帧区间取**最后一帧**（管道流式读，内存有界；
+  不做第四种选帧语义），仍取不到才抛；
+- `cap` 的角色从"钳制值"降级为"判据"：只有**片尾形状**的失败才被救，中段子流损坏照样抛（不误吞）；
+- `_grab_last_frame` 按 (路径, size, mtime_ns, scale) 记忆（上限 8 条）：短原片一次 locate
+  **实测命中 11 次**，不记忆就是 11 次片尾重解；
+- 测试：`test_grab_frame_beyond_end_rescues_not_raises`（兜底帧 = `_grab_last_frame` 且非黑帧）、
+  `test_grab_frame_in_bounds_untouched_by_rescue`（界内点与批量口逐字节同）、
+  `test_grab_frames_beyond_end_keeps_original_keys`（批量键仍为原始请求值）。
+
+### 资产侧收口（同轮）
+
+`model-assets` 内部 tag 挂三份（88,342,528 / 1,613,211 / 209,190,912 B），CI 第 11 步下载 +
+`verify_model_asset_shas.py` 校验；`releases/download` 本机不通 ⇒ 改走 API assets 端点。
+mac 侧"精排静默回退 CPU torch / ISC 第二意见缺席"的缺口正式关闭（此前该缺口会让 mac 包
+与 Windows 包不同档，且完全静默）。
+
+### 门禁与遗留
+
+- 后端 **545 OK (skipped=2)** · API **105 OK** · FFmpegIO 单测 20 OK；提交 `7589659`（修复）
+  + `1c07cea`（脚本路径修复）+ `137c724`/`edfa5ac`（资产管线）已推送。
+  ⚠️ 本节所述"预钳制"实现**已被补七的严格惰性版替换**（测试也随之改名/加条，现役 21 OK）。
+- **r11 不含第二处修复** ⇒ 短原片在 Windows 包上照样会崩 ⇒ 由 r12 收口（见下一节）。
+- 仍开放：预览"一路播完另一路继续"的真浏览器目检；LOC-1107 用户 16:34 真项目的包体判别重跑；
+  竞品 opcode 通道可行性。
+
+## 2026-10-06（续61 补七）— EOF 兜底改严格惰性 + test1 实测判决 + r13 出包验收
+
+### 代码最终态（替代补六的"预钳制"版）
+
+- `grab_frame`：**单次 spawn 按原始 t**；仅当 `stdout` 不足一帧**且** `t > cap` 时调
+  `_grab_last_frame()`（`-ss 时长−tail` 起流式解到 EOF，只留最后一帧，管道逐帧读；
+  按 (路径, size, mtime_ns, scale) 记忆，上限 8 条）。仍取不到才抛，异常文本不变。
+- `grab_frames`：**取消**预钳制与"原始请求值别名键"，簇目标一律原始 t。
+- `cap` 的角色 = 判据（区分"片尾越界"与"中段流损坏"，后者照旧抛），不再是钳制值。
+- 短原片实测兜底一次 locate **命中 11 次** ⇒ 记忆化把 11 次片尾重解压成 1 次。
+
+### 实测判决（两条，都是本轮新证据）
+
+- **真实片 test1 零语义**（`work/eof_inert_check/run_instr.py test1`，同旋钮
+  patch_refine_grid/rerank_grid_grab=True + cluster_workers=4，对照修复前基线
+  `work/defaults_flip_ab/test1/on.results.json`）：
+  **segments 55/55 · strip 后 identical=True · n_diff=0 · 兜底命中 0 次**。
+  wall=1238.2s 含并行 typecheck 争用 ⇒ **不作性能口径**（见 [[assert-backend-in-measurements]] ⑧）。
+  ⇒ 补六 免跑四片的推理这轮**有实测背书**（test1 直接同帧同结果），其余三片仍是构造性论证。
+- **包体级判别闭合**（同一 `short20` 素材 = 20s 原片 + 其 6–12s 剪辑，三个代际各实测一次）：
+  r11 包 = `task_status=failed` + LOC-1107；r12 包（预钳制）= completed 1 段；
+  **r13 包（严格惰性）= completed 1 段**（wall 18.1s，进度 92→94→95→100）。
+  源码树同素材 = `src 5.5–7.5`、HIGH 0.9957、frame_precision=true（构造真值 6–12s）。
+  ⇒ LOC-1107 的包体级"修复前必崩/修复后不崩"这一课，从补一至今挂着的状态**已闭合**。
+
+### 判卷抓手修复（我自己踩的坑，见补六更正）
+
+`mvp/scripts/attr_packaged_headless.py`：`[done]` 现在同时打 `status`/`err`；
+`package` 字段不再硬编码 "r4"，改为按实测 `backend.exe` 的 `sha256[:16] + size + mtime` 生成
+（r13 = `sha16=52ca8c225bbc3683 77445580B mtime=2026-10-06 23:02`）。
+
+### 门禁与 r13 出包
+
+- 后端 **546 OK (skipped=2)** · API **105 OK** · FFmpegIO 单测 **21 OK** · vitest **142** ·
+  `vue-tsc` 与 electron `tsc` 均干净。
+- r13 = `mvp/ui/release/Video-Locator-win-x64-20261006r13.zip`（981,636,653 B / 7,078 条目 /
+  `testzip()` 无坏件，backend.exe·主 exe·ISC 图三条目抽读可开）。
+  accept **FAILED=0**（冒烟 27.0s · DirectML 生效 · 精排与 ISC 未回退 CPU · 定位段数 1）·
+  三防 **FAILED=0** · 启动冒烟 25s 存活 Electron 4 + backend 1（用完即清，AFTER_KILL=0）。
+- backend.exe 尺寸逐代：r10 77,441,843 → r11 77,442,958 → r12 77,443,992 → **r13 77,445,580**。
+- **分发包保留**（用户口令"只留 r10、r11、最新包"）：r8/r9 已删，r13 过验收后 r12 已删。
+
+### 仍开放
+
+- 预览"一路播完另一路继续"的真浏览器目检（`pause`/`ended` 先后仍是前提）。
+- mac 现役资产 = **预钳制版**（CI #28 绿、`mac-alpha` 已发布）；是否为严格惰性再 dispatch 一次
+  （≈180 macOS 分钟）待拍板。
+- LOC-1107 是否拆码 · 下一刀 A1→A2 ∥ A3 · 性能口径三处对齐（PRODUCT_INTRO 19~31 vs 现役）·
+  竞品 opcode 通道可行性。

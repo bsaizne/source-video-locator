@@ -68,7 +68,28 @@
 
 ## Current Task
 
-> **▶ 2026-10-06（续61 补五）— mac 包体验收脚本 + publish 门槛已接线（未跑过真 mac）【下个对话从这里读起】**
+> **▶ 2026-10-06（续61 补七）— 现役包 = r13；EOF 兜底改严格惰性并有真实片判决【下个对话从这里读起】**
+> 三件事收尾（细节全在 `.agent/CHANGELOG.md` 续61 补六/补七）：
+> ① **mac 包体门槛三轮转正**（#26 脚本自身相对路径 bug → #27 抓到**真缺陷** ISC 片尾越界
+> t=20.500 vs 20.0s → #28 `FAILED=0`，publish 现受门槛管；mac zip 913MB 含 patch/ISC 权重）；
+> ② **LOC-1107 收口到解码层**，且**预钳制版已被撤**：`grab_frame` 只在「原始 t 真的取不到帧
+> 且 `t > cap`」时用 `_grab_last_frame()` 返回片内最后一帧（cap 只当判据，不当钳制值 ——
+> 它是末帧时间的**下界**，预钳会把 `(cap, 时长]` 内本来正确的帧换掉）；`grab_frames` 取消预钳与别名键；
+> ③ **两条实测判决**：真实片 test1 对照修复前基线 = **55/55 段、strip 后 identical、兜底命中 0 次**
+> （⇒ 补六"免跑四片"的构造性论证这轮有背书，其余三片仍是论证不是实测）；
+> 包体三世代同素材 `short20`（20s 原片 + 其 6–12s 剪辑）= **r11 failed LOC-1107 / r12 completed 1 段 /
+> r13 completed 1 段** ⇒ 这条从续61 补一挂到现在的"包体级判别未实证"**已闭合**。
+> 现役包 = `mvp/ui/release/Video-Locator-win-x64-20261006r13.zip`（981,636,653 B / 7,078 条目；
+> backend.exe 77,445,580 B `sha16=52ca8c225bbc3683`）；accept/三防/启动冒烟 **FAILED=0**；
+> 门禁 后端 **546** · API **105** · FFmpegIO **21** · vitest **142** · 双 typecheck 干净。
+> **判卷抓手已修**：`attr_packaged_headless.py` 的 `[done]` 现在打 `status/err`，`package` 字段
+> 按实测 backend.exe `sha256[:16]+size+mtime` 生成（此前硬编码 "r4" 害我把 r11 的 failed 读成 0 段）。
+> **分发包保留**（口令"只留 r10、r11、最新包"）：r8/r9 已删，r13 过验收后 r12 已删。
+> **仍开放/待拍板**：① mac 现役 = 预钳制版（严格惰性未上 mac，是否再 dispatch ≈180 macOS 分钟）
+> ② 预览联动的真浏览器目检 ③ LOC-1107 是否拆码 ④ 下一刀 A1→A2 ∥ A3
+> ⑤ 性能口径三处对齐（PRODUCT_INTRO 19~31 vs 现役）⑥ 竞品 opcode 通道可行性。
+
+> **▶ 2026-10-06（续61 补五）— mac 包体验收脚本 + publish 门槛已接线（未跑过真 mac）【已销项，见补七】**
 > 动因：mac 包过去只验「构建成功 + 静态库 + ad-hoc 签名」，从未做包体实测；且 `macos-package`
 > 最后一步是**构建成功即 `gh release upload --clobber` 到公开 rolling tag `mac-alpha`**
 > （实测该 release 现有两资产，旧 `Video.Locator-0.1.0-arm64-mac.zip` dl=12）。
@@ -2698,4 +2719,4 @@ test3 27.79 与 2026-09-26 border_review 独立裁决逐点吻合）; test2 **�
 
 ## Last Updated
 
-2026-10-06 19:18
+2026-10-06 23:15
