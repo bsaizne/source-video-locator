@@ -210,12 +210,16 @@ def main() -> int:
         "SVL_BACKEND_PORT": "0",
         "SVL_DML_MODEL": str(RES_DIR / "models" / "dinov2_cls_384" / "dinov2_cls_384.onnx"),
         "SVL_DINOV2_WEIGHTS": str(RES_DIR / "models" / "dinov2_vits14" / "dinov2_vits14_pretrain.pth"),
+        # r5+ 打包态 main.ts 注入（2026-10-06 补齐）：缺 patch = 精排静默回退 CPU torch
+        # 慢 2.6~3.9x；缺 ISC = 第二意见整体跳过。headless 必须与 Electron env 逐字对齐。
+        "SVL_PATCH_ONNX": str(RES_DIR / "models" / "dinov2_cls_patch" / "dinov2_cls_patch.onnx"),
+        "SVL_ISC_ONNX": str(RES_DIR / "models" / "isc_ft_v107" / "isc_ft_v107.onnx"),
     }
     if mode == "venv":
         # 源码树形态的导入路径：mvp.api（顶层 mvp 包）+ mvp/src 里的 app/domain/... 绝对导入
         env["PYTHONPATH"] = os.pathsep.join(
             [str(BENCH), str(BENCH / "mvp" / "src"), str(BENCH / "mvp")])
-    for k in ("SVL_DML_MODEL", "SVL_DINOV2_WEIGHTS"):
+    for k in ("SVL_DML_MODEL", "SVL_DINOV2_WEIGHTS", "SVL_PATCH_ONNX", "SVL_ISC_ONNX"):
         assert Path(env[k]).exists(), "%s 缺失: %s" % (k, env[k])
 
     proc = subprocess.Popen(cmd, cwd=str(EXE_DIR), env=env,

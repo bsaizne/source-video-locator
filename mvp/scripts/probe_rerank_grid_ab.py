@@ -38,9 +38,10 @@ from infrastructure.config import load_config             # noqa: E402
 OUT = BENCH / "work" / "rerank_grid_ab"
 CASES = {
     "test1": (r"D:\ProjectXIXI\test1\test1-ed.mp4", r"D:\ProjectXIXI\test1\test1-om.mkv"),
-    "test2": (r"D:\ProjectXIXI\test2\test2-ed.mp4", r"D:\ProjectXIXI\test2\test2-om.mkv"),
-    "test3": (r"D:\ProjectXIXI\test3\test3-ed.mp4", r"D:\ProjectXIXI\test3\test3-om.mkv"),
-    "2mkv": (r"D:\ProjectXIXI\2mkv\1.mp4", r"D:\ProjectXIXI\2mkv\2.mkv"),
+    # ⚠️ 真实文件名：test2 剪辑片就是拼错的 "tset2-ed.mp4"；2mkv 在 D:\video\（2026-10-06 修正）
+    "test2": (r"D:\ProjectXIXI\test2\tset2-ed.mp4", r"D:\ProjectXIXI\test2\test2-om.mp4"),
+    "test3": (r"D:\ProjectXIXI\test3\test3-ed.mp4", r"D:\ProjectXIXI\test3\test3-om.mp4"),
+    "2mkv": (r"D:\video\1.mp4", r"D:\video\2.mkv"),
 }
 
 
