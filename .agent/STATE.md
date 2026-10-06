@@ -63,6 +63,57 @@
 
 ## Current Task
 
+> **▶ 2026-10-06（续58 补一）— r9 包真机全链复核 = PASS【醒来读这条】**
+> 口令「跑吧」：`attr_packaged_headless.py test1`（包内 backend.exe headless；**脚本 env 补齐
+> `SVL_PATCH_ONNX`/`SVL_ISC_ONNX` 注入对齐 main.ts**——r3 时代旧跑手缺这两项，不补会复现
+> 精排静默回退 CPU 事故）⇒ wall **1196.9s = 19.9min**（实验室同代码态 1320.5s，headless 无
+> UI 观察侧，方差内）· 55 段 task completed 零错误 · DirectML 生效（无回退）· 索引复用 VALID ·
+> 轮询 p50 4.7ms。**最硬一条：包内结果 vs 实验室 defaults_flip_ab/test1/on 臂 strip 后
+> 逐字节 identical = True** ⇒ r9 包 = 实验室同语义，三旋钮新默认在包内正确生效。
+> 阶段观感：逐段定位 ~7s/段 → REFINE ~10min，进度通道全程有消息（续40 修复生效）。
+> ⚠️ 包 = 未提交工作区构建 ⇒ **git 提交前勿再改工作区**。
+> **待拍板**：① 工作区 git 提交 ② 下一刀拍板（A1→A2 推荐 ∥ A3 产品选项，见 RESEARCH_PROPOSAL_NEXT_CUT_20261006.md）。
+
+> **▶ 2026-10-06（续58）— r9 出包完成 + 验收全过**
+> 口令「出包」：`build-release.ps1` 四步全过（首跑败于旧 win-unpacked 文件被占用，清进程删目录
+> 重跑即过）→ `accept_packaged_bundle.py` **FAILED=0**（backend.exe/patch/ISC sha256 全过 ·
+> 包内冒烟 33.9s≤75s · DirectML 生效 · 精排 GPU 未回退 · ISC GPU）+ **启动冒烟 PASS** +
+> zip 抽验（936MB/7078 条目/CRC OK/main.js+preload+渲染层+三模型资产全在）。
+> **`mvp/ui/release/Video-Locator-win-x64-20261006r9.zip` = 现役包**：三旋钮新默认
+> （定位 15~31min/片）+ UI 五件修复进包。release 现役 = r8（回滚）+r9；r7 已删（2026-10-06 用户口令「留r8删r7」，1.68GB 释放）。
+> ⚠️ 包 = 未提交工作区构建 ⇒ **git 提交前不要再改工作区**（保包↔提交一致）。
+> **待拍板**：① 工作区 git 提交 ② r8 删除授权 ③ r9 真机全链复核 ④ 算法下一刀立项。
+
+> **▶ 2026-10-06（续57 夜间批二）— 计划项 1「ISC margin 门标定」= 判负关闭（已回滚）【从这里读起】**
+> 按「按你的计划来」执行计划项 1（原 ED 子镜头对齐 → 材料复读修正为 ISC margin 门标定：
+> t1r08c/t1r12a 探针 margin 0.0457/0.0391 卡 0.05 门）。两级探针后**判负关闭**：
+> ① 全量 0.035 臂（2mkv 实跑）读图 = 1 真增益（row23 近场 1.5s）+ **1 真损失**
+> （row77 0.9s 窄段 HIGH 被远跳 56.6s）⇒ 亚门分不可作远距重锚证据；② 近场限定设计在
+> 实现+单测阶段**机制否证**——`_score_mid` 评分窗（±(w/2+1.5s)）内取 max ⇒ 近场峰被主分
+> 吸收 margin 恒 0，无可达面；探针点评分 vs runtime 窗 max = 口径错位教训。
+> **处置**：isc_refine/config/locator_service/单测全部回滚（判负不进 runtime 不留通道），
+> 后端 **540 OK** 复验；探针留证。真救回需换评分几何（主分排除峰侧/锚点级），与「扫描行为
+> 缩减」同层级立项。明细 FINDINGS_NEXT_DIRECTIONS §7。
+> **工作区（仍未提交未打包，按口令）**：三旋钮翻默认 + 回归锁 + pd__lib 修复 + 探针
+> （defaults_flip_ab / fp16_ab / isc_margin35 / isc_subgate_ab / rerank_grid_ab 路径修正）。
+> **醒来待拍板**：① 本工作区 git 提交（含三旋钮翻默认）② r9 出包 ③ 下一刀
+> （ED 子镜头对齐仍待真正设计 / mkv 建表异步化需产品口径 / 扫描行为缩减）。
+
+> **▶ 2026-10-06（续57 夜间批次）— 三旋钮已翻默认（四片 PASS）+ 真机复核过 + FP16 判负【从这里读起】**
+> 按口令「翻→真机复核→列方向评估→按计划执行；**不推 git 不打包**」完成：
+> ① **翻默认**：前置补齐联合双臂四片（`probe_defaults_flip_ab.py`）全 PASS —— test2 **1.294×**
+> 0/67 · test3 **1.276×** 0/103 · 2mkv **1.162×** 0/84 · test1 0/55 ⇒ `patch_refine_grid=True` ·
+> `rerank_grid_grab=True` · `cluster_workers=4` 已生效，**三指标 136/131/138/4·9 自动成立**，
+> 后端 540 OK。**新默认态 ≈ 15~31min/片**（on 臂实测 22.0/27.0/30.1/31.6）。
+> ② **真机复核**：UI dev 浏览器目检续57 四件全过 + **抓修第 5 处同类溢出**（`.pd__lib` grid
+> min-width:auto 面板撑破，已修+复验）；vitest 136 · 双 typecheck 绿。
+> ③ **FP16 探针（L4 销项）**：ISC **1.806×**（cos 0.999992）但 DINOv2 CLS 0.845×（更慢）/
+> patch dual 1.014×；采纳 = feature_version bump+全量重建换 ~2.5% 全链 ⇒ **判负（有据）**。
+> ④ **方向评估**（`FINDINGS_NEXT_DIRECTIONS_20261006.md`）：抓帧三桶已到解码地板 ⇒ 纯性能侧
+> 挤干（账单拟合实测）；剩余杠杆 = 扫描行为缩减（语义变更）。建议排序：ED 子镜头切分对齐
+> （精度，救 t1r08c/t1r12a part 族）> mkv 建表异步化 > r9 出包 > 扫描缩减 > 代际差穷举。
+> **工作区未提交**（按口令）：config 翻默认 + 回归锁 + pd__lib 修复 + 3 探针。**未打包 r9**。
+
 > **▶ 2026-10-06（续57）— UI 真机反馈四件（卡片溢出/新建直进构建页/剪辑可删/按钮间距）= 完成**
 > ① `ProjectCard.vue` `.pcard` 加 `min-width:0`（grid 子项 min-width:auto 是溢出根因）+「剪辑」行
 > 只显示文件名；② `useCreateProject.ts` 重写 = 新建项目**不再弹对话框选剪辑视频**，直接建空项目

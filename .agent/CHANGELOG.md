@@ -1,5 +1,42 @@
 # CHANGELOG
 
+## 2026-10-06（续57 夜间批二）— 计划项 1「ISC margin 门标定」= 判负关闭（两级探针 + 机制否证，已回滚）
+
+- **立项修正**：材料复读发现 t1r08c/t1r12a 非子镜头族，而是 ISC margin 卡门（探针口径
+  0.0457/0.0391 < 0.05 门）⇒ 方向改为门标定。
+- **第一级（全量 0.035 臂，`probe_isc_margin35.py`）**：2mkv 2 行翻转读图裁决 =
+  row23（1.5s 近场）**真增益** + row77（0.9s 窄段 HIGH 被远跳 56.6s）**真损失** ⇒
+  亚门分不可作远距重锚证据。
+- **第二级（近场限定 offset≤3s 才降门）**：实现+单测阶段**机制否证**——`_score_mid`
+  评分窗（mid ± (w/2+1.5s)）内取 max ⇒ 近场峰必被主分吸收 ⇒ margin 恒 ≈0，无可达面；
+  探针点评分口径与 runtime 窗 max 口径不可比（口径错位教训）。
+- **裁决 = 判负关闭**：全量不安全 + 近场无可达面。t1r08c/t1r12a 真救回需换评分几何
+  （主分排除峰侧/锚点级评分），与「扫描行为缩减」同层级立项，本轮不做。
+- **处置**：isc_refine/config/locator_service 改动与单测**全部回滚**（「判负不进 runtime
+  不留通道」纪律），后端 **540 OK** 复验；探针留证（`probe_isc_margin35.py` /
+  `probe_isc_subgate_ab.py` + `work/isc_margin35/` 帧证据）。明细 FINDINGS_NEXT_DIRECTIONS §7。
+- 按口令：**未提交 git / 未打包 r9**（工作区 = 三旋钮翻默认 + 回归锁 + pd__lib 修复 + 探针）。
+
+## 2026-10-06（续57 夜间批次）— 三旋钮翻默认（四片联合 PASS）+ 真机复核五件 + FP16 探针判负
+
+- **三旋钮翻默认**（用户口令「翻」，前置=补齐三片证据）：`probe_defaults_flip_ab.py` 联合双臂
+  四片全 PASS（test1 0/55 · test2 **1.294×** 0/67 · test3 **1.276×** 0/103 · 2mkv **1.162×** 0/84，
+  `all_identical=True`）⇒ `patch_refine_grid=True` · `rerank_grid_grab=True` · `cluster_workers=4`
+  生效，三指标 136/131/138/4·9 自动成立。**新默认态 ≈ 15~31 分钟/片**
+  （test1 22.0 · 2mkv 27.0 · test2 30.1 · test3 31.6，on 臂实测）。后端 540 OK。
+- **真机复核（UI dev 浏览器目检）**：续57 四件全过（新建直达构建页/按钮间距/剪辑×删除/卡片
+  不溢出+文件名省略），**抓修第 5 处同类溢出**（`.pd__lib` grid min-width:auto ⇒ 面板撑破），
+  截图复验 scrollWidth==clientWidth；vitest 136 · 双 typecheck 绿。
+- **FP16 探针（L4 销项，`probe_fp16_ab.py` 证据级）**：ISC **1.806×**（40.2→72.6fps，cos
+  0.999992/max|d|=0.000956）但 DINOv2 CLS **0.845×（更慢）**、patch dual 1.014×（无肉）；
+  采纳代价 = feature_version bump + 全量重建索引换 ~2.5% 全链 ⇒ **判负（有据）**。
+- **方向盘点评估**（`FINDINGS_NEXT_DIRECTIONS_20261006.md`）：抓帧三桶已到解码地板（账单拟合
+  实测 ≈ 固定+解码秒，管道已被网格化消掉）⇒ 纯性能侧挤干；剩余大杠杆 = 扫描行为缩减（语义
+  变更需拍板）。精度首选 = **ED 子镜头切分对齐**（救 t1r08c/t1r12a part 族）；工程首选 =
+  **mkv 建表异步化**。
+- 按口令：**未提交 git / 未打包 r9**。工作区 = config 翻默认 + 回归锁 + pd__lib 修复 +
+  3 探针（新增 defaults_flip_ab / fp16_ab，rerank_grid_ab 路径修正）。
+
 ## 2026-10-06（续57）— UI 真机反馈四件：卡片溢出 / 新建直进构建页 / 剪辑可删 / 按钮间距
 
 - **① 首页卡片路径溢出**：`ProjectCard.vue` 根因 = grid 子项默认 `min-width:auto`，长绝对路径把
@@ -984,3 +1021,44 @@ win-unpacked 01:38 全新构建，BUILD_EXIT=0）。
 - Created `checkpoint-2026-10-06-0118.md` checkpoint (25 modified/untracked file(s)).
 
 - Created `checkpoint-2026-10-06-0114.md` checkpoint (24 modified/untracked file(s)).
+
+## 2026-10-06（续58）— r9 出包 + 全链验收 PASS（口令「出包」）
+
+- **构建**：`build-release.ps1` 四步全过（首跑败于旧 win-unpacked 文件被占用 `Access is denied`
+  → 清进程删目录重跑即过）；产物 `mvp/ui/release/win-unpacked/Video Locator.exe`。
+- **包内容**（工作区未提交态构建）：三旋钮新默认（`patch_refine_grid` / `rerank_grid_grab` /
+  `cluster_workers=4`）+ UI 五件修复（卡片溢出/新建直进构建页/剪辑×删除/按钮间距/pd__lib
+  面板溢出）+ 续54~57 全部提速与修复。
+- **验收**：`accept_packaged_bundle.py` **FAILED=0**（backend.exe/patch/ISC 资产 sha256 全过 ·
+  包内冒烟 33.9s ≤75s · DirectML 生效 · 精排 GPU 未回退 · ISC GPU）+ **启动冒烟 PASS**
+  （进程 25s 存活）+ zip 抽验（`Video-Locator-win-x64-20261006r9.zip` 936MB / 7078 条目 /
+  CRC OK / main.js+preload+渲染层+三模型资产全在；asar 禁用形态 = `resources/app/out/electron/`）。
+- release 现役 = r8（回滚）+ **r9（最新）**；r7 已删（2026-10-06 用户口令「留r8删r7」）。
+- ⚠️ 包 = 未提交工作区构建 ⇒ **git 提交应先于任何对工作区的再修改**（保持包↔提交一致）。
+
+## 2026-10-06（续58 补一）— r9 包真机全链复核 = PASS（口令「跑吧」）
+
+- **跑法**：`attr_packaged_headless.py test1`（包内 backend.exe headless，与 Electron 打包态
+  同 env）。**补齐脚本落后项**：r3 时代的 env 注入缺 `SVL_PATCH_ONNX`/`SVL_ISC_ONNX`
+  （r5+ main.ts 才有），不补会复现「精排静默回退 CPU」事故——已对齐 main.ts 打包态注入。
+- **结果**：wall **1196.9s = 19.9min**（实验室同代码态 1320.5s，headless 无 UI 观察侧，方差内）
+  · 55 段 · task completed 零错误 · DirectML 生效（directml/amd 无回退）· 索引复用（VALID）·
+  轮询延迟 p50 4.7ms / p95 17.4ms（进度通道健康）。
+- **语义核验（最硬一条）**：包内结果 vs 实验室 `defaults_flip_ab/test1/on` 臂
+  strip(result_id) 后**逐字节 identical = True**（55 段 + 信封）⇒ r9 包 = 实验室同语义，
+  三旋钮新默认在包内正确生效。
+- 阶段观感：逐段定位 ~7s/段 → REFINE（拆分+精排）~10min，进度通道全程有消息（续40 修复生效）。
+  ⚠️ 脚本 summary 的 "package" 字段是硬编码 r4 旧串（化妆品级，未改）。
+- ⚠️ 包 = 未提交工作区构建 ⇒ git 提交前不要再改工作区。r8 删除仍待授权。
+
+## 2026-10-06（续58 补二）— 算法下一刀立项完成（口令「3」），待拍板三选一
+
+- **影响面量化（离线，新默认批 136/131/138/4·9）**：路线 A 导出选择器 oracle = **导出实得
+  131→136（+5）、零损失行**（t1r22/t1r25/t2r02b/t2r06a/t3r02a 五行全有命中子 span）。
+- **信号面新发现（推翻朴素选优）**：命中子 span 的 score 全为 null（基础链降子老主，5 行里
+  仅 1 行有 refine 改写后缀）；alternatives 近乎空；池子 span 只有检索级分 ⇒ 同源信号重选
+  大概率同错，选优需异源信号（patch/ISC 导出时打分）或口径变更。
+- 路线 B 扫描缩减（解码地板，radius 90 不可砍）、路线 C mkv 异步化（缺产品口径）——均列
+  暂缓理由。提案档 `semantic_signal/RESEARCH_PROPOSAL_NEXT_CUT_20261006.md`：
+  A1 降子补记分（半天，零行为）→ A2 异源选优（1 天，主形态）∥ A3 导出含子（产品选项），
+  统一验收门 = 严格/场景/负例零回退 + 导出 +5 全兑现 + 5 行读图。
