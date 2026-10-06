@@ -17,12 +17,26 @@ const props = withDefaults(
 const emit = defineEmits<{
   (e: 'tick', currentTime: number): void
   (e: 'playingChange', playing: boolean): void
+  // 本路**播到末尾**（2026-10-06 修联动暂停）：浏览器在播完时也会 fire `pause`，
+  // 若一律当「用户暂停」上报，共享播放状态会把另一路还没播完的视频一起拽停。
+  (e: 'ended'): void
   (e: 'seek', seconds: number): void
   (e: 'duration', duration: number): void
 }>()
 
 const video = ref<HTMLVideoElement | null>(null)
 const duration = ref(0)
+const atEnd = ref(false)
+// 按钮图标看的是"本路实际在放"，不是共享的 playing（一路先播完时另一路仍在放）。
+const showPlaying = computed(() => props.playing && !atEnd.value)
+
+function onLoadedMeta(): void {
+  const v = video.value
+  if (!v) return
+  // 时长原先只在 timeupdate 里更新 ⇒ 未开播时右侧一直是 00:00（用户截图里的现象）。
+  duration.value = v.duration || 0
+  emit('duration', duration.value)
+}
 
 // Ensure external time prop drives the element (and the other way around).
 watch(
@@ -51,9 +65,18 @@ function onTimeUpdate(): void {
 }
 
 function onPlay(): void {
+  atEnd.value = false
   emit('playingChange', true)
 }
 function onPause(): void {
+  const v = video.value
+  // 播到末尾时浏览器同样 fire `pause`（此时元素 `ended` 已为 true）：改发 ended，
+  // 让父级决定"另一路继续"，而不是把共享 playing 置 false。
+  if (v?.ended) {
+    atEnd.value = true
+    emit('ended')
+    return
+  }
   emit('playingChange', false)
 }
 
@@ -105,6 +128,7 @@ const disabled = computed(() => !props.src)
         :poster="poster ?? undefined"
         preload="metadata"
         @timeupdate="onTimeUpdate"
+        @loadedmetadata="onLoadedMeta"
         @play="onPlay"
         @pause="onPause"
       />
@@ -117,7 +141,7 @@ const disabled = computed(() => !props.src)
 
     <div class="vp__controls" :class="{ 'vp__controls--disabled': disabled }">
       <button class="vp__btn" :disabled="disabled" @click="toggle">
-        <BaseIcon :name="playing ? 'pause' : 'play'" :size="16" />
+        <BaseIcon :name="showPlaying ? 'pause' : 'play'" :size="16" />
       </button>
       <span class="vp__time mono">{{ formatClock(currentTime, false) }}</span>
       <div class="vp__bar" @pointerdown="onScrubDown" @pointermove="onScrubMove" @pointerup="onScrubUp">

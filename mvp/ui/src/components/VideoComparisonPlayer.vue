@@ -3,6 +3,13 @@ import { computed, ref, watch } from 'vue'
 import type { ResultJson } from '@/services'
 import { formatEdited, formatOriginal } from '@/utils/format'
 import VideoPlayer from './VideoPlayer.vue'
+import {
+  initialSyncState,
+  reportEnded,
+  reportPause,
+  reportPlay,
+  resetSyncState,
+} from '@/utils/previewCoupling'
 import Timeline, { type TimelineMarker } from './Timeline.vue'
 import BaseIcon from './ui/BaseIcon.vue'
 
@@ -36,7 +43,8 @@ const ogWin = computed(() => {
 const edWidth = computed(() => Math.max(0, edWin.value.end - edWin.value.start))
 const ogWidth = computed(() => Math.max(0, ogWin.value.end - ogWin.value.start))
 
-const playing = ref(false)
+const sync = ref(initialSyncState(false))
+const playing = computed(() => sync.value.playing)
 const edCurrent = ref(0)
 const ogCurrent = ref(0)
 
@@ -58,11 +66,28 @@ function onOriginalSeek(sec: number): void {
 function reset(): void {
   edCurrent.value = 0
   ogCurrent.value = 0
-  playing.value = false
+  sync.value = resetSyncState()
 }
 
 function toggle(): void {
-  playing.value = !playing.value
+  // 重新开始 = 清掉两路的"已播完"标记（播完后再按播放，元素会从各自起点重放）。
+  sync.value = initialSyncState(!sync.value.playing)
+}
+
+function onEdPlaying(p: boolean): void {
+  sync.value = p ? reportPlay(sync.value, 'ed') : reportPause(sync.value)
+}
+
+function onOgPlaying(p: boolean): void {
+  sync.value = p ? reportPlay(sync.value, 'og') : reportPause(sync.value)
+}
+
+function onEdEnded(): void {
+  sync.value = reportEnded(sync.value, 'ed')
+}
+
+function onOgEnded(): void {
+  sync.value = reportEnded(sync.value, 'og')
 }
 
 function onEditedTick(t: number): void {
@@ -94,7 +119,8 @@ defineExpose({
         :playing="playing"
         @tick="onEditedTick"
         @seek="onEditedSeek"
-        @playing-change="(p) => (playing = p)"
+        @playing-change="onEdPlaying"
+        @ended="onEdEnded"
       />
       <div class="vcp__sync">
         <button class="vcp__play" @click="toggle">
@@ -111,6 +137,8 @@ defineExpose({
         :playing="playing"
         @tick="onOriginalTick"
         @seek="onOriginalSeek"
+        @playing-change="onOgPlaying"
+        @ended="onOgEnded"
       />
     </div>
 
