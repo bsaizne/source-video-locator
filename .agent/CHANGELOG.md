@@ -1417,3 +1417,7 @@ mac 侧"精排静默回退 CPU torch / ISC 第二意见缺席"的缺口正式关
   （≈180 macOS 分钟）待拍板。
 - LOC-1107 是否拆码 · 下一刀 A1→A2 ∥ A3 · 性能口径三处对齐（PRODUCT_INTRO 19~31 vs 现役）·
   竞品 opcode 通道可行性。
+
+### Notes
+
+- Created `checkpoint-2026-10-06-2315.md` checkpoint (0 modified/untracked file(s)).
