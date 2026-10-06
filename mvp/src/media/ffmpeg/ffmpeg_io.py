@@ -63,6 +63,8 @@ class FFmpegIO:
         # metadata（实测 ~0.08s/次，定位全程 ~800 次 spawn ⇒ ~66s 纯 ffprobe 开销）。
         # 媒体文件元数据在运行期不变 ⇒ 按 (路径, size, mtime_ns) 缓存，安全。
         self._metadata_cache: dict[tuple, VideoMetadata] = {}
+        # EOF 兜底帧缓存（2026-10-06 续61）：片尾越界的请求成批出现，见 _grab_last_frame。
+        self._last_frame_cache: dict[tuple, np.ndarray] = {}
 
     def metadata(self, path: str | Path) -> VideoMetadata:
         p = Path(path)
@@ -143,13 +145,16 @@ class FFmpegIO:
             )
 
     def _decodable_cap(self, info) -> float | None:
-        """最后一个可解码帧的时间上界（容器时长 − 1 帧）；元数据不可信时返回 None。
+        """末帧时间的**下界**估计（容器时长 − 1 帧）；元数据不可信时返回 None。
 
         片尾之外的 t 没有"正确答案"：``first_ge`` 语义下 ffmpeg 吐不出帧，而此前一律抛
         ``MediaError`` ⇒ **任何一个候选窗越过片尾就把整条 locate 打死**（LOC-1107 根因）。
         2026-10-06 mac CI 门槛抓到第二处调用点（``isc_refine`` 宽扫/精扫，本地复现
         t=20.500 vs 20.0s 原片），故统一收在解码层而不是逐个引擎补。
-        钳制只作用于 t > 上界 的请求 ⇒ 凡过去能成功的取帧一帧不动（构造性零语义）。
+
+        ⚠️ 这是**末帧时间的下界估计**，不是精确值：``dur − 1/fps`` 可能**早于**末帧真实 pts。
+        所以它只能当**判据**（"这次失败像不像片尾越界"），绝不能用它**预先钳制** ——
+        那会把 ``(cap, dur]`` 区间内本来能取到正确帧的请求换成 cap 处的另一帧。
         """
         try:
             dur = float(getattr(info, "duration", 0.0) or 0.0)
@@ -165,14 +170,16 @@ class FFmpegIO:
 
         Uses ``-ss`` before ``-i`` (fast input seek, decode-and-discard up to
         ``t``) then ``-frames:v 1``. Used for previews and QA.
+
+        **严格惰性的片尾兜底**：只有「按原始 t 确实吐不出帧」且「t 越过末帧下界」时，
+        才改为返回片内最后一帧（过去这些请求抛 ``MediaError`` ⇒ 打死整条 locate）。
+        凡过去能成功的请求一帧不动 —— 包括 t 落在 ``(cap, 时长]`` 的（cap 只是下界，
+        预先钳制会换帧；见 ``_decodable_cap`` 的警告）。
         """
         path = Path(path)
         info = self.metadata(path)
         if not info.has_video:
             raise MediaError(f"{path.name}: no video stream")
-        cap = self._decodable_cap(info)
-        if cap is not None and t > cap:
-            t = cap
         width, height = self._output_size(info, scale)
         frame_bytes = width * height * 3
 
@@ -195,8 +202,70 @@ class FFmpegIO:
                 f"{proc.stderr.decode(errors='replace')[-1000:]}"
             )
         if len(proc.stdout) < frame_bytes:
+            cap = self._decodable_cap(info)
+            # 严格惰性：只有「原始 t 真的取不到帧」且 t 在片尾之外，才退到片内最后一帧。
+            # cap 在这里只当**判据**（区分"片尾越界"与"中段流损坏"，后者照旧抛），不当钳制值。
+            if cap is not None and t > cap:
+                last = self._grab_last_frame(path, info, scale, width, height, frame_bytes)
+                if last is not None:
+                    return last
             raise MediaError(f"grab_frame returned no frame at t={t:.3f}: {path.name}")
         return np.frombuffer(proc.stdout[:frame_bytes], dtype=np.uint8).reshape(height, width, 3)
+
+    def _grab_last_frame(self, path: Path, info, scale, width: int, height: int,
+                         frame_bytes: int) -> np.ndarray | None:
+        """片内最后一帧（EOF 兜底专用）：从片尾前一帧区间起解到 EOF，流式只留最后一帧。
+
+        不做精确 pts 匹配 —— 调用方已经在原 t 取不到帧，这里要的是「片内任一帧」而非
+        第四种选取语义。内存有界：逐帧读管道，不整段进内存（1080p × 25 帧 ≈ 156MB）。
+        结果按 (路径, size, mtime_ns, scale) 记忆：片尾越界的请求常成批出现（实测短原片
+        一次 locate 命中 11 次），否则每次都重解一遍片尾。
+        """
+        try:
+            st = Path(path).stat()
+            key = (str(path), st.st_size, st.st_mtime_ns,
+                   None if scale is None else (int(scale[0]), int(scale[1])))
+        except OSError:
+            key = None
+        if key is not None and key in self._last_frame_cache:
+            return self._last_frame_cache[key]
+        dur = float(getattr(info, "duration", 0.0) or 0.0)
+        fps = float(getattr(info, "fps", 0.0) or 0.0)
+        tail = max(1.0, 2.0 / fps) if fps > 0 else 1.0
+        args = [str(self.ffmpeg), *BASE_ARGS, "-ss", f"{max(0.0, dur - tail):.6f}",
+                "-i", str(path)]
+        if scale is not None:
+            args += ["-vf", f"scale={scale[0]}:{scale[1]}"]
+        args += ["-an", "-f", "rawvideo", "-pix_fmt", "bgr24", "-"]
+        try:
+            proc = popen(args)
+        except OSError:
+            return None
+        last: bytes | None = None
+        try:
+            while True:
+                buf = proc.stdout.read(frame_bytes)
+                if len(buf) < frame_bytes:
+                    break
+                last = buf
+        finally:
+            try:
+                if proc.poll() is None:
+                    proc.terminate()
+                proc.stdout.close()
+                if proc.stderr is not None:
+                    proc.stderr.close()
+                proc.wait()
+            except Exception:
+                pass
+        if last is None:
+            return None
+        frame = np.frombuffer(last, dtype=np.uint8).reshape(height, width, 3).copy()
+        if key is not None:
+            if len(self._last_frame_cache) >= 8:      # 只留最近几片，别把帧堆在内存里
+                self._last_frame_cache.pop(next(iter(self._last_frame_cache)))
+            self._last_frame_cache[key] = frame
+        return frame
 
     # ------------------------------------------------------------------ #
     # Window batch grab (2026-10-03 续46)
@@ -222,9 +291,9 @@ class FFmpegIO:
 
         聚类：升序时间相邻间隔 ≤``max_gap_s`` 且簇总跨度 ≤``max_span_s``（界内存*3 帧缓冲）。
         任一簇解码失败/流提前结束 → 该簇未满足的 t 逐帧回退 ``grab_frame``（补一次 seek 机会）。
-        ⚠️ 该回退**不是**片尾兜底：``t`` 落在原片时长之外时 ``grab_frame`` 同样取不到帧并抛
-        ``MediaError``（2026-10-06 LOC-1107 教训）。越界时间要由**调用方**按源时长钳制
-        （见 ``patch_refine.apply_patch_refine(source_duration_s=…)``），不要指望这里吞掉。
+        越界 t 不在这里钳制：簇内目标一律按**原始请求时间**解码，缺帧的 t 由 ``grab_frame``
+        的严格惰性片尾兜底处理（第一版曾在此按 cap 预钳 —— cap 只是末帧下界，
+        预钳会替 ``(cap, 时长]`` 内本来成功的请求换帧，2026-10-06 续61 撤掉）。
 
         ``filters`` 可为**字符串或 callable(簇起点) -> 字符串**（后者用于把网格锚定到簇起点，
         见 ``grab_grid_times`）。``filters``（2026-10-03 续50，L1 管道优化）：插到 ``showinfo`` 之前的附加滤波串，
@@ -236,11 +305,7 @@ class FFmpegIO:
         """
         path = Path(path)
         raw = [round(float(t), 6) for t in times]
-        cap = self._decodable_cap(self.metadata(path))
-        # 片尾外的目标钳到片内（见 _decodable_cap）；返回时按**原始请求值**补一份别名键，
-        # 调用方仍用自己要的时间取帧。
-        eff = raw if cap is None else [cap if t > cap else t for t in raw]
-        uniq = sorted(set(eff))
+        uniq = sorted(set(raw))
         if not uniq:
             return {}
         clusters: list[list[float]] = [[uniq[0]]]
@@ -279,9 +344,6 @@ class FFmpegIO:
         for t in uniq:
             if t not in got:
                 got[t] = self.grab_frame(path, t, scale=size)
-        for r, e in zip(raw, eff):
-            if r != e and e in got:
-                got[r] = got[e]      # 原始请求值别名（越界点拿到的是片内最后一帧）
         return got
 
     def grab_grid(self, path: str | Path, t0: float, step: float, n: int, *,
