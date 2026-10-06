@@ -173,6 +173,33 @@ jobs:
             || { echo "::error::bundled libmediainfo.0.dylib missing - 剪映草稿导出会失败"; exit 1; }
           echo "OK: bundled libmediainfo present for pymediainfo"
 
+      # 精排/ISC 资产不入库（ISC 外部权重 209MB 超 GitHub 单文件 100MB 硬限；patch 的 .data
+      # 88MB 虽在限内但同批处理）⇒ 从内部 tag `model-assets` 下载，并逐个按 asset.json 的
+      # sha256 校验（下载完整性不能只看 curl 退出码）。缺任一份 ⇒ 后面「Accept packaged mac
+      # bundle」的资产判据会红，publish 不放行。
+      # 后果背景：这两份资产缺失时，包内 patch 精排会**静默**回退 CPU torch（Windows 实测
+      # 整条慢 2.6~3.9×，当年瞒了两周）、ISC 第二意见整体跳过 ⇒ 结果与 Windows 包不同档。
+      - name: Fetch model assets for mac bundle (patch + ISC ONNX)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          M=mvp/ui/resources/models
+          json="$(curl -sfL --max-time 60 -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/tags/model-assets")"
+          fetch() {
+            name="$1"; dest="$2"
+            url="$(printf '%s' "$json" | python3 -c "import sys,json;a=json.load(sys.stdin)['assets'];print(next(x['url'] for x in a if x['name']=='$name'))")"
+            mkdir -p "$dest"
+            curl -sfL --max-time 900 -H "Authorization: Bearer $GH_TOKEN" -o "$dest/$name" "$url"
+            echo "fetched $name -> $dest/$name ($(wc -c < "$dest/$name") B)"
+          }
+          fetch dinov2_cls_patch.onnx.data "$M/dinov2_cls_patch"
+          fetch isc_ft_v107.onnx "$M/isc_ft_v107"
+          fetch isc_ft_v107.onnx.data "$M/isc_ft_v107"
+          python3 mvp/scripts/verify_model_asset_shas.py "$M/dinov2_cls_patch" "$M/isc_ft_v107"
+
       - name: Build UI + electron app (mac arm64 dir, unsigned)
         working-directory: mvp/ui
         env:
