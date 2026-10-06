@@ -1120,3 +1120,55 @@ win-unpacked 01:38 全新构建，BUILD_EXIT=0）。
 - **销项**：续59 三项待办（① 回归 ② CI ③ 全过归档）全部结案，无阻塞、无遗留。
 - **待拍板延续**：本会话仅改档案文档（STATE/TODO/CHANGELOG），git 提交等口令；
   下一刀（A1 降子补记分 → A2 异源选优 ∥ A3 导出含子）仍未拍板。
+
+## 2026-10-06（续61）— LOC-1107 片尾越界真缺陷修复 + 竞品入口/资源层整值读完（精度仍无肉，工程出 9 条）
+
+### 一、LOC-1107 片尾越界（打包态 r9 真机撞出，源码已改未提交）
+
+- **现象**：r9 打包态跑 `work/e2e_r3/src_part1.mp4`（63.000s / 1827 帧 @29fps）整条 locate 失败，
+  UI 只见通用话术「视频读取/剪辑处理失败，请确认文件未损坏、未被其它程序占用」；日志真因 =
+  `MediaError: grab_frame returned no frame at t=63.500: src_part1.mp4`，链路
+  `locate:1172 → apply_patch_refine:164 → _grab_source_grid:100 → _grab_grid_batch:2512 →
+  grab_grid_times:323 → grab_frames:252 → grab_frame:177`。
+- **根因（两条叠加）**：① 精扫窗 `g1 = mid + REFINE_WIN_S(5s)` 无片尾边界（修复前
+  `patch_refine.py` 内 `grep duration` 零命中），落在片尾的候选会向**不存在的帧**要网格点；
+  ② `grab_frames` docstring 承诺的「超片尾逐帧回退 `grab_frame`（健壮性优先）」不成立——
+  `grab_frame` 取不到帧即抛（`ffmpeg_io.py:177`），于是**单点越界 = 整条任务失败**。
+- **修法（上游钳制）**：`apply_patch_refine` 新增 `source_duration_s`，窗尾
+  `g1 = min(g1, source_duration_s)`，钳后 `g1 <= g0` 的候选跳过（该段原样返回，走既有 None 守卫）；
+  `locator_service` 生产传 `bundle.meta.duration`（**容器时长而非索引末点**——末点比片尾早约 1s，
+  用它钳制会削掉原本能成功的窗，属语义变更）。两处假承诺注释同步改正。
+- **为什么不必重跑四片（构造性零语义）**：钳制仅在窗尾越过容器时长时生效，而这类目标过去必然走到
+  抛错路径 ⇒ **任何过去能跑完的 run，请求时间集合与帧逐位不变**；且网格按 `(g1-g0)` 等分，
+  一旦钳制整窗点位都变，所以"会不会变"等价于"钳制有没有触发"，而触发即意味着过去会崩。
+- **验证**：后端 **543 OK (skipped=2)**（原 540 + 3 新锁：窗尾钳制 / `dur=None` 旧行为不变 /
+  窗整体越界→段原样返回）· API **104 OK** · 真素材 A/B `work/fix_eof_ab_probe.py`：
+  未钳制臂复现 `MediaError @ t=63.000`，钳制臂 OK（51 个请求点，最大 t=62.48，结果段数 1）。
+- **登记盲区（诚实）**：四片回归母片都是 ~2h，「短原片 + 段落落片尾」从未进验收集 ⇒ 零语义 harness
+  覆盖不到越界输入这类边界；残留下界 = [视频流末点, 容器末点) 的一帧缝（本例 0.019s，既有行为未扩大）。
+- **顺带**：竞品把这类失败单列 `MEDIA-002 素材无法正常读取` 并配建议话术，而我方一个 LOC-1107
+  覆盖全部 ffmpeg/ffprobe 失败 ⇒ 「是否拆码」列为待拍板（触 `errors.py` 只增不改规则）。
+
+### 二、竞品入口/资源层整值读完（只读常量池，零 `mvp/src` 改动）
+
+- **触发**：`work/cm_redig/inventory_prefixes.py` 清点实测 = 续37 只挖 9,850 / 37,041 值（26.6%），
+  分桶为 已挖 26.6% / **未挖第一方 10,721 值 74 模块（28.9%）** / 三方噪声 16,470（44.5%）；
+  `cutmatch.matching` 整族 58 模块 9,733 值**已全覆盖** ⇒ 续37「精度已挖干净」在其范围内成立，
+  「竞品侧已空」不成立。
+- **本次读**：`dump_entry.py` → 17 模块 3,634 值（`processing.video.{processor,concat}`、
+  `processing.jobs.batch`、`processing.progress.tracker`、`processing.resources.{device_events,
+  memory_safety}`、`web.processing_api.{single,batch,state,routes,diagnostics}`、`runtime.{resources,tools}`）。
+- **结论**：精度侧无新机制（与总账一致）；**工程/UX/售后侧 9 条形态**，4 条直接回答我方挂着待办
+  （720p 代理 + `is_proxy_frame_accurate` 帧精确门禁 → CFR 代理；按可用内存收缩 batch/预取 +
+  `low_memory_mode` 上报 → memmap；`CUTMATCH_DEVICE_CONFIRM=` 子进程回报真实设备 → UI-P3 徽标误标；
+  阶段延迟发布 + `heartbeat` → UX-P1 卡感）。另 `xml_only` 是**入口开关不是失败兜底** ⇒ 竞品
+  「渲染失败仍出 XML」的未决口径要重问；`runtime.tools` 明文 macOS Finder 启动 locale 非 UTF-8 会
+  炸中文路径 ⇒ 对刚出的 mac artifact 直接相关；口径收益 = 竞品默认 `matching_mode=standard`
+  从反推升级为直证（view:308/861/930/933）。
+- **两处更正留痕**：① 会话内先前提的「27% 已读 ⇒ 精度结论不稳」被清点数据削弱，已按实测改口；
+  ② `model_lease` 口头猜「GPU 模型占用治理」**错**，入口层证据 = 授权租约
+  （`verified_model_lease` / `reason=missing_model_lease` / 话术「V2 模型授权租约缺失，无法开始处理」）。
+- **未穷尽**：竞品是 Nuitka 产物，本层证据全来自常量池 ⇒ 能证"有什么旗标"，不能证"先做哪个"；
+  opcode 通道可行性仍未探。
+- **明细档**：`mvp/benchmark/user_case/competitor_cutmatch/FINDINGS_CUTMATCH_ENTRY_LAYER_20261006.md`
+  + `work/cm_redig/inventory_20261006.md` / `entry_view_20261006.md` / `entry/*.txt`。

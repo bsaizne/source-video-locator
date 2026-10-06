@@ -10,6 +10,18 @@
 
 ## P0 — Current
 
+> **▶ 2026-10-06（续61）— LOC-1107 片尾越界已修（未提交）+ 竞品入口层读完【下个对话第一件事读这条】**
+> 修 = `apply_patch_refine` 新增 `source_duration_s` 窗尾钳制（生产传 `bundle.meta.duration`），
+> 根因与验证细节见 STATE 续61 (a) 与 `work/fix_eof_ab_probe.py`。门禁 543 + API 104 全绿；
+> 零语义为构造性论证 ⇒ **未重跑四片**（登记盲区：短原片+片尾段从未进回归集）。
+> 竞品侧 = `FINDINGS_CUTMATCH_ENTRY_LAYER_20261006.md`（精度仍无肉；9 条工程/UX/售后形态，
+> 其中 4 条回答我方挂着的待办：CFR 代理帧精确门禁 / 内存收缩 batch / 设备回报标记行 / 进度防抖心跳）。
+> **待拍板**：① git 提交（源码 3 文件 + 3 测试 + 档案与新 FINDINGS + 2 份清点产物）
+> ② LOC-1107 是否按竞品形态**拆码**（一码一因，触 `errors.py` 只增不改规则）
+> ③ 下一刀 A1→A2 ∥ A3 ④ 性能口径三处对齐。
+> **新可做的工程项（竞品已给形态，均未立项）**：短原片形态进回归集、代理视频帧精确门禁、
+> 低内存收缩 batch、UI 徽标真值回报、阶段进度防抖+心跳、合并输出校验（extradata/三属性/时长单调）。
+
 > **▶ 2026-10-06（续60）— stable 修复双链验证 PASS，续59 三项待办全结【下个对话第一件事读这条】**
 > ① 四片零差异回归（2mkv/test1/test2/test3）**逐字节 identical、diffs=0**
 > （`work/stable_sort_regress/summary.json`；对照 `work/defaults_flip_ab/<case>/on` 臂）

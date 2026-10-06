@@ -68,7 +68,38 @@
 
 ## Current Task
 
-> **▶ 2026-10-06（续60）— stable 修复双链验证 PASS（四片零差异 + macOS CI 全绿）【下个对话从这里读起】**
+> **▶ 2026-10-06（续61）— LOC-1107 片尾越界真缺陷已修 + 竞品入口/资源层整值读完（9 条新形态）【下个对话从这里读起】**
+> **(a) 真缺陷修复（源码已改，未提交）**：打包态 r9 跑 `work/e2e_r3/src_part1.mp4`（**63.000s**）时
+> 整条 locate 失败 = `MediaError: grab_frame returned no frame at t=63.500`。
+> 根因两条叠加：① `patch_refine` 精扫窗 `g1 = mid + REFINE_WIN_S(5s)` **无任何片尾边界**
+> （`grep duration engine/localization/patch_refine.py` 修复前 = 零命中）；② `grab_frames` docstring
+> 承诺的"超片尾逐帧回退"不成立——补帧走 `FFmpegIO.grab_frame`，取不到帧即 **raise**（`ffmpeg_io.py:177`）
+> ⇒ 单点越界把任务打死。
+> 修法 = 上游钳制（新增 `apply_patch_refine(source_duration_s=…)`，生产传 `bundle.meta.duration`）：
+> 窗尾 `min(g1, 片尾)`，钳后 `g1<=g0` 的候选跳过（该段原样返回）。**刻意不用索引末点**（比片尾早 ~1s，
+> 会削掉原本成功的窗 = 语义变更）。两处假承诺注释已改（`ffmpeg_io.py` docstring、`locator_service.py:2517`）。
+> 验证：后端 **543 OK (skipped=2)**（+3 新锁：钳制生效 / `dur=None` 旧行为逐位不变 / 窗整体越界→原样返回）
+> · API 104 OK · 真素材 A/B（`work/fix_eof_ab_probe.py`）= 未钳制臂复现抛错、钳制臂 OK（最大请求 t=62.48）。
+> **零语义是构造性论证**（钳制只作用于 `t >= 容器时长`，而这类点过去必抛 ⇒ 过去能跑通的一帧不动），
+> 故**未重跑四片**；残留下界 = [视频流末点, 容器末点) 的一帧缝（实测本例 0.019s，属既有行为未扩大）。
+> ⚠️ **验收盲区登记**：四片回归素材母片均 ~2h，"短原片 + 段落落片尾"从未进集 ⇒ 这类越界过去抓不到。
+> **(b) 竞品入口/资源层读完**（`FINDINGS_CUTMATCH_ENTRY_LAYER_20261006.md`）：清点发现续37 只挖了
+> 9,850/37,041 值（26.6%），第一方另 **10,721 值 / 74 模块从未读**；本次整值读 17 模块 3,634 值。
+> 结论 = **精度侧确实仍无肉**（matching 整族 58 模块全覆盖，"已挖干净"在其范围内成立），
+> 但**工程/UX/售后侧出 9 条形态**，4 条直接回答我方挂着的待办：720p 代理 + `is_proxy_frame_accurate`
+> 帧精确门禁（CFR 代理项）、按可用内存收缩 batch/预取 + `low_memory_mode` 上报（memmap 项）、
+> 子进程 `CUTMATCH_DEVICE_CONFIRM=` 标记行回报真实设备（UI-P3 徽标误标的根因级解法）、
+> 阶段延迟发布 + `heartbeat`（UX-P1 92% 卡感）。另 `xml_only` 在竞品是**入口开关不是失败兜底**
+> ⇒ 「竞品渲染失败仍出 XML」的口径要重问；macOS 打包有中文路径 locale 明文教训（对今天刚出的
+> mac artifact 直接相关）。口径类收益 = 竞品默认 `matching_mode=standard` 从反推变直证。
+> **(c) 待拍板**：① **git 提交**（本轮源码 = patch_refine/locator_service/ffmpeg_io 注释 + 3 测试；
+> 档案 = 新 FINDINGS + 两份清点产物）；② 是否把 LOC-1107 按竞品形态**拆码**（MEDIA-002 式一码一因，
+> 触 `errors.py` 码规则=只增不改）；③ 下一刀 A1→A2 ∥ A3 仍未拍板；④ 性能口径三处对齐仍挂。
+> **(d) 已更正留痕**：`model_lease` 我上一轮口头猜"GPU 模型占用治理"**错**，入口层证据 =
+> 授权租约（`verified_model_lease`/`missing_model_lease`）；另本轮先前"27% 已读 ⇒ 精度结论不成立"
+> 的质疑被清点数据削弱（三方噪声占 44.5%），已按实测改口。
+
+> **▶ 2026-10-06（续60）— stable 修复双链验证 PASS（四片零差异 + macOS CI 全绿）**
 > 续59 两项未完全部结案，**无阻塞、无需回滚**：
 > ① **四片零差异回归 = PASS**（进程当时未断，本会话按 log 接管到 `ALL_DONE`）：
 > `work/stable_sort_regress/summary.json` 四片 **`strip_identical=true` / `n_diff_rows=0`**
@@ -2600,4 +2631,4 @@ test3 27.79 与 2026-09-26 border_review 独立裁决逐点吻合）; test2 **�
 
 ## Last Updated
 
-2026-10-06 16:05
+2026-10-06 16:58
