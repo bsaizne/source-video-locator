@@ -209,6 +209,13 @@ jobs:
           path: mvp/ui/release/Video-Locator-mac-arm64.zip
           if-no-files-found: error
 
+      # 包体内容验收（2026-10-06 续61 补五）：过去 mac 包只验到「构建成功 + 静态库依赖 +
+      # ad-hoc 签名可验」，没做过一次包体实测（我们自己的纪律：源码全绿 ≠ 包能用）。
+      # 判据 = 结构/资产 + 起包 + 门禁负例 + MPS 真被选中 + 合成素材端到端 + 中文路径。
+      # FAILED>0 即本步失败 ⇒ 下面 publish 不执行（mac-alpha 不再"构建成功即对外发布"）。
+      - name: Accept packaged mac bundle (gate publish)
+        run: python mvp/scripts/accept_packaged_bundle_mac.py "mvp/ui/release/mac-arm64/Video Locator.app"
+
       - name: Publish to GitHub Releases (rolling tag mac-alpha)
         env:
           GH_TOKEN: ${{ github.token }}
