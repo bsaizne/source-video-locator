@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import ctypes
 import csv
+import hashlib
 import json
 import os
 import queue
@@ -66,6 +67,11 @@ CASES = {
     #   ffmpeg -f concat -safe 0 -i work/e2e_r3/concat_list.txt -c copy work/e2e_r3/eof_ed126.mp4
     "eof126": {"edited": str(BENCH / "work" / "e2e_r3" / "eof_ed126.mp4"),
                "original": str(BENCH / "work" / "e2e_r3" / "src_part1.mp4")},
+    # LOC-1107 第二处（ISC 片尾越界）的**判别性**包体用例：20s lavfi 原片 + 末段 6s 剪辑，
+    # 与 mac CI 门槛 #27 崩掉时用的完全同款素材（本地源码树已复现 t=20.500 越界）。
+    # 预期：r11 包 = failed[LOC-1107]；r12 包 = completed。生成命令见 work/mac_repro/。
+    "short20": {"edited": str(BENCH / "work" / "mac_repro" / "ed6.mp4"),
+                "original": str(BENCH / "work" / "mac_repro" / "src20.mp4")},
 }
 
 # E2E（r3 包，2026-10-01 02:45:09 起）从打包日志读出的阶段边界，仅作对照常量。
@@ -327,12 +333,22 @@ def main() -> int:
 
             lat_sorted = sorted(latencies)
             n = len(lat_sorted)
+            # 包身份**按实测生成**（旧写法硬编码 "r4"，双臂对照时把 r11/r12 都标成了 r4 ⇒
+            # 归因失去抓手）。sha256[:16] + mtime + size 足以区分同目录不同代。
+            exe_path = Path(cmd[0])
+            try:
+                exe_h = hashlib.sha256(exe_path.read_bytes()).hexdigest()[:16]
+                exe_stat = exe_path.stat()
+                exe_id = "%s sha16=%s %dB mtime=%s" % (
+                    exe_path, exe_h, exe_stat.st_size,
+                    time.strftime("%Y-%m-%d %H:%M", time.localtime(exe_stat.st_mtime)))
+            except OSError:
+                exe_id = "%s (不可读)" % exe_path
             summary = {
                 "arm": "packaged_headless" if mode == "packaged" else "venv_http_headless",
                 "case": case,
                 "backend_cmd": cmd[0],
-                "package": ("Video-Locator-win-x64-20261001r4（backend.exe 2026-10-01 04:22 构建）"
-                            if mode == "packaged" else "源码树 run_backend.py（同 env/同数据目录）"),
+                "package": exe_id if mode == "packaged" else "源码树 run_backend.py（同 env/同数据目录）",
                 "started_utc": time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime(t0)),
                 "wall_s": round(wall, 1),
                 "backend_cpu_s": None if None in (cpu0, cpu1) else round(cpu1 - cpu0, 1),
@@ -355,8 +371,9 @@ def main() -> int:
             }
             summary_json.write_text(json.dumps(summary, ensure_ascii=False, indent=1),
                                     encoding="utf-8")
-            print("[done] wall=%.1fs segments=%s cpu_ratio=%s -> %s"
-                  % (wall, summary["segments"], summary["backend_cpu_ratio"],
+            print("[done] wall=%.1fs segments=%s status=%s err=%s cpu_ratio=%s -> %s"
+                  % (wall, summary["segments"], summary["task_status"],
+                     summary["task_error"], summary["backend_cpu_ratio"],
                      summary_json.name), flush=True)
         return 0
     finally:
