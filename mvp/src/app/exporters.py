@@ -35,7 +35,7 @@ from domain.enums import ConfidenceLevel
 
 __all__ = [
     "ExportClip", "build_export_plan", "snap_clips_to_scenes",
-    "split_clips_at_boundaries",
+    "split_clips_at_boundaries", "trim_adjacent_source_overlaps",
     "seconds_to_frames", "timecode_ndf", "render_edl", "render_fcp7_xml",
     "plan_jianying_assets", "create_jianying_draft_dir", "write_jianying_draft",
     "expand_material_spans",
@@ -290,6 +290,102 @@ def split_clips_at_boundaries(plan: list[ExportClip], scenes, *,
         n_split += 1
     plan[:] = out
     return n_split
+
+
+# --------------------------------------------------------------------- #
+# 相邻段源区间去重叠
+# --------------------------------------------------------------------- #
+# 编辑时间轴上"贴接"判定容差（秒）：间隔不超过此值才算相邻段。剪辑切点本身是
+# 帧粒度，贴接段的 gap 实测恒为 0.00，这里留一帧量级的余量给浮点/取整误差。
+_ADJACENCY_TOL_S = 0.05
+
+
+def trim_adjacent_source_overlaps(plan: list[ExportClip], *, fps: float = 25.0,
+                                  adjacency_tol_s: float = _ADJACENCY_TOL_S) -> int:
+    """编辑序**贴接**的相邻两 clip 源区间去重叠（成片/EDL/XML 不再重复同一画面）。
+
+    动因（2026-10-06 用户实测反馈）：定位段的源窗宽度有 ``min_span_s=2.0`` 地板，而剪辑段
+    常只有 0.7~1.5s ⇒ 两个贴接段各自被撑到 2s 宽必然交叠，"逐段从原片切区间再拼接"的成片里
+    同一画面出现两次（实测四片 29 对贴接重叠，重复 0.5~10.2s/片）。
+
+    口径（**硬要求：不丢画面，只去重复**）：
+    - 只处理编辑时间轴贴接（``gap ≤ adjacency_tol_s``）的 ``main``/``low`` 相邻对。
+      段与段之间还有内容的重叠 = 真实复用（连续场景内切多镜头，档案目检确证多数正确），**不动**。
+    - **部分重叠**（含源序倒挂）：交叠区按**中点**切开，谁独占左半谁取左半。交叠区外的各自
+      独占部分不动 ⇒ 并集覆盖逐字段保持，重复那份只留一次。
+    - **一段整个被另一段包住**（扩宽到整镜头 vs 短段的常态）：把外层段**挖洞**——保留洞左的
+      头段，洞右还剩 ≥1 帧时另起一条尾段（同属该编辑段，记录槽按源宽比例分）。中点裁尾会
+      把外层独占的尾巴丢掉（真实四片回放实测少 6.58s/0.83s 画面），故不采用。
+    - 单帧守卫：任何一侧切完不足 1 帧 ⇒ 不切该对（重复量本身不可见）；挖洞时头/尾各自
+      不足 1 帧的那半直接舍弃（≤1 帧）。
+    - 链式多段连叠按编辑序从左到右逐对处理；新产生的尾段插回原位后继续参与后续配对。
+    - 只改 clip 的源片侧区间与其记录槽内部分配，不改 ``Result`` 定位语义、不改该段在编辑
+      时间轴上的总占位 ⇒ 三指标（读 Result）与既有回归口径不受影响。
+    返回处理过的重叠对数。
+    """
+    frame_s = 1.0 / fps if fps and fps > 0 else 0.04
+    ordered = sorted((c for c in plan if c.kind in ("main", "low")),
+                     key=lambda c: (c.edited_start, c.edited_end))
+    trimmed = 0
+    i = 0
+    while i < len(ordered) - 1:
+        a, b = ordered[i], ordered[i + 1]
+        i += 1
+        if b.edited_start - a.edited_end > adjacency_tol_s:
+            continue
+        lo = max(a.orig_start, b.orig_start)
+        hi = min(a.orig_end, b.orig_end)
+        if hi - lo <= 0:
+            continue
+        # 源序左段（起点不晚于另一段）与右段。
+        left, right = ((a, b) if a.orig_start <= b.orig_start else (b, a))
+        if (left.orig_start <= right.orig_start + 1e-9
+                and left.orig_end >= right.orig_end - 1e-9):
+            # 包含形态：外层挖洞，内层完整保留。
+            head_w = right.orig_start - left.orig_start
+            tail_w = left.orig_end - right.orig_end
+            if head_w >= frame_s and tail_w >= frame_s:
+                pos = ordered.index(left)
+                src_total = left.orig_end - left.orig_start
+                rec_total = left.edited_end - left.edited_start
+                head_rec = rec_total * head_w / src_total if src_total > 0 else rec_total
+                tail = ExportClip(
+                    kind=left.kind,
+                    edited_start=round(left.edited_start + head_rec, 3),
+                    edited_end=round(left.edited_end, 3),
+                    orig_start=round(right.orig_end, 3),
+                    orig_end=round(left.orig_end, 3),
+                    confidence=left.confidence, score=left.score,
+                    from_scene_pool=left.from_scene_pool,
+                    from_event_pool=left.from_event_pool,
+                    seg_index=left.seg_index, sub_index=left.sub_index,
+                    snap_in=False, snap_out=left.snap_out,
+                    split_index=left.split_index)
+                left.snap_out = False
+                left.edited_end = tail.edited_start
+                left.orig_end = round(right.orig_start, 3)
+                ordered.insert(pos + 1, tail)
+                plan.insert(plan.index(left) + 1, tail)   # 尾段紧跟母段，保持计划顺序
+                trimmed += 1
+                continue
+            if head_w >= frame_s:
+                left.orig_end = round(right.orig_start, 3)
+                trimmed += 1
+                continue
+            if tail_w >= frame_s:
+                left.orig_start = round(right.orig_end, 3)
+                trimmed += 1
+                continue
+            # 头尾都留不下 1 帧（两段几乎重合）⇒ 落到中点均分。
+        cut = min(max((lo + hi) / 2.0, left.orig_start + frame_s),
+                  right.orig_end - frame_s)
+        if (cut - left.orig_start < frame_s
+                or right.orig_end - cut < frame_s):
+            continue   # 交叠并集不足 2 帧，重复量本身不可见
+        left.orig_end = round(cut, 3)
+        right.orig_start = round(cut, 3)
+        trimmed += 1
+    return trimmed
 
 
 # --------------------------------------------------------------------- #

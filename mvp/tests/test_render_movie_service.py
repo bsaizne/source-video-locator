@@ -114,6 +114,34 @@ class RenderMoviePlanTest(unittest.TestCase):
         self.assertEqual(call["binaries"], (Path("D:/tools/ffmpeg.exe"),
                                             Path("D:/tools/ffprobe.exe")))
 
+    def test_adjacent_overlapping_segments_are_deduped_in_the_movie(self):
+        """接线锁：相邻贴接段源区间重叠 ⇒ 送进渲染器的 clip 列表不再重复同一画面
+        （2026-10-06 用户报「剪出的片里相邻两段有重合」，min_span_s=2.0 地板的常态）。"""
+        batch = _batch([
+            _result((0.0, 1.0), (100.0, 102.0)),
+            _result((1.0, 2.0), (101.0, 103.0)),
+        ])
+        self.assertEqual(self._call(batch)["clips"], [(100.0, 101.5), (101.5, 103.0)])
+
+    def test_contained_adjacent_segment_holes_out(self):
+        """外层段被短段整个盖住 ⇒ 外层挖洞成头/尾两条，内层完整保留（一块画面不丢）。"""
+        batch = _batch([
+            _result((0.0, 2.0), (100.0, 110.0)),
+            _result((2.0, 3.0), (103.0, 105.0)),
+        ])
+        self.assertEqual(self._call(batch)["clips"],
+                         [(100.0, 103.0), (105.0, 110.0), (103.0, 105.0)])
+
+    def test_non_adjacent_reuse_is_not_trimmed(self):
+        """两段之间还夹着别的记录内容 ⇒ 源区间重叠是真实复用，不裁（口径边界锁）。"""
+        batch = _batch([
+            _result((0.0, 1.0), (100.0, 102.0)),
+            _result((1.0, 2.0), (120.0, 122.0)),
+            _result((2.0, 3.0), (101.0, 103.0)),
+        ])
+        self.assertEqual(self._call(batch)["clips"],
+                         [(100.0, 102.0), (120.0, 122.0), (101.0, 103.0)])
+
     def test_movie_path_is_str_for_the_wire(self):
         """API/JSON 契约：service 出口把 Path 归一成字符串（此前 merge 也踩过同类坑）。"""
         info = _service(self.tmp).render_movie(_one())

@@ -71,7 +71,8 @@ from .exporters import (EXPORT_FORMATS, ExportClip, build_export_plan,
                         create_jianying_draft_dir, expand_material_spans,
                         plan_jianying_assets, split_clips_at_boundaries,
                         render_edl, render_fcp7_xml, seconds_to_frames,
-                        snap_clips_to_scenes, write_jianying_draft)
+                        snap_clips_to_scenes, trim_adjacent_source_overlaps,
+                        write_jianying_draft)
 from .models import CancellationToken, ProgressEvent, ProgressStage
 
 ProgressCb = Callable[[ProgressEvent], None]
@@ -930,6 +931,13 @@ class SourceLocatorService:
             split_clips_at_boundaries(plan, scenes,
                                       min_piece_s=float(xcfg.boundary_min_piece_s),
                                       orig_duration=orig_duration)
+        # 相邻贴接段源区间去重叠（2026-10-06 修「成片里同一画面出现两次」）：
+        # 定位段源窗有 min_span_s=2.0 地板，短剪辑段必然与邻段交叠。
+        # 这里不额外 ffprobe（编排层不探测）：单帧守卫只是"别切出 1 帧闪烁段"的兜底，
+        # 25fps 名义帧长足够；真实帧数校验在渲染层 expected_frames/verify_segment_frames。
+        n_trim = trim_adjacent_source_overlaps(plan)
+        if n_trim:
+            self._log.info("adjacent dedup: %d 对贴接段源区间被裁到不重叠", n_trim)
         # 紧凑拼接：按记录时间轴顺序取源片区间；零宽/负宽段由渲染层再过滤一次
         clips = [(c.orig_start, c.orig_end) for c in plan
                  if c.kind in ("main", "low") and c.orig_end > c.orig_start]
@@ -1528,6 +1536,14 @@ class SourceLocatorService:
         rec_meta = self._probe_meta(Path(batch.edited_video)) if batch.edited_video else None
         source_fps = (meta.get("fps") if meta else None) or 25.0
         record_fps = (rec_meta.get("fps") if rec_meta else None) or source_fps
+
+        # 相邻贴接段源区间去重叠（2026-10-06，同成片渲染口径）：EDL/XML 是"逐段取材再
+        # 拼接"的时间线，交叠不裁就会在成片里重复同一画面。剪映卷轴走
+        # ``plan_jianying_assets`` 的重叠回并（已有去重语义），此处不重复施加。
+        if fmt in ("edl", "fcp7_xml"):
+            n_trim = trim_adjacent_source_overlaps(plan, fps=float(source_fps))
+            if n_trim:
+                self._log.info("export adjacent dedup: %d 对贴接段源区间已裁开", n_trim)
 
         out_root = Path(out_dir) if out_dir else self.export_root
         stem = Path(batch.edited_video).stem if batch.edited_video else "results"
