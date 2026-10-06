@@ -1176,6 +1176,11 @@ class SourceLocatorService:
                     grab_grid=self._grab_grid_batch,
                     refine_grid=bool(getattr(self.config.pipeline,
                                              "patch_refine_grid", False)),
+                    # 片尾钳制（2026-10-06 修 LOC-1107）：用**真实视频流时长**而非索引末点 ——
+                    # 索引末点会比片尾早 ~1s，用它钳制会削掉原本能成功的窗（= 语义变更）。
+                    # meta.duration = 容器时长 >= 流末点 ⇒ 构造上不会削掉任何原本成功的目标；
+                    # 残留下界 = [流末点, 容器末点) 的一帧缝（实测本例 0.019s），属既有行为、未新增。
+                    source_duration_s=float(bundle.meta.duration or 0.0) or None,
                     embed_dual=self._patch_reranker.frame_dual,
                     lib_times=np.asarray(bundle.times, dtype=np.float64),
                     lib_feats=bundle.features, log=self._log,
@@ -2513,7 +2518,7 @@ class SourceLocatorService:
             for t in missing:
                 fr = fresh.get(t)
                 if fr is None:
-                    fr = self._grab_frame_cached(path, t)   # 超片尾/解码失败回退
+                    fr = self._grab_frame_cached(path, t)   # 网格漏帧补一次 seek（非片尾兜底：t 越出源时长仍会抛）
                 got[t] = fr
                 key = (resolved, round(t, 3))
                 if len(self._grab_cache) >= 512:

@@ -73,6 +73,7 @@ def apply_patch_refine(results: Sequence[Result], *, edited_path, source_path,
                        grab_frames: Callable | None = None,
                        grab_grid: Callable | None = None,
                        refine_grid: bool = False,
+                       source_duration_s: float | None = None,
                        progress: Callable[[int, int], None] | None = None) -> list[Result]:
     """对歧义段做 patch 局部精排；其余原样返回。不修改入参对象。
 
@@ -85,6 +86,14 @@ def apply_patch_refine(results: Sequence[Result], *, edited_path, source_path,
     抽取（select 只吐网格帧 ⇒ 管道搬运量 ÷~源帧率×步长）。本仓真实窗形状（test1 账单 134 个
     窗，跨度恰 9.00s、步长恰 1.0s）micro A/B = **2.28×，120/120 点逐字节同帧**（非整数秒步长
     由 ``MIN_GRID_STEP_S``/``max_pts_lag`` 护栏逐帧回退 ⇒ 语义不变）。关 = 旧路径逐位不变。
+
+    ``source_duration_s``（可选，2026-10-06 修 LOC-1107 片尾越界）：原片**视频流时长**
+    （生产传 ``bundle.meta.duration``；不要用索引末点——它比片尾早约 1s，会削掉原本成功的窗）。
+    候选精扫窗窗尾 ``mid + REFINE_WIN_S`` 按它钳制 ⇒ 落在片尾的段不再向**不存在的帧**要网格点；
+    此前这类点最终走到 ``FFmpegIO.grab_frame`` 并在取不到帧时抛 MediaError，把整条 locate 打死。
+    钳制基准 = 片尾本身 ⇒ **凡过去能跑通的窗，一帧都不动**（零语义）；只有会抛的越界点被削掉。
+    钳制后窗退化（``g1 <= g0``）的候选直接跳过；全跳过 ⇒ 该段原样返回（既有 None 守卫）。
+    None = 不钳制（旧行为逐位不变，单测/离线验证器用）。
 
     ``progress(done, total)``（可选，2026-10-01 续35 E2E UX-P1）：逐段进度回调。精排是
     定位链路最慢的后处理（每歧义段 ±5s 窗 × 多候选 × patch+global DML），此前全程静默
@@ -110,6 +119,8 @@ def apply_patch_refine(results: Sequence[Result], *, edited_path, source_path,
 
     out: list[Result] = []
     n_refine = n_switch = 0
+    hi_bound = (float(source_duration_s) if source_duration_s
+                and float(source_duration_s) > 0 else None)
     n_total = len(results)
     for i_r, r in enumerate(results, start=1):
         if progress is not None:
@@ -156,14 +167,17 @@ def apply_patch_refine(results: Sequence[Result], *, edited_path, source_path,
         grids: dict[float, list[float]] = {}
         for mid in eval_mids:
             g0, g1 = max(0.0, mid - REFINE_WIN_S), mid + REFINE_WIN_S
+            if hi_bound is not None:          # 片尾钳制（2026-10-06 修 LOC-1107）
+                g1 = min(g1, hi_bound)
+            if g1 <= g0:
+                continue
             n = max(6, int((g1 - g0) * REFINE_FPS))
             grids[mid] = [g0 + (g1 - g0) * (i + 0.5) / n for i in range(n)]
         frames_by_t: dict[float, np.ndarray] = {}
         if not (refine_grid and grab_grid is not None):
             all_ts = sorted({t for g in grids.values() for t in g})
             frames_by_t = dict(zip(all_ts, _grab_many(source_path, all_ts)))
-        for mid in eval_mids:
-            grid = grids[mid]
+        for mid, grid in grids.items():
             frames = ([frames_by_t[t] for t in grid] if frames_by_t
                       else _grab_source_grid(grid))
             peak_s = -1.0

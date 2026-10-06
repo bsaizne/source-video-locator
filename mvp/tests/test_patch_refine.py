@@ -32,12 +32,17 @@ def _lib():
 
 
 class ApplyPatchRefineTest(unittest.TestCase):
-    def _run(self, results, q_region, progress_cb=None, grab_grid=None, refine_grid=False):
+    def _run(self, results, q_region, progress_cb=None, grab_grid=None, refine_grid=False,
+             dur=None, recorder=None):
         """q_region: 查询帧内容区域 id（0=E1,1=E2,2=E3）。grab 返回时间标记，
-        embed_dual 按时间轴分支：编辑轴 [0,4] → 查询区域；源片轴按 lib 区域。"""
+        embed_dual 按时间轴分支：编辑轴 [0,4] → 查询区域；源片轴按 lib 区域。
+        ``dur`` = 传给 apply_patch_refine 的 source_duration_s（片尾钳制）；
+        ``recorder`` 收所有**源片轴**请求过的时间（含网格路径）。"""
         lib_t, lib_f = _lib()
 
         def grab(path, t):
+            if recorder is not None and float(t) > 10.0:
+                recorder.append(float(t))
             return float(t)
 
         def embed_dual(marker):
@@ -50,11 +55,19 @@ class ApplyPatchRefineTest(unittest.TestCase):
                 return _onehot(1), _onehot(1)[None, :]
             return _onehot(2), _onehot(2)[None, :]
 
+        def grid(path, times):
+            times = [float(t) for t in times]
+            if recorder is not None:
+                recorder.extend(times)
+            return {round(t, 6): float(t) for t in times} if grab_grid is None \
+                else grab_grid(path, times)
+
         return apply_patch_refine(results, edited_path="x", source_path="y",
                                   grab_frame=grab,
                                   embed_dual=embed_dual, lib_times=lib_t,
                                   lib_feats=lib_f, progress=progress_cb,
-                                  grab_grid=grab_grid, refine_grid=refine_grid)
+                                  grab_grid=(grid if refine_grid else grab_grid),
+                                  refine_grid=refine_grid, source_duration_s=dur)
 
     def test_progress_reports_per_segment(self):
         # UX-P1（2026-10-01 续35 E2E）：逐段进度回调 (done,total)，含跳过段也计数
@@ -151,6 +164,34 @@ class ApplyPatchRefineTest(unittest.TestCase):
         self.assertAlmostEqual(out[0].original.start, 110.0, delta=1.5)
 
     # ---- 续55：段内候选窗并集（一次批量抓帧，簇间可并行解码）----
+
+    # ---- 2026-10-06 修 LOC-1107：精扫窗按原片时长钳制，不向片尾外的帧要东西 ----
+
+    def test_tail_segment_window_clamped_to_source_duration(self):
+        """段落在片尾：mid=127 + REFINE_WIN_S(5) 本会请求 132，超过时长 128 ⇒ 必须被钳掉。"""
+        asked: list[float] = []
+        r = _mk_result(original=TimeSpan(125.0, 129.0))
+        out = self._run([r], q_region=2, dur=128.0, recorder=asked, refine_grid=True)
+        self.assertTrue(asked, "网格路径未请求任何源片时间")
+        self.assertLessEqual(max(asked), 128.0,
+                             "精扫窗请求了片尾之外（> 原片时长）的帧 = LOC-1107 根因")
+        self.assertEqual(len(out), 1)
+
+    def test_tail_segment_without_duration_keeps_old_behaviour(self):
+        """source_duration_s=None（单测/离线口径）= 不钳制，旧行为逐位不变。"""
+        asked: list[float] = []
+        r = _mk_result(original=TimeSpan(125.0, 129.0))
+        self._run([r], q_region=2, dur=None, recorder=asked, refine_grid=True)
+        self.assertGreater(max(asked), 128.0, "dur=None 时不应发生钳制")
+
+    def test_window_fully_past_end_returns_segment_unchanged(self):
+        """窗整体在片尾外（时长 < 窗头）⇒ 候选全跳过，该段原样返回、不抛。"""
+        asked: list[float] = []
+        r = _mk_result(original=TimeSpan(125.0, 129.0))
+        out = self._run([r], q_region=2, dur=119.0, recorder=asked, refine_grid=True)
+        self.assertEqual(len(out), 1)
+        self.assertAlmostEqual(out[0].original.start, 125.0, places=6)
+        self.assertAlmostEqual(out[0].original.end, 129.0, places=6)
 
     def _run_batched(self, results, q_region, refine_grid=False, grab_grid=None):
         """与 _run 同语义，但传批量抓帧 grab_frames 并记录每次调用的目标表。"""

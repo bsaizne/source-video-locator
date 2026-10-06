@@ -200,7 +200,10 @@ class FFmpegIO:
         ——该 flag 是本方法成立的前提，不可省。
 
         聚类：升序时间相邻间隔 ≤``max_gap_s`` 且簇总跨度 ≤``max_span_s``（界内存*3 帧缓冲）。
-        任一簇解码失败/流提前结束 → 该簇未满足的 t 逐帧回退 ``grab_frame``（健壮性优先）。
+        任一簇解码失败/流提前结束 → 该簇未满足的 t 逐帧回退 ``grab_frame``（补一次 seek 机会）。
+        ⚠️ 该回退**不是**片尾兜底：``t`` 落在原片时长之外时 ``grab_frame`` 同样取不到帧并抛
+        ``MediaError``（2026-10-06 LOC-1107 教训）。越界时间要由**调用方**按源时长钳制
+        （见 ``patch_refine.apply_patch_refine(source_duration_s=…)``），不要指望这里吞掉。
 
         ``filters`` 可为**字符串或 callable(簇起点) -> 字符串**（后者用于把网格锚定到簇起点，
         见 ``grab_grid_times`）。``filters``（2026-10-03 续50，L1 管道优化）：插到 ``showinfo`` 之前的附加滤波串，
