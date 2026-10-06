@@ -275,6 +275,14 @@ def main() -> int:
             for kw in ("UnicodeDecodeError", "ASCII", "codec can't decode"):
                 if kw in text and "中文" in text:
                     warn("日志含解码告警", kw)
+            if fails:
+                # 失败必须把包内后端日志尾部打到 job console：run #26/#27 实测只有
+                # 通用话术 LOC-1107 时，CI 侧完全看不到真因（本地是靠 traceback 才定位到
+                # isc_refine 的片尾越界）。
+                tail = [l for l in text.splitlines() if l.strip()][-60:]
+                print("---- 包内后端日志尾部（供定位真因）----", flush=True)
+                for l in tail:
+                    print("  " + l[:240], flush=True)
     finally:
         if proc is not None and proc.poll() is None:
             proc.kill()

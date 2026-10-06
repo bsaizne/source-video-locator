@@ -57,6 +57,32 @@ class FFmpegIOTest(unittest.TestCase):
         self.assertEqual(f.dtype, np.uint8)
         self.assertGreater(f.mean(), 1.0)  # not black
 
+    def test_grab_frame_beyond_end_clamps_not_raises(self):
+        """LOC-1107 片尾越界（2026-10-06）：t 超出最后可解码帧 ⇒ 钳到片内，不再抛。
+
+        旧行为 = 抛 MediaError ⇒ 任何一个候选窗越过片尾（isc_refine 宽扫/精扫、
+        patch 精扫、近场池）就把整条 locate 打死。
+        """
+        m = self.io.metadata(SYNTH)
+        cap = self.io._decodable_cap(m)
+        self.assertIsNotNone(cap)
+        self.assertGreater(cap, 0.0)
+        f = self.io.grab_frame(SYNTH, m.duration + 5.0)
+        self.assertEqual(f.shape, (720, 1280, 3))
+        self.assertTrue(np.array_equal(f, self.io.grab_frame(SYNTH, cap)))
+
+    def test_grab_frames_beyond_end_keeps_original_keys(self):
+        """批量口同样收口，且**返回键仍是原始请求值**（调用方按原 t 取帧）。"""
+        m = self.io.metadata(SYNTH)
+        beyond = round(m.duration + 5.0, 6)
+        got = self.io.grab_frames(SYNTH, [1.0, beyond])
+        self.assertIn(1.0, got)
+        self.assertIn(beyond, got)
+        # 片内请求逐位不变（构造性零语义）
+        got2 = self.io.grab_frames(SYNTH, [0.5, 1.5])
+        self.assertEqual(sorted(got2), [0.5, 1.5])
+        self.assertTrue(np.array_equal(got2[1.5], self.io.grab_frame(SYNTH, 1.5)))
+
     def test_grab_frames_batch_matches_single(self):
         # 续46 窗批量解码：零语义 = 与 grab_frame 逐字节一致（同选取规则：首个 pts≥t）
         times = [0.5, 1.0, 2.0, 2.5, 3.5, 4.5]

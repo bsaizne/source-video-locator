@@ -142,6 +142,24 @@ class FFmpegIO:
                 f"frame extraction failed (rc={rc}): {path.name}\n{err[-1500:]}"
             )
 
+    def _decodable_cap(self, info) -> float | None:
+        """最后一个可解码帧的时间上界（容器时长 − 1 帧）；元数据不可信时返回 None。
+
+        片尾之外的 t 没有"正确答案"：``first_ge`` 语义下 ffmpeg 吐不出帧，而此前一律抛
+        ``MediaError`` ⇒ **任何一个候选窗越过片尾就把整条 locate 打死**（LOC-1107 根因）。
+        2026-10-06 mac CI 门槛抓到第二处调用点（``isc_refine`` 宽扫/精扫，本地复现
+        t=20.500 vs 20.0s 原片），故统一收在解码层而不是逐个引擎补。
+        钳制只作用于 t > 上界 的请求 ⇒ 凡过去能成功的取帧一帧不动（构造性零语义）。
+        """
+        try:
+            dur = float(getattr(info, "duration", 0.0) or 0.0)
+            fps = float(getattr(info, "fps", 0.0) or 0.0)
+        except (TypeError, ValueError):
+            return None
+        if dur <= 0:
+            return None
+        return max(0.0, dur - (1.0 / fps if fps > 0 else 0.0))
+
     def grab_frame(self, path: str | Path, t: float, *, scale: tuple[int, int] | None = None) -> np.ndarray:
         """Return one decoded BGR frame at time ``t`` (frame-accurate single seek).
 
@@ -152,6 +170,9 @@ class FFmpegIO:
         info = self.metadata(path)
         if not info.has_video:
             raise MediaError(f"{path.name}: no video stream")
+        cap = self._decodable_cap(info)
+        if cap is not None and t > cap:
+            t = cap
         width, height = self._output_size(info, scale)
         frame_bytes = width * height * 3
 
@@ -214,7 +235,12 @@ class FFmpegIO:
         整格跳位）。``filters=None`` 时 ``match="nearest"`` 与 ``"first_ge"`` 等价（逐帧都在）。
         """
         path = Path(path)
-        uniq = sorted({round(float(t), 6) for t in times})
+        raw = [round(float(t), 6) for t in times]
+        cap = self._decodable_cap(self.metadata(path))
+        # 片尾外的目标钳到片内（见 _decodable_cap）；返回时按**原始请求值**补一份别名键，
+        # 调用方仍用自己要的时间取帧。
+        eff = raw if cap is None else [cap if t > cap else t for t in raw]
+        uniq = sorted(set(eff))
         if not uniq:
             return {}
         clusters: list[list[float]] = [[uniq[0]]]
@@ -253,6 +279,9 @@ class FFmpegIO:
         for t in uniq:
             if t not in got:
                 got[t] = self.grab_frame(path, t, scale=size)
+        for r, e in zip(raw, eff):
+            if r != e and e in got:
+                got[r] = got[e]      # 原始请求值别名（越界点拿到的是片内最后一帧）
         return got
 
     def grab_grid(self, path: str | Path, t0: float, step: float, n: int, *,
