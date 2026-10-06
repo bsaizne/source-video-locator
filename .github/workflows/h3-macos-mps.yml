@@ -190,9 +190,20 @@ jobs:
             "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/tags/model-assets")"
           fetch() {
             name="$1"; dest="$2"
-            url="$(printf '%s' "$json" | python3 -c "import sys,json;a=json.load(sys.stdin)['assets'];print(next(x['url'] for x in a if x['name']=='$name'))")"
+            # 走 API 的 octet-stream 端点而不是 releases/download：后者依赖公共重定向主机
+            # （本机实测该路径连不上，connect=0/21s 无首字节，而 api.github.com 0.8s 正常），
+            # 且仓库若转私有 releases/download 需要额外鉴权。
+            aid="$(printf '%s' "$json" | python3 -c "import sys,json;a=json.load(sys.stdin)['assets'];print(next(x['id'] for x in a if x['name']=='$name'))")"
             mkdir -p "$dest"
-            curl -sfL --max-time 900 -H "Authorization: Bearer $GH_TOKEN" -o "$dest/$name" "$url"
+            # 重试 + 低速判定：截断/半速卡死都会显式失败，绝不静默交半成品
+            # （本地彩排实测截断过一次 ⇒ 下面 verify_model_asset_shas 是第二道闸）
+            curl -sfL --retry 5 --retry-delay 5 --retry-all-errors \
+              --speed-time 120 --speed-limit 20000 --max-time 1200 \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/octet-stream" \
+              -o "$dest/$name" \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/assets/$aid"
+            test "$(wc -c < "$dest/$name")" -gt 0 || { echo "::error::$name 下载为空"; exit 1; }
             echo "fetched $name -> $dest/$name ($(wc -c < "$dest/$name") B)"
           }
           fetch dinov2_cls_patch.onnx.data "$M/dinov2_cls_patch"
