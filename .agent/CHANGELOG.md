@@ -1172,3 +1172,74 @@ win-unpacked 01:38 全新构建，BUILD_EXIT=0）。
   opcode 通道可行性仍未探。
 - **明细档**：`mvp/benchmark/user_case/competitor_cutmatch/FINDINGS_CUTMATCH_ENTRY_LAYER_20261006.md`
   + `work/cm_redig/inventory_20261006.md` / `entry_view_20261006.md` / `entry/*.txt`。
+
+## 2026-10-06（续61 补一）— r10 出包（含 LOC-1107 修复）+ 五道包体验收
+
+- **构建**：`mvp/ui/scripts/build-release.ps1` 四步全过（vite → compile:electron → PyInstaller
+  onedir 后端 1053 MiB → electron-builder --win dir），PS_EXIT=0，产物
+  `release/win-unpacked/Video Locator.exe`（11:27 的 r9 被**原位覆盖**，非空目录重打）。
+  ⚠️ 过程记录：`release/win-unpacked` 目录级 rename 被拒（某进程把它当 CWD），但目录内文件
+  可写可改名 ⇒ 放弃改名、原位构建；r9 解包内容改从 **r9 zip 解出**留作对照臂。
+- **包内容验收**：`accept_packaged_bundle.py` **FAILED=0**（patch/ISC 图+外部权重 sha256 全过 ·
+  包内冒烟 30.3s ≤ 75s · DirectML 生效 · 精排 GPU 未回退 CPU · ISC GPU）。
+  `work/pkg_attr/three_defense_smoke_r7.py` **FAILED=0**（backend 在位 · BACKEND_LISTEN 公告 ·
+  health 200 · 拒绝无令牌 · release 无令牌拒启 exit!=0）。
+- **启动冒烟**：`Video Locator.exe` 起后 25s 存活 = Electron 4 + backend 1（与 r9 同形态）。
+- **zip**：`mvp/ui/release/Video-Locator-win-x64-20261006r10.zip` = 981,634,169 B / **7,078 条目**；
+  抽验 `Video Locator.exe`、`resources\backend\backend.exe`、`resources\app\out\electron\main.js`、
+  patch/ISC `.onnx.data` 均可打开读取（CRC 过）。
+  **包内含修复的硬证**：包内 backend.exe = 77,441,843 B，r9 同文件 = 77,440,920 B（差 923 B），
+  且包内无散装 pyc（模块在 CArchive 内，故字符串 grep 不适用，改用尺寸+行为证据）。
+- **macOS CI run #24**（head `137866f`，含本次修复与 3 个新测试；**用户手动 dispatch**）=
+  三 job success，`mvp-tests-macos` 日志 **Ran 543 tests in 362.3s → OK (skipped=45)**
+  ⇒ 修复跨平台不回归（Windows 543 / macOS 543 齐平）。
+- **片尾形态的包体复现 = 未成立（如实登记）**：新造两条素材
+  （`eof_tail_ed6.mp4` 原片末 6s；`eof_ed126.mp4` part1+part2 拼接 126.8s 只给 part1 作原片，
+  66 段定位 + 82 段精排）在 **r9 包**上跑：eof63 22.1s 过、eof126 455.0s 过，**都没崩**
+  ⇒ 这两条不是判别性用例，包体级"修复前必崩"仍未实证；源码级 A/B（真 FFmpegIO，未钳制臂复现
+  `MediaError @ t=63.000`）与 543 单测才是本次修复的证据面。
+  ⇒ **待用户用 16:34 那次失败的同项目（31 段解说 vs `src_part1.mp4`）在 r10 上重跑一次**，
+  那才是包体级判别测试。跑手已备：`attr_packaged_headless.py` 新增 `eof63` / `eof126` 两用例。
+
+## 2026-10-06（续61 补二）— 进度条 92% 卡死 + 计时显示 00:00 两个 UI 缺陷修复
+
+- **用户报**：打包态分析跑到「镜头分析 92.1% 00:00」长时间不动，且计时不像在走。
+- **根因 1（百分比）**：`_STAGE_RANGES` 里 REFINE = (RETRIEVAL, 92, 6) 被**修复链 / 切镜拆分 /
+  patch 逐段精排 / ISC 逐段**四条子链共用同一条 0→1 ramp，而修复链整段只发一条
+  `current=0, total=len(results)` 的事件 ⇒ UI 停在 92.0~92.1 数分钟；随后逐段精排的分数
+  又被 `run_worker` 的单调钳制挡住（它的 frac 从 0 重起）。
+- **根因 2（计时）**：`AnalysisPage.vue` 的 elapsed 是**组件本地** `setInterval` 计数器，
+  只有 `run()` 会 `startElapsed()` ⇒ 换页/组件重挂即归零且不再走（显示 00:00）。
+- **修法**：① `ProgressEvent` 加 `phase`（默认空 = 旧行为逐位不变，`to_dict` 同步）；
+  ② `worker._PHASE_RANGES` 把 92→98 切成互不重叠四段：`fix` 92-94 / `split` 94-95 /
+  `patch` 95-97 / `isc` 97-98，带 phase 的事件 current 一律按**已完成数**解释（`current/total`）；
+  ③ 修复链补 5 个粗步事件（全局锚点 → 字牌与序列 → 时序与冲突 → 连续重复 → 整体一致性），
+  `locator_service._notify` 透传 phase；④ 起点时刻改存 store `taskStartedAt`，
+  页面按 `Date.now() - taskStartedAt` 现算，`running` 驱动 tick，终态/`reset()` 清空。
+- **门禁**：后端 **543 OK (skipped=2)** · API **105 OK**（+1 phase 切片测，含"无 phase = 92.1
+  旧行为"回归锁）· vitest **137 全绿**（+1 store 起点测）· `typecheck` + `typecheck:desktop` 干净。
+- **口径**：纯展示层与事件 schema，**未动任何定位语义**（无新旋钮、无 GT 变更、无 feature_version）；
+  修复链事件插在既有步骤块之后，不改步骤顺序。
+- **注意**：现役 **r10 包不含本修复**（r10 = 17:31 构建，只含 LOC-1107）⇒ 要让打包态进度动起来需 r11。
+
+## 2026-10-06（续61 补三）— 预览双播放器联动暂停 + 时长显示 00:00 修复（UI）
+
+- **用户报**：结果页预览里「上面的（剪辑）播完后，下面的（原片）没播完也跟着暂停」；截图同时显示
+  剪辑播放器左右时间都是 `00:00`。
+- **根因 1（联动暂停）**：`VideoPlayer.onPause` 把 `<video>` 的 `pause` 事件**一律**上报成
+  `playingChange(false)`，而浏览器在**播到末尾时同样会 fire `pause`** ⇒ 剪辑片段放完 ⇒
+  `VideoComparisonPlayer` 的共享 `playing` 被置 false ⇒ 另一路经 `watch(props.playing)` 被暂停。
+  佐证症状是单向的：原片那路**当时根本没接** `@playing-change`（只有剪辑接了），
+  所以"上停拽下"成立、反向不成立。
+- **根因 2（00:00）**：`duration` 只在 `@timeupdate` 里更新，且 `preload="metadata"` 下未开播就没有
+  timeupdate ⇒ 右侧总时长一直显示 00:00。
+- **修法**：① `VideoPlayer` 用元素自身的 `ended` 标志区分两种 pause —— 播完改发新事件 `ended`
+  （不再冒泡成"用户暂停"），并补 `@loadedmetadata` 设时长；按钮图标改用本地 `showPlaying`
+  （= 共享 playing 且本路未播完），使先播完那路显示 ▶ 而另一路继续；
+  ② 联动判定抽成纯函数 `src/utils/previewCoupling.ts`（`reportPause` 手动暂停=两路都停；
+  `reportEnded` 单路播完=另一路继续，两路都完才置停；`reportPlay` 重播清标记；`resetSyncState`），
+  父组件按该状态机走，两路都接上 `@playing-change` + `@ended`。
+- **门禁**：`typecheck` 干净 · vitest **142 全绿**（+5 条状态机测，含"一路播完另一路不停"与
+  "两路都完才停"两条判别锁；未装 `@vue/test-utils`，故以纯函数锁行为）。
+- **未验证面（如实）**：`pause` 与 `ended` 的先后（规范上 ended 标志先置 true 再排队 pause）
+  是本次判定的前提，**没在真浏览器里跑过**；起 dev 前端用真实素材目检，或等 r11 由用户实测。

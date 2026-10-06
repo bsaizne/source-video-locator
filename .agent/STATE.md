@@ -68,6 +68,45 @@
 
 ## Current Task
 
+> **▶ 2026-10-06（续61 补三）— 预览"一路播完拽停另一路"+ 时长 00:00 已修（UI，未提交）【下个对话从这里读起】**
+> 根因：`VideoPlayer` 把 `<video>` 的 `pause` 一律上报成"用户暂停"，而**播到末尾也会 fire pause**
+> ⇒ 剪辑放完 ⇒ 共享 `playing=false` ⇒ 原片被 watch 暂停（症状单向可佐证：原片那路当时根本没接
+> `@playing-change`）。时长 00:00 = `duration` 只在 `timeupdate` 更新 + `preload=metadata` 未开播。
+> 修：元素 `ended` 标志区分两种 pause（播完改发 `ended`）+ 补 `@loadedmetadata` + 按钮图标用本地
+> `showPlaying`；联动判定抽成纯函数 `src/utils/previewCoupling.ts`（手动暂停=两路停；
+> 单路播完=另一路继续，两路都完才停；重播清标记），两路都接 playing-change + ended。
+> 门禁：typecheck 干净 · vitest **142**（+5 判别锁）。**未验证**：pause/ended 先后是规范前提，
+> 没在真浏览器跑过 ⇒ 需 dev 目检或 r11 实测。
+> 本会话累计未提交 = 进度切片(后端5文件) + 计时(UI store+页面) + 本次预览联动 + r10 档案；
+> **r10 包不含这三项**，要见效需 r11。
+
+> **▶ 2026-10-06（续61 补二）— 进度条 92% 卡死 + 计时 00:00 已修（源码已改，未提交；r10 包不含）【下个对话从这里读起】**
+> 用户报打包态「镜头分析 92.1% 00:00」长时间不动。两条根因：
+> ① REFINE 的 (92,6) 区间被**修复链/拆分/patch 逐段/ISC 逐段**共用同一条 0→1 ramp，而修复链
+> 整段只发一条 `current=0` 事件 ⇒ 停 92.1 数分钟，后面逐段又被单调钳制挡住；
+> ② elapsed 是 `AnalysisPage.vue` **组件本地** setInterval 计数 ⇒ 换页/重挂即归零不再走。
+> 修：`ProgressEvent.phase`（空=旧行为逐位不变）+ `worker._PHASE_RANGES` 切四段互不重叠
+> （fix 92-94 / split 94-95 / patch 95-97 / isc 97-98，带 phase 时 current 按**已完成数**解释）
+> + 修复链补 5 个粗步事件 + 起点时刻移进 store `taskStartedAt`（页面按 Date.now() 差值现算）。
+> 门禁：后端 **543 OK** · API **105 OK**（含"无 phase=92.1 旧行为"回归锁）· vitest **137** ·
+> 双 typecheck 干净。纯展示层 + 事件 schema，**零定位语义变更**（无新旋钮/GT/feature_version）。
+> ⚠️ **现役 r10 包不含此修复**（17:31 构建，只含 LOC-1107）⇒ 要让包内进度动起来需 **r11**。
+> 待拍板：① 提交本批（源码 5 文件 + UI 3 文件 + 新测 2 个 + r10 档案）② 打 r11
+> ③ LOC-1107 是否拆码 ④ 下一刀 A1→A2 ∥ A3 ⑤ 性能口径三处对齐。
+
+> **▶ 2026-10-06（续61 补一）— r10 已出包（含 LOC-1107 修复），包体验收全过；唯一未闭合项=包体级判别复现【下个对话从这里读起】**
+> 现役包 = **`mvp/ui/release/Video-Locator-win-x64-20261006r10.zip`**（981,634,169 B / 7,078 条目，
+> 含 `3a6aa4c` 片尾钳制）；r9（11:32）+ r8 留作回滚。验收：`accept_packaged_bundle.py` FAILED=0
+> （资产 sha256 · 冒烟 30.3s · DML 生效 · 精排/ISC GPU 未回退）· 三防冒烟 FAILED=0 ·
+> 启动冒烟 Electron 4 + backend 1 存活 25s · zip 抽验关键条目可开读 ·
+> 包内 backend.exe 尺寸 77,441,843 ≠ r9 77,440,920（含修复的硬证，包内无散装 pyc 故不能用字符串 grep）。
+> macOS CI run #24（head `137866f`，**用户手动 dispatch**）= **Ran 543 → OK (skipped=45)** 三 job success。
+> ⚠️ **未闭合**：我造的片尾素材（末 6s 切片、126.8s 解说 vs 63s 原片）在 **r9 包上不崩**
+> ⇒ 包体级"修复前必崩"没实证，本次修复的证据面 = 源码级真 FFmpegIO A/B + 543 单测 + CI 543。
+> **请用户拿 16:34 那次失败的同一项目（31 段解说 vs `src_part1.mp4`）在 r10 里重跑一次**作判别测试。
+> 待拍板：r10 档案与 `attr_packaged_headless.py` 新用例（`eof63`/`eof126`）的 git 提交；
+> LOC-1107 是否拆码；下一刀 A1→A2 ∥ A3；性能口径三处对齐。
+
 > **▶ 2026-10-06（续61）— LOC-1107 片尾越界真缺陷已修 + 竞品入口/资源层整值读完（9 条新形态）【下个对话从这里读起】**
 > **(a) 真缺陷修复（源码已改，未提交）**：打包态 r9 跑 `work/e2e_r3/src_part1.mp4`（**63.000s**）时
 > 整条 locate 失败 = `MediaError: grab_frame returned no frame at t=63.500`。
@@ -2631,4 +2670,4 @@ test3 27.79 与 2026-09-26 border_review 独立裁决逐点吻合）; test2 **�
 
 ## Last Updated
 
-2026-10-06 16:58
+2026-10-06 18:38

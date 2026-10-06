@@ -55,6 +55,17 @@ CASES = {
     # 接线冒烟用（秒级索引 + 短定位），不用于性能读数
     "syn": {"edited": str(BENCH / "datasets" / "synthetic" / "edited" / "a1.mp4"),
             "original": str(BENCH / "datasets" / "synthetic" / "originals" / "source.mp4")},
+    # 片尾越界（LOC-1107，2026-10-06 续61）打包态功能回归：edited = 原片末 6s 切片
+    # （`tools/ffmpeg.exe -ss 57 -t 6 -i src_part1.mp4 -c:v libx264 -an ...` 生成，本机跑手素材）
+    # ⇒ 主 span 必落片尾、精扫窗必然越过容器末点(63.019s) = 修复前 r9 包直接崩的形态。
+    "eof63": {"edited": str(BENCH / "work" / "e2e_r3" / "eof_tail_ed6.mp4"),
+              "original": str(BENCH / "work" / "e2e_r3" / "src_part1.mp4")},
+    # 更强的片尾复现（eof63 未触发 r9 崩溃后补）：edited = part1+part2 拼接 126.8s，
+    # original 只给 part1（63.0s）⇒ 后半段无对应内容，检索候选散布整条索引（含末 5s），
+    # 即用户 r9 那次「31 段解说 vs 63s 原片」的同型形态。生成：
+    #   ffmpeg -f concat -safe 0 -i work/e2e_r3/concat_list.txt -c copy work/e2e_r3/eof_ed126.mp4
+    "eof126": {"edited": str(BENCH / "work" / "e2e_r3" / "eof_ed126.mp4"),
+               "original": str(BENCH / "work" / "e2e_r3" / "src_part1.mp4")},
 }
 
 # E2E（r3 包，2026-10-01 02:45:09 起）从打包日志读出的阶段边界，仅作对照常量。
