@@ -1074,3 +1074,49 @@ win-unpacked 01:38 全新构建，BUILD_EXIT=0）。
 ### Notes
 
 - Created `checkpoint-2026-10-06-1432.md` checkpoint (1 modified/untracked file(s)).
+
+### Notes
+
+- Created `checkpoint-2026-10-06-1435.md` checkpoint (1 modified/untracked file(s)).
+
+## 2026-10-06（续59 补记）— macOS CI 5 失败根因修复（跨平台平局确定性）
+
+> 本条为补记：续59 当时只写了 STATE/TODO，**CHANGELOG 漏落**（STATE 里「明细 CHANGELOG 续59」
+> 指向不存在的条目），2026-10-06 续60 会话核对时发现并补齐。
+
+- **现象**：CI（macOS runner）全套抓到 **5 失败**（`patch_refine`×2 + `isc_l2_index`×3），Windows 全绿。
+- **根因**：numpy SIMD 快排（quicksort）对**精确平局**的返回顺序跨架构不同 ⇒ `_clusters` 选出的候选
+  代表帧不同 ⇒ 下游精扫窗 / 宽扫排除集漂移。生产真实 sims 是连续浮点、无精确平局，产品语义不受影响；
+  踩中者是合成夹具的退化平局。
+- **修复（提交 `3230fad`，已推 origin/master）**：判据排序加 `kind="stable"` **两处**（`git show --stat` 核过）
+  —— `engine/localization/patch_refine.py:58`（`_patch_score` 的 `_clusters` 代表帧序）与
+  `engine/localization/isc_refine.py:302`（L2 宽扫排除集序）；平局按索引序 ⇒ 全平台逐位一致。
+  另两处 `clustering.py:80` / `segment.py:204` 的 `kind="stable"` **本次未动**（先前已在位）。
+  测试侧随确定性收敛更新两断言/一夹具（patch E2 代表帧 112 ⇒ child start 110；isc_l2 真峰 139-141
+  移到 CLS 库外延区，使 `-iscw` 采纳与平局顺序无关）。
+- **门禁**：Windows 后端全套 **540 OK**；未改 GT、未 bump `feature_version`、未动任何旋钮/阈值/采样。
+
+## 2026-10-06（续60）— stable 修复双链验证 PASS：四片逐字节零差异 + macOS CI 全绿
+
+- **① 四片零差异回归（生产不变性证明）= PASS**：`probe_stable_sort_regress.py`（defaults-only、
+  `assert DirectMLBackend`）续59 会话启动后**未断**，本会话按日志实测接管监控至 `ALL_DONE`。
+  `work/stable_sort_regress/summary.json`：2mkv `wall=1584.3s` / test1 `1202.5s` / test2 `1642.6s` /
+  test3 `1548.5s`，四片 **`strip_identical=true`、`n_diff_rows=0`**（对照臂 =
+  `work/defaults_flip_ab/<case>/on.results.json`，同代码态默认旋钮）。
+  ⇒ **stable 排序对生产行为零影响，无需回滚、无需改纯夹具方案重推**。
+- **② macOS CI = 全绿**：run **37425131410**（#23，head `eded658` 含 `3230fad`）三 job success
+  （`mvp-tests-macos` / `mps-poc` / `macos-package`）。`mvp-tests-macos` 日志实测
+  **`Ran 540 tests in 412.938s` → `OK (skipped=45)`** ⇒ 续59 的 5 个失败确认修复；
+  Windows 540 / macOS 540 计数齐平（skip 数差异 = 平台资产与 DML 用例守护）。
+- **更正留痕（两条，均为交接文本里的错记）**：
+  ① **「push `3230fad` 自动触发 CI」是错的**——`.github/workflows/h3-macos-mps.yml` 的 `on:`
+  **只有 `workflow_dispatch`**（文件注释写明为省 macOS runner 刻意手动）。GitHub API 实测最新 run
+  停在 3d1b580（修复的父提交），3230fad 之后**没有任何新 run** ⇒ CI 验证必须手动 dispatch；
+  本会话经用户口令后 dispatch。② STATE「明细 CHANGELOG 续59」指向空条目（见上「续59 补记」）。
+- **未动的平局敏感点（将来跨平台再漂移时从这里查）**：`app/locator_service.py:1863`、
+  `engine/localization/evidence_localize.py:168/198/493`、`montage_localize.py:57`、
+  `offset_vote_prior.py:123`、`retrieval.py:50`（本轮 CI 已全绿，未改；这些点含真实连续 sims
+  上理论平局面，改动须重走四片零差异验收）。
+- **销项**：续59 三项待办（① 回归 ② CI ③ 全过归档）全部结案，无阻塞、无遗留。
+- **待拍板延续**：本会话仅改档案文档（STATE/TODO/CHANGELOG），git 提交等口令；
+  下一刀（A1 降子补记分 → A2 异源选优 ∥ A3 导出含子）仍未拍板。

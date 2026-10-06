@@ -10,11 +10,24 @@
 
 ## P0 — Current
 
-> **▶ 2026-10-06（续59）— macOS CI 5 失败修复已推送；四片零差异回归待查【下个对话第一件事】**
+> **▶ 2026-10-06（续60）— stable 修复双链验证 PASS，续59 三项待办全结【下个对话第一件事读这条】**
+> ① 四片零差异回归（2mkv/test1/test2/test3）**逐字节 identical、diffs=0**
+> （`work/stable_sort_regress/summary.json`；对照 `work/defaults_flip_ab/<case>/on` 臂）
+> ⇒ stable 排序生产不变性成立，**不回滚、不重推**。
+> ② macOS CI run #23（head `eded658`）三 job success，`mvp-tests-macos` **Ran 540 → OK (skipped=45)**
+> ⇒ 续59 的 5 失败确认修复。⚠️ **push 不会触发 CI**（`h3-macos-mps.yml` 只有 `workflow_dispatch`），
+> 跨平台验证须手动 dispatch（本次经用户口令）。
+> ③ 归档销项已完成；CHANGELOG 补齐了续59 漏写的那一笔。
+> **仍待拍板（不变）**：工作区 git 提交（本会话仅档案文档）/ 下一刀 A1→A2 ∥ A3。
+> **新登记（续60 核对发现，待拍板）**：性能**口径漂移** —— `mvp/docs/PRODUCT_INTRO.md:55-59` 仍写
+> 「高精度全片定位实测约 **19~31 分钟**」（翻默认**之前**的四片 19.3/23.5/31.0/31.0），而 STATE/TODO
+> 续57 已把现役默认态写成「**≈15~31**」，但同一块的 on 臂实测是 **22.0 / 27.0 / 30.1 / 31.6**
+> （「15」无出处，疑混入快速档）。r9 真机 test1 = **19.9min**（打包态）。⇒ 需一次三处对齐的产品口径拍板。
+>
+> **▶ 2026-10-06（续59）— macOS CI 5 失败修复已推送 → 已由续60 销项**
 > 根因 = numpy SIMD 快排精确平局跨架构顺序不同（合成夹具踩中；生产无影响）。
-> 已推 3230fad：两处 argsort 改 stable + patch 两断言 + isc_l2 夹具真峰移库外。后端 540 全绿。
-> **待办**：① 查 `work/stable_sort_regress/summary.json`（不完整就重跑 probe_stable_sort_regress.py，
-> 预期四片逐字节零差异）② 等 macOS CI 重跑结果 ③ 全过销项，有失败按 STATE 续59 块思路续查。
+> 已推 3230fad：两处 argsort 改 stable（patch_refine:58 / isc_refine:302）+ patch 两断言 +
+> isc_l2 夹具真峰移库外。后端 540 全绿（Windows）。
 
 > **▶ 2026-10-06（续58 补一）— r9 包真机全链复核 = PASS【醒来读这条】**
 > 口令「跑吧」：包内 backend.exe headless 跑 test1 真实片（env 已补齐 SVL_PATCH_ONNX/
