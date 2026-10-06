@@ -1062,3 +1062,7 @@ win-unpacked 01:38 全新构建，BUILD_EXIT=0）。
   暂缓理由。提案档 `semantic_signal/RESEARCH_PROPOSAL_NEXT_CUT_20261006.md`：
   A1 降子补记分（半天，零行为）→ A2 异源选优（1 天，主形态）∥ A3 导出含子（产品选项），
   统一验收门 = 严格/场景/负例零回退 + 导出 +5 全兑现 + 5 行读图。
+
+### Notes
+
+- Created `checkpoint-2026-10-06-1320.md` checkpoint (1 modified/untracked file(s)).
