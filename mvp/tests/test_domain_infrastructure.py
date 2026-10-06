@@ -102,13 +102,13 @@ class InfrastructureTest(unittest.TestCase):
         # 2026-10-03（续51）：宽扫粗扫网格抽取翻默认（零语义 + 1.27~1.30×，见 config 注释验收证据）
         self.assertTrue(cfg.pipeline.grab_grid_decode)
         self.assertTrue(cfg.pipeline.grab_window_decode)
-        # 2026-10-05（续54 补二）：patch 精排窗网格抽取 = 新旋钮，待四片 A/B 前维持默认关
-        self.assertFalse(cfg.pipeline.patch_refine_grid)
-        # 2026-10-06（续55 下一刀）：主循环重排窗（patch v2 近场池/字牌锚定源窗）网格抽取
-        # = 新旋钮，默认关（待 test1 双臂 A/B + 三片回归再拍板）
-        self.assertFalse(cfg.pipeline.rerank_grid_grab)
-        # 2026-10-05（续55）：簇间并发解码默认 1 = 现役串行（待同脚本双臂 A/B 再定）
-        self.assertEqual(cfg.media.cluster_workers, 1)
+        # 2026-10-05（续54 补二）：patch 精排窗网格抽取
+        # 2026-10-06（续57）翻默认 True（用户口令「翻」）：test1 双臂 1.068× + 联合四片 0 差异
+        self.assertTrue(cfg.pipeline.patch_refine_grid)
+        # 2026-10-06（续57）翻默认 True：主循环重排窗网格抽取，test1 双臂 1.132× + 联合四片 0 差异
+        self.assertTrue(cfg.pipeline.rerank_grid_grab)
+        # 2026-10-05（续55）：簇间并发解码；2026-10-06（续57）翻默认 4（同上证据）
+        self.assertEqual(cfg.media.cluster_workers, 4)
         self.assertEqual(cfg.media.timeout_s, 600.0)
 
     def test_config_json_override(self):

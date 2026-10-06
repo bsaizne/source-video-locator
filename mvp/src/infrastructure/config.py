@@ -26,9 +26,13 @@ class MediaConfig:
     ffprobe_path: str | Path | None = None
     timeout_s: float = 600.0
     # 窗批量抓帧的簇间并发度（2026-10-05 续55）：一次 grab_frames 内多个时间簇各自一个
-    # ffmpeg 进程，互不依赖 ⇒ 可并发。1 = 现役串行（逐位不变）。定位全程 ~680 簇、CPU 侧
-    # 抓帧占 78% 而本机 12 核闲置 ⇒ 待 test1 同脚本双臂 A/B 验收后再决定是否翻默认。
-    cluster_workers: int = 1
+    # ffmpeg 进程，互不依赖 ⇒ 可并发；失败簇隔离 + 逐帧回退语义不变。
+    # **2026-10-06（续57）翻默认 4（用户口令「翻」）**，验收证据：
+    #   ① test1 同脚本双臂 1→4 = 1155.4→1078.9s = 1.071× + strip 0 差异（work/perf_ab/cl4.*）；
+    #   ② 单测：并发=串行逐字节、失败簇隔离回退；
+    #   ③ 三旋钮联合四片双臂 strip 全 0 差异（见 rerank_grid_grab 注）。
+    # 回退路径 = 置回 1（现役串行逐位）。
+    cluster_workers: int = 4
 
 
 @dataclass
@@ -387,20 +391,28 @@ class PipelineConfig:
     # 回退路径 = 本旋钮置 False（逐位回现役）。待 test1 双臂 A/B（预期 strip 逐字段 0 差异）
     # + 计时后由用户拍板再翻。
     isc_refine_grid_refine: bool = False
-    # patch 精排候选窗网格抽取（2026-10-05 续54 补二，默认关）：patch_refine 每候选 ±5s
+    # patch 精排候选窗网格抽取（2026-10-05 续54 补二）：patch_refine 每候选 ±5s
     # 精排窗的采样点是 REFINE_FPS=1s 均匀网格 ⇒ 开 = 走 FFmpegIO.grab_grid_times（select
-    # 只吐网格帧，其余照抄续50 契约），关 = 现役逐帧窗解码路径。micro 探针待做。
-    patch_refine_grid: bool = False
-    # 主循环重排窗网格抽取（2026-10-06 续55 下一刀，默认关）：locate 主循环里 patch_refine
+    # 只吐网格帧，其余照抄续50 契约），关 = 逐帧窗解码路径。
+    # **2026-10-06（续57）翻默认 True（用户口令「翻」）**，验收证据：
+    #   ① test1 同脚本双臂 1.068× + strip 0 差异（work/patch_grid_ab/）；
+    #   ② 真实窗形状 micro 2.28×、120/120 逐字节同帧；跨源 1.86~3.29×（%.6f 修复后）；
+    #   ③ 三旋钮联合四片双臂（work/defaults_flip_ab/）strip 0 差异（见 rerank_grid_grab 注）。
+    # 回退路径 = 本旋钮置 False（逐位回窗解码）。
+    patch_refine_grid: bool = True
+    # 主循环重排窗网格抽取（2026-10-06 续55 下一刀）：locate 主循环里 patch_refine
     # 之外的两处源片重排窗抓帧 —— ① patch v2 近场池（`_patch_nearfield_rescue`，±30s@4s
     # 均匀网格，跨度中位 ~28s/步长恰 4.0s 整数秒）② 字牌锚定源窗（`_apply_text_anchor`，
     # 每窗 4 个 `_rep_times` 均匀点）。两者都是等差整数秒锚点 ⇒ 开 = 走 grab_grid select 抽取
-    # （管道只传目标帧；现役窗解码要搬全跨度 25fps 帧，4s 步长下管道量 ÷~100）。关 = 逐位回
-    # 现役 `_grab_frames_parallel` 路径。计时账单归因（FINDINGS §5.8 分桶）：other 桶
-    # 294.4s=22%（test1 1332s 全链），本旋钮即该桶的网格形态接线。
-    # 与 `patch_refine_grid` 语义解耦（一个=patch_refine 阶段候选窗，一个=主循环重排窗），
-    # 各自独立 A/B 独立拍板。回退路径 = 本旋钮置 False。
-    rerank_grid_grab: bool = False
+    # （管道只传目标帧；窗解码要搬全跨度 25fps 帧，4s 步长下管道量 ÷~100）。
+    # **2026-10-06（续57）翻默认 True（用户口令「翻」）**，验收证据：
+    #   ① test1 同脚本双臂 **1.132×** + strip 55 段 0 差异 + 信封一致（work/rerank_grid_ab/）；
+    #   ② 与 patch_refine_grid + cluster_workers 联合四片双臂（work/defaults_flip_ab/）：
+    #     test1 0/55（off 复用本臂）· test2 2338.0→1807.3s=**1.294×** 0/67 ·
+    #     test3 2417.7→1894.2s=**1.276×** 0/103 · 2mkv 1885.5→1622.9s=**1.162×** 0/84
+    #     ⇒ all_identical=True，三指标 136/131/138/4·9 自动成立。
+    # 与 `patch_refine_grid` 语义解耦（各自独立 A/B）；回退路径 = 本旋钮置 False。
+    rerank_grid_grab: bool = True
     # 窗批量抓帧解码（2026-10-03 续46）：locate 后处理的抓帧从「每帧 spawn 一次 ffmpeg」
     # 改为「每时间簇一次 spawn 窗解码」（-copyts+showinfo PTS 对齐，选帧规则与 grab_frame
     # 同语义）。**2026-10-03 翻默认开（用户拍板做续46）**：零语义证据 = 单测逐字节一致

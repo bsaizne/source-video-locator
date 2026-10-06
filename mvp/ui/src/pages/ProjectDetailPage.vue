@@ -364,7 +364,10 @@ function onBrowseEditedPicked(paths: string[]): void {
 .pd__k { color: var(--fg-faint); font-size: var(--fs-xs); }
 .pd__actions { display: flex; gap: 12px; margin: 20px 0; }
 .pd__note { color: var(--fg-muted); font-size: var(--fs-xs); }
+/* min-width:0：grid 子项默认 min-width:auto，长绝对路径会把「剪辑视频」面板撑出轨道
+   （路径省略与 ×删除按钮随之被挤出视口，2026-10-06 真机复核抓到，与 ProjectCard 同根因）。 */
 .pd__libraries { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.pd__lib { min-width: 0; }
 .pd__lib { background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-m); padding: 18px; }
 .pd__drop { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 28px; border: 1px dashed var(--border-strong); border-radius: var(--radius-m); color: var(--fg-muted); cursor: pointer; }
 .pd__drop:hover { border-color: var(--accent); color: var(--fg); }
