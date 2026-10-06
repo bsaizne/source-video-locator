@@ -1007,8 +1007,18 @@ class SourceLocatorService:
                                         edited=edited)
         # UX（2026-10-02 续40）：段循环结束 = 进入全局修复/拆分/精排链（实测可达数分钟），
         # 统一发 REFINE 阶段事件；首条落在链入口（此前此处到导出之间零消息 ⇒ UI 卡感）。
+        # 子阶段切片（2026-10-06 修「92% 卡死」）：修复链原先整段只有这一条 current=0 事件
+        # ⇒ 实测几分钟停在 92.1。改为按 5 个粗步发 phase="fix" 事件（current=已完成步数）。
+        _FIX_STEPS = 5
+        _fix_done = [0]
+
+        def _fix_step(label: str) -> None:
+            _fix_done[0] += 1
+            self._notify(on_progress, ProgressStage.REFINE, current=_fix_done[0],
+                         total=_FIX_STEPS, phase="fix", message=label)
+
         self._notify(on_progress, ProgressStage.REFINE, current=0,
-                     total=max(len(results), 1), message="画面深度复核：整体一致性校验")
+                     total=_FIX_STEPS, phase="fix", message="画面深度复核：整体一致性校验")
         if getattr(self.config.pipeline, "fast_global_enabled", False):
             # 快速全局锚定（立项 2026-09-28）: vote_prior 同内核超集(密帧/无帽/分散度门/保宽度),
             # 启用时**替换** vote_prior 应用点, 同一机制不叠加二次平移。
@@ -1042,6 +1052,7 @@ class SourceLocatorService:
                 raise
             except Exception:
                 self._log.exception("dense start recheck failed (non-fatal)")
+        _fix_step("画面深度复核：全局锚点复核")
         if self.config.pipeline.text_anchor_enabled:
             try:
                 self._apply_text_anchor(results, edited, orig_path,
@@ -1060,6 +1071,7 @@ class SourceLocatorService:
                 raise
             except Exception:
                 self._log.exception("sequence rerank failed (non-fatal)")
+        _fix_step("画面深度复核：字牌与序列复核")
         if self.config.pipeline.temporal_repair_enabled:
             try:
                 self._apply_temporal_repair(results, bundle, edited,
@@ -1086,6 +1098,7 @@ class SourceLocatorService:
                 raise
             except Exception:
                 self._log.exception("temporal ambiguity failed (non-fatal)")
+        _fix_step("画面深度复核：时序与冲突复核")
         # E1 连续重复起点修正（竞品 resolve_consecutive_scene_offsets 语义重建, 默认关）:
         # 放在全部定位/重排之后、退化门前 = 看到的是最终主 span; 平移只动后段起点。
         if getattr(self.config.pipeline, "resolve_consecutive_enabled", False):
@@ -1111,6 +1124,7 @@ class SourceLocatorService:
                 raise
             except Exception:
                 self._log.exception("consecutive offset resolve failed (non-fatal)")
+        _fix_step("画面深度复核：连续重复修正")
         # 退化拒绝门 + 场景覆盖门槛（竞品 results.validation 语义, 2026-09-28 续19; 默认关）。
         # 放在全部定位/重排之后 = 看到的是最终主 span 归属, 重复率判定才有意义。
         gate = apply_degradation_gate(
@@ -1123,6 +1137,7 @@ class SourceLocatorService:
             self._log.info("degradation gate rejected=%d subs_dropped=%d subs_kept=%d",
                            len(gate.rejected), gate.subs_dropped, gate.subs_kept)
         self._last_gate_stats = gate
+        _fix_step("画面深度复核：整体一致性校验")
         # 段级拆分（2026-09-30 续32 形态4 runtime 化, engine/localization/shot_split.py;
         # 2026-10-01 续35 默认开）。放在全部定位/门/重排之后 = 看到最终主 span；宽 span 保全 ⇒
         # 严格口径结构性零回退；导出/渲染契约不变（仍每条结果导主 span）。
@@ -1137,7 +1152,7 @@ class SourceLocatorService:
             # UX-P1（2026-10-01 续35 E2E）：后处理阶段此前零进度上报 ⇒ UI 停在段循环的
             # 最后一帧百分比像卡死。切镜拆分较快，报一条阶段消息即可。
             self._notify(on_progress, ProgressStage.REFINE,
-                         current=1, total=max(len(results), 1),
+                         current=0, total=1, phase="split",
                          message="画面深度复核：拆分多镜头段")
             results = apply_shot_split(
                 results, edited_path=edited,
@@ -1146,6 +1161,9 @@ class SourceLocatorService:
                 embed=lambda fr: self.backend.embed_frames([fr])[0],
                 lib_times=np.asarray(bundle.times, dtype=np.float64),
                 lib_feats=bundle.features, log=self._log)
+            self._notify(on_progress, ProgressStage.REFINE,
+                         current=1, total=1, phase="split",
+                         message="画面深度复核：拆分多镜头段")
         # patch 局部精排（2026-09-30 续32 形态6 runtime 化, engine/localization/patch_refine.py;
         # 2026-10-01 续35 默认开）。歧义段 top-K 候选各自局部窗 patch+global 融合精排再择优；
         # 老主降子 ⇒ 严格结构性零回退。
@@ -1162,12 +1180,14 @@ class SourceLocatorService:
                 def _refine_progress(done: int, total: int) -> None:
                     # UX-P1：精排逐段进度（最慢后处理，E2E 实测 ~30+ 分钟全程静默）。
                     # 2026-10-02 续40：改 REFINE 阶段（92→98 插值）+ 去技术术语话术。
+                    # 2026-10-06 切片：phase="patch" 独占 95→97；引擎在**处理第 done 段前**
+                    # 回调 ⇒ 已完成数 = done-1（current 语义 = 已完成）。
                     self._notify(on_progress, ProgressStage.REFINE,
-                                 current=done, total=total,
+                                 current=max(0, done - 1), total=total, phase="patch",
                                  message=f"画面深度复核 {done}/{total}")
 
                 self._notify(on_progress, ProgressStage.REFINE,
-                             current=0, total=n_refine_total,
+                             current=0, total=n_refine_total, phase="patch",
                              message=f"画面深度复核 0/{n_refine_total}")
                 results = apply_patch_refine(
                     results, edited_path=edited, source_path=orig_path,
@@ -1202,12 +1222,13 @@ class SourceLocatorService:
                 self._log.info("isc refine device=%s", self._isc_scorer.device)
                 n_isc_total = len(results)
                 self._notify(on_progress, ProgressStage.REFINE,
-                             current=0, total=n_isc_total,
+                             current=0, total=n_isc_total, phase="isc",
                              message=f"画面深度复核 0/{n_isc_total}")
 
                 def _isc_progress(done: int, total: int) -> None:
+                    # phase="isc" 独占 97→98；current 语义 = 已完成数
                     self._notify(on_progress, ProgressStage.REFINE,
-                                 current=done, total=total,
+                                 current=max(0, done - 1), total=total, phase="isc",
                                  message=f"画面深度复核 {done}/{total}")
 
                 results = apply_isc_refine(
@@ -2589,9 +2610,10 @@ class SourceLocatorService:
 
     @staticmethod
     def _notify(on_progress: ProgressCb | None, stage: ProgressStage,
-                current: int = 0, total: int = 0, message: str = "") -> None:
+                current: int = 0, total: int = 0, message: str = "",
+                phase: str = "") -> None:
         if on_progress is not None:
-            on_progress(ProgressEvent(stage, current, total, message))
+            on_progress(ProgressEvent(stage, current, total, message, phase))
 
     @staticmethod
     def _check_cancel(cancel_token: CancellationToken | None) -> None:

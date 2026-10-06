@@ -53,26 +53,30 @@ const hasSource = computed(() => !!original.value || sources.value.length > 0)
 
 const progress = computed(() => analysis.progress)
 
-// Elapsed wall-clock seconds while the analysis task runs.
-const elapsedSec = ref(0)
+// 计时从 store 里的任务起点时刻算（2026-10-06 修「时间消失/一直 00:00」）：
+// 原先是组件本地 setInterval 计数器 ⇒ 换页或重挂即归零且不再走（run() 才会重启）。
+const nowTick = ref(Date.now())
 let elapsedTimer: ReturnType<typeof setInterval> | null = null
-function startElapsed(): void {
-  elapsedSec.value = 0
-  if (elapsedTimer) clearInterval(elapsedTimer)
-  elapsedTimer = setInterval(() => (elapsedSec.value += 1), 1000)
-}
-function stopElapsed(): void {
-  if (elapsedTimer) {
+function ensureTicking(on: boolean): void {
+  if (on && !elapsedTimer) {
+    nowTick.value = Date.now()
+    elapsedTimer = setInterval(() => (nowTick.value = Date.now()), 1000)
+  }
+  if (!on && elapsedTimer) {
     clearInterval(elapsedTimer)
     elapsedTimer = null
   }
 }
-onBeforeUnmount(stopElapsed)
+const elapsedSec = computed(() =>
+  analysis.taskStartedAt
+    ? Math.max(0, Math.floor((nowTick.value - analysis.taskStartedAt) / 1000))
+    : 0)
+watch(() => analysis.running, (r) => ensureTicking(r), { immediate: true })
+onBeforeUnmount(() => ensureTicking(false))
 
 async function run(): Promise<void> {
   if (!pinned.value || !edited.value) return
   analysis.reset()
-  startElapsed()
   try {
     // 一键分析（反馈 ②）：原片索引已包含在流程内，无需单独构建。
     const batch = await analysis.runLocate(
@@ -86,7 +90,7 @@ async function run(): Promise<void> {
   } catch {
     // error surfaced in analysis.error
   } finally {
-    stopElapsed()
+    ensureTicking(false)
   }
 }
 

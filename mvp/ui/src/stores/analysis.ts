@@ -47,6 +47,9 @@ export const useAnalysisStore = defineStore('analysis', () => {
   const progress = ref<{ stage: ProgressStage; current: number; total: number; message: string } | null>(null)
   const steps = ref<PipelineStep[]>(STEPS.map((s) => ({ ...s, status: 'idle', message: '' })))
   const activeTaskId = ref<string | null>(null)
+  // 任务起点（epoch ms，2026-10-06 修「计时显示 00:00」）：原先计时器是分析页组件内的
+  // 本地 setInterval 计数 ⇒ 换页/重挂即归零且不再走。改存起点时刻，用时按 Date.now() 差值算。
+  const taskStartedAt = ref<number | null>(null)
   // 分析页固定项目（反馈 ⑫：别处切项目不打断/不偷换分析界面；顶部切换器改这里）
   const pinnedProjectId = ref<string | null>(null)
 
@@ -114,6 +117,7 @@ export const useAnalysisStore = defineStore('analysis', () => {
     try {
       const { task_id } = await service.startAnalyzeTask(edited, original, originalPaths, refine)
       activeTaskId.value = task_id
+      taskStartedAt.value = Date.now()
       const batch = await pollTaskUntilDone(task_id)
       steps.value = steps.value.map((s) => (s.status === 'error' ? s : { ...s, status: 'done' }))
       return batch
@@ -126,6 +130,7 @@ export const useAnalysisStore = defineStore('analysis', () => {
     } finally {
       activeTaskId.value = null
       running.value = false
+      taskStartedAt.value = null
     }
   }
 
@@ -135,6 +140,7 @@ export const useAnalysisStore = defineStore('analysis', () => {
     error.value = null
     progress.value = null
     activeTaskId.value = null
+    taskStartedAt.value = null
     idleSteps()
   }
 
@@ -146,6 +152,7 @@ export const useAnalysisStore = defineStore('analysis', () => {
     steps,
     activeStep,
     activeTaskId,
+    taskStartedAt,
     pinnedProjectId,
     setPinnedProject,
     runLocate,

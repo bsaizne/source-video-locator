@@ -33,12 +33,18 @@ class ProgressStage(str, Enum):
 
 @dataclass(frozen=True)
 class ProgressEvent:
-    """一次进度回调。``total`` 为 0 表示未知。"""
+    """一次进度回调。``total`` 为 0 表示未知。
+
+    ``phase``（2026-10-06 修「92% 卡死」）= 同一 stage 内的**子阶段标识**，供任务层把
+    一个宽区间切成互不重叠的小段（REFINE 的修复链/拆分/精排/ISC 各自一段）。
+    留空 = 该 stage 的整段区间（旧行为逐位不变）。
+    """
 
     stage: ProgressStage
     current: int = 0
     total: int = 0
     message: str = ""
+    phase: str = ""
 
     def to_dict(self) -> dict:
         return {
@@ -46,6 +52,7 @@ class ProgressEvent:
             "current": self.current,
             "total": self.total,
             "message": self.message,
+            "phase": self.phase,
         }
 
 

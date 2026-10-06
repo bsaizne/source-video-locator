@@ -45,6 +45,17 @@ _STAGE_RANGES: dict[ProgressStage, tuple[TaskStage, int, int]] = {
     ProgressStage.RENDER_MOVIE: (TaskStage.EXPORTING, 0, 99),
 }
 
+# 子阶段切片（2026-10-06 修「92% 卡死」）：REFINE 的 6 个点原先被修复链/拆分/精排/ISC
+# **共用同一条 0→1 ramp**，而修复链只发一条 current=0 的事件 ⇒ 实测整段几分钟停在 92.1，
+# 真正耗时的逐段精排又被单调钳制挡住。⇒ 按 phase 切成互不重叠的小段，各自推进且不回退。
+# 该表内 current 语义 = **已完成数**（0-based），插值用 current/total（不再 +1）。
+_PHASE_RANGES: dict[tuple[ProgressStage, str], tuple[TaskStage, float, float]] = {
+    (ProgressStage.REFINE, "fix"): (TaskStage.RETRIEVAL, 92, 2),      # 全局修复链（逐步）
+    (ProgressStage.REFINE, "split"): (TaskStage.RETRIEVAL, 94, 1),    # 切镜拆分
+    (ProgressStage.REFINE, "patch"): (TaskStage.RETRIEVAL, 95, 2),    # patch 逐段精排
+    (ProgressStage.REFINE, "isc"): (TaskStage.RETRIEVAL, 97, 1),      # ISC 第二意见逐段
+}
+
 
 def map_progress_stage(ev: ProgressEvent) -> tuple[TaskStage, float]:
     """把一个 service 进度事件映射为 (TaskStage, 0-100 百分比，一位小数)。
@@ -52,9 +63,17 @@ def map_progress_stage(ev: ProgressEvent) -> tuple[TaskStage, float]:
     事件带 current/total 时在阶段区间内插值：逐帧阶段（索引/特征提取，
     current=已处理数，1-based）用 ``current/total``；逐段阶段（current=段下标，
     0-based）用 ``(current+1)/total``——首段事件就前进、末段事件到达区间右端。
-    无 total 的阶段事件取区间起点。未知阶段回退 IDLE。
+    无 total 的阶段事件取区间起点。带 ``phase`` 的事件改走 :data:`_PHASE_RANGES`
+    的子区间，且 current 一律按**已完成数**解释（``current/total``）。
     一位小数（2026-10-02 续40 UX）：逐段阶段在短区间内整数百分比会长时间不动。
     """
+    keyed = (ev.stage, ev.phase)
+    if ev.phase and keyed in _PHASE_RANGES:
+        stage, base, span = _PHASE_RANGES[keyed]
+        if ev.total and ev.total > 0:
+            frac = min(1.0, max(0.0, ev.current / ev.total))
+            return stage, round(base + span * frac, 1)
+        return stage, float(base)
     stage, base, span = _STAGE_RANGES.get(ev.stage, (TaskStage.IDLE, 0, 0))
     if ev.total and ev.total > 0:
         if ev.stage in (ProgressStage.MERGE_SOURCES, ProgressStage.INDEX_BUILD,

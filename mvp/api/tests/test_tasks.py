@@ -190,6 +190,28 @@ class StageMappingTest(unittest.TestCase):
         self.assertEqual(
             map_progress_stage(ProgressEvent(ProgressStage.LOCALIZATION, 1, 4)),
             (TaskStage.RETRIEVAL, 65))
+
+    def test_refine_phase_slices(self):
+        """REFINE 子阶段切片（2026-10-06 修「92% 卡死」）：各 phase 独占互不重叠小段。
+
+        旧形态 = 修复链/拆分/精排/ISC 共用同一条 92→98 ramp，而修复链只发一条
+        current=0 事件 ⇒ 实测几分钟停在 92.1，逐段精排又被单调钳制挡住。
+        """
+        def ev(phase, cur, tot):
+            return ProgressEvent(ProgressStage.REFINE, cur, tot, "", phase)
+
+        self.assertEqual(map_progress_stage(ev("fix", 0, 5)), (TaskStage.RETRIEVAL, 92.0))
+        self.assertEqual(map_progress_stage(ev("fix", 3, 5)), (TaskStage.RETRIEVAL, 93.2))
+        self.assertEqual(map_progress_stage(ev("fix", 5, 5)), (TaskStage.RETRIEVAL, 94.0))
+        self.assertEqual(map_progress_stage(ev("split", 0, 1)), (TaskStage.RETRIEVAL, 94.0))
+        self.assertEqual(map_progress_stage(ev("split", 1, 1)), (TaskStage.RETRIEVAL, 95.0))
+        self.assertEqual(map_progress_stage(ev("patch", 41, 82)), (TaskStage.RETRIEVAL, 96.0))
+        self.assertEqual(map_progress_stage(ev("patch", 82, 82)), (TaskStage.RETRIEVAL, 97.0))
+        self.assertEqual(map_progress_stage(ev("isc", 0, 1)), (TaskStage.RETRIEVAL, 97.0))
+        self.assertEqual(map_progress_stage(ev("isc", 1, 1)), (TaskStage.RETRIEVAL, 98.0))
+        # 无 phase = 旧行为逐位不变（回归锁）
+        self.assertEqual(map_progress_stage(ProgressEvent(ProgressStage.REFINE, 0, 82)),
+                         (TaskStage.RETRIEVAL, 92.1))
         self.assertEqual(
             map_progress_stage(ProgressEvent(ProgressStage.CANDIDATE_RETRIEVAL, 3, 4)),
             (TaskStage.RETRIEVAL, 92))
