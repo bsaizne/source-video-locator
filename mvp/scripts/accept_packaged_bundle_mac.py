@@ -129,7 +129,9 @@ def main() -> int:
     if sys.platform != "darwin":
         print("本脚本只在 macOS runner 上跑（当前 %s）" % sys.platform, flush=True)
         return 2
-    app = Path(sys.argv[1] if len(sys.argv) > 1 else APP_DEFAULT)
+    app = Path(sys.argv[1] if len(sys.argv) > 1 else APP_DEFAULT).expanduser().resolve()
+    # 必须绝对路径：下面 Popen 带 cwd=backend_dir，POSIX 会先切 cwd 再解析 argv[0]，
+    # 相对路径会指向不存在的位置（CI 首跑实测：is_file() 判 True 却在 Popen 抛 ENOENT）。
     res = app / "Contents" / "Resources"
     backend_dir = res / "backend"
     backend_bin = backend_dir / "backend"
@@ -160,15 +162,18 @@ def main() -> int:
 
     # ---- B 精排资产（静默回退教训；mac 目前确实缺）----
     allow_missing = os.environ.get("SVL_MAC_ALLOW_MISSING_REFINE_ASSETS", "").strip() == "1"
-    for label, p in (("patch 双输出 ONNX（精排）", patch_onnx),
-                     ("ISC 第二意见 ONNX", isc_onnx)):
-        if p.is_file():
-            check("PASS", True, "%s 在位 sha256[:16]=%s" % (label, sha256_of(p)))
+    for label, files in (
+            ("patch 双输出 ONNX（精排）", [patch_onnx, Path(str(patch_onnx) + ".data")]),
+            ("ISC 第二意见 ONNX", [isc_onnx, Path(str(isc_onnx) + ".data")])):
+        missing = [p.name for p in files if not p.is_file()]
+        if not missing:
+            detail = ", ".join("%s sha256[:16]=%s" % (p.name, sha256_of(p)) for p in files)
+            check("%s 图+外部权重齐" % label, True, detail)
         elif allow_missing:
-            warn("%s 缺失（已豁免）" % label,
-                 "缺失后果：精排静默回退 CPU torch / isc_refine 整体跳过")
+            warn("%s 缺 %s（已豁免）" % (label, missing),
+                 "后果：精排静默回退 CPU torch / isc_refine 整体跳过")
         else:
-            ck("%s 缺失" % label, False,
+            ck("%s 缺 %s" % (label, missing), False,
                "后果 = 精排静默回退 CPU（Windows 实测整条慢 2.6~3.9x）/ ISC 第二意见缺席；"
                "临时放行请设 SVL_MAC_ALLOW_MISSING_REFINE_ASSETS=1 并在档案留痕")
 
@@ -199,9 +204,14 @@ def main() -> int:
     proc = None
     try:
         with out_log.open("w", encoding="utf-8") as logf:
-            proc = subprocess.Popen([str(backend_bin)], stdout=subprocess.PIPE,
-                                    stderr=subprocess.PIPE, text=True, encoding="utf-8",
-                                    errors="replace", env=env, cwd=str(backend_dir))
+            try:
+                proc = subprocess.Popen([str(backend_bin)], stdout=subprocess.PIPE,
+                                        stderr=subprocess.PIPE, text=True, encoding="utf-8",
+                                        errors="replace", env=env, cwd=str(backend_dir))
+            except OSError as exc:
+                ck("包内 backend 可启动", False, "%r" % (exc,))
+                print("FAILED=%d" % fails, flush=True)
+                return 1
             drain(proc, logf, listen_q)
             try:
                 line = listen_q.get(timeout=90.0)
