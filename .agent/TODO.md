@@ -10,6 +10,12 @@
 
 ## P0 — Current
 
+> **▶ 2026-10-06（续59）— macOS CI 5 失败修复已推送；四片零差异回归待查【下个对话第一件事】**
+> 根因 = numpy SIMD 快排精确平局跨架构顺序不同（合成夹具踩中；生产无影响）。
+> 已推 3230fad：两处 argsort 改 stable + patch 两断言 + isc_l2 夹具真峰移库外。后端 540 全绿。
+> **待办**：① 查 `work/stable_sort_regress/summary.json`（不完整就重跑 probe_stable_sort_regress.py，
+> 预期四片逐字节零差异）② 等 macOS CI 重跑结果 ③ 全过销项，有失败按 STATE 续59 块思路续查。
+
 > **▶ 2026-10-06（续58 补一）— r9 包真机全链复核 = PASS【醒来读这条】**
 > 口令「跑吧」：包内 backend.exe headless 跑 test1 真实片（env 已补齐 SVL_PATCH_ONNX/
 > SVL_ISC_ONNX 注入对齐 main.ts，防精排静默回退 CPU）⇒ wall **1196.9s=19.9min**（实验室
