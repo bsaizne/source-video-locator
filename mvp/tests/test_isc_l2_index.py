@@ -48,20 +48,27 @@ V_HIGH = np.array([0.62, 0.785]) / np.linalg.norm([0.62, 0.785])
 
 
 def _make_isc(mode):
-    """mode='switch': E2 区=q 本体(sim 1.0) 其余 V_LOW；mode='small': E2=V_HIGH(0.62)。"""
+    """mode='switch': 真峰区(139-141)=q 本体(sim 1.0) 其余 V_LOW；
+    mode='small': 真峰区=V_HIGH(0.62)。
+
+    真峰放在 CLS 库（90..131）之外的 139-141：`_clusters` 的零分区候选 mid 可能落在
+    任何零分区行上（跨平台平局顺序不同），真峰若在库内，taken（候选+2s 排除带）有
+    概率盖住全部峰行 ⇒ -iscw 采纳与否随平局顺序漂移（macOS CI 3 失败根因，续58）。
+    库外峰值行距一切可能 taken ≥8s ⇒ 采纳决策与平局顺序无关。"""
     def _isc_vec(marker):
         t = float(marker)
         if 0 <= t <= 4:
             return V_Q
-        if 112 <= t <= 116:
+        if 139 <= t <= 141:
             return V_Q if mode == "switch" else V_HIGH
         return V_LOW
     return _isc_vec
 
 
 def _src_index(mode):
-    """源侧 1s 索引（truepts 语义：标签 t 的特征 = 该时刻画面嵌入）。"""
-    lib_t = np.arange(90.0, 131.0, 1.0)
+    """源侧 1s 索引（truepts 语义：标签 t 的特征 = 该时刻画面嵌入）。
+    时间轴延伸到 145：真峰区 139-141 必须在索引里（见 _make_isc 注释）。"""
+    lib_t = np.arange(90.0, 146.0, 1.0)
     vec = _make_isc(mode)
     feats = np.stack([np.asarray(vec(float(t), ), dtype=np.float64) for t in lib_t])
     return lib_t, feats
@@ -126,8 +133,8 @@ class IscL2IndexTest(unittest.TestCase):
         r, _ = self._run(l2_index=_src_index("switch"))
         self.assertTrue(r.result_id.endswith("-iscw"))
         mid = (r.original.start + r.original.end) / 2
-        self.assertGreaterEqual(mid, 110.5)
-        self.assertLessEqual(mid, 117.5)
+        self.assertGreaterEqual(mid, 138.0)
+        self.assertLessEqual(mid, 142.0)
 
     def test_l2_same_direction_as_legacy(self):
         rl, _ = self._run(l2_index=None)          # 现役宽扫
@@ -137,8 +144,8 @@ class IscL2IndexTest(unittest.TestCase):
         # 两者都应切到 E2 真峰附近（后缀可异：CLS 候选 -isc / 宽扫 -iscw，胜者按分数+距离裁决）
         for r in (rl, r2):
             self.assertTrue(r.result_id.endswith(("-isc", "-iscw")))
-            self.assertGreaterEqual((r.original.start + r.original.end) / 2, 110.5)
-            self.assertLessEqual((r.original.start + r.original.end) / 2, 117.5)
+            self.assertGreaterEqual((r.original.start + r.original.end) / 2, 138.0)
+            self.assertLessEqual((r.original.start + r.original.end) / 2, 142.0)
         self.assertLess(abs(ml - m2), 1.6)         # 网格密度差 ≤ 一格
 
     def test_l2_no_switch_when_margin_not_met(self):

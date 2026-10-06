@@ -69,11 +69,13 @@ class ApplyPatchRefineTest(unittest.TestCase):
         self.assertEqual(len(out), 1)
 
     def test_ambiguous_switch_carries_old_main_as_sub(self):
-        # 查询=E2，现主在 E1 区(102) → 歧义；patch 峰在 E2 区(≈114) → 切换
+        # 查询=E2，现主在 E1 区(102) → 歧义；patch 峰在 E2 区 → 切换。
+        # 期望 mid=112（= E2 代表帧，argsort 改 kind="stable" 后平局按索引序、跨平台确定；
+        # 此前 Windows 依赖不稳定快排先出 114，macOS 出 112 —— CI 5 失败根因，续58）
         out = self._run([_mk_result()], q_region=1)
         self.assertEqual(len(out), 1)
         child = out[0]
-        self.assertAlmostEqual(child.original.start, 112.0, delta=1.5)
+        self.assertAlmostEqual(child.original.start, 110.0, delta=1.5)
         self.assertGreater(child.original.start, 106.0)
         # 宽 span 保全：老主降为首子 span
         self.assertEqual(len(child.original_segments), 1)
@@ -145,7 +147,8 @@ class ApplyPatchRefineTest(unittest.TestCase):
 
         out = self._run([_mk_result()], q_region=1, grab_grid=grid, refine_grid=True)
         self.assertEqual(len(out), 1)
-        self.assertAlmostEqual(out[0].original.start, 112.0, delta=1.5)
+        # 期望 mid=112（stable 排序后的 E2 代表帧；同 test_ambiguous_switch 注释）
+        self.assertAlmostEqual(out[0].original.start, 110.0, delta=1.5)
 
     # ---- 续55：段内候选窗并集（一次批量抓帧，簇间可并行解码）----
 

@@ -51,7 +51,11 @@ def _patch_score(q_patch: np.ndarray, cand_patch: np.ndarray) -> float:
 def _clusters(q_cls_mean: np.ndarray, lib_times: np.ndarray, lib_feats: np.ndarray,
               k: int) -> list[float]:
     sims = lib_feats @ q_cls_mean
-    order = np.argsort(-sims)
+    # kind="stable"（2026-10-06 续58 CI 修复）：合成/退化 sims 的精确平局在 numpy SIMD
+    # quicksort 下跨架构（x64/arm64）顺序不同 ⇒ 候选代表帧不同 ⇒ 下游精扫窗/宽扫排除集
+    # 漂移（macOS CI 5 失败的根因）。稳定排序 = 平局按索引序，全平台逐位一致；
+    # 真实嵌入 sims 为连续浮点，精确平局概率为零 ⇒ 生产行为不变（四片零差异回归留证）。
+    order = np.argsort(-sims, kind="stable")
     mids: list[float] = []
     for ti in order:
         t = float(lib_times[ti])

@@ -297,7 +297,9 @@ def apply_isc_refine(results: Sequence[Result], *, edited_path, source_path,
                     Q = np.stack([np.asarray(q, dtype=np.float64) for q in q_isc], axis=1)
                     s_idx = (if_ @ Q).mean(axis=1)
                     taken = [main_mid] + list(eval_mids) + list(wide_mids)
-                    order = np.argsort(-s_idx)
+                    # kind="stable"：同 _clusters（2026-10-06 续58 CI 修复）——平局跨架构
+                    # 顺序不同会改变宽扫排除集；稳定排序全平台逐位一致，真实 sims 无精确平局。
+                    order = np.argsort(-s_idx, kind="stable")
                     picked = []
                     for k in order:
                         if len(picked) >= WIDE_TOPK:
