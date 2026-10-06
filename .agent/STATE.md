@@ -86,6 +86,19 @@
 > **并集覆盖 Δ=0.00**（一块不丢）。零语义为构造性：只改导出计划层不回写 `Result`，
 > `measure_four_results` 读 Result 字段 ⇒ 三指标不可能变（已核）。
 > **未闭合**：打包态真机渲染一次目检（需 r14 或 dev 跑一次 render）。**已提交**（本批源码+测试+档案）。
+> **r14 已出包（2026-10-07 00:21，口令「推ci并打包，删旧包只留 r13+r14」）**：
+> `mvp/ui/release/Video-Locator-win-x64-20261007r14.zip` = 981,639,927 B / **7,078 条目** /
+> `testzip()=None`；包内 `backend.exe` **77,448,544 B `sha16=4f5631af9e4ea51f`**
+> （r13 = 77,445,580 / `52ca8c225bbc3683` ⇒ 新代码入包的尺寸+摘要硬证）；
+> `Video Locator.exe` 与 ISC 图与 r13 逐字节同（未改动层，符合预期）。
+> 验收：**accept FAILED=0**（冒烟 26.4s · DirectML 生效 · 精排与 ISC 未回退 CPU · 段数 1）·
+> 三防 **FAILED=0**（`three_defense_smoke_r7.py`）· 启动冒烟 Electron 4 + backend 1 存活 25s，
+> 用完即清 AFTER_KILL=0。构建日志 `work/build_r14.log`，验收日志 `work/accept_r14.log` /
+> `work/three_defense_r14.log` / `work/zip_r14.log`。
+> **仍缺的那一课 = 包体级判别**：accept 冒烟素材（`syn`/`short20`）只有 1 段，**不会触发贴接重叠**，
+> 所以"重叠在包内确实被裁开"没有包内实测，证据面 = 源码级 16 单测 + 3 渲染接线锁 + 真实四片计划层回放。
+> ⇒ 由用户在 r14 真项目里渲染/导出一次来闭合（那正是他报的路径）。
+> **分发包现状**（口令执行）：r10/r11 已删（释放 ~1.9GB），留 **r13（回滚）+ r14（现役）**。
 
 > **▶ 2026-10-06（续61 补八）— 预览联动的真浏览器前提已实测确证（补三/补四/补七挂着的目检项闭合）**
 > 现役组件 `VideoComparisonPlayer.vue` 被临时探针页直接挂载在 vite dev + Chromium 里跑真 `<video>`
