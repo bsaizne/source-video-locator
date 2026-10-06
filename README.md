@@ -1,60 +1,31 @@
-# 视频片段反向定位引擎 Benchmark
+# source-video-locator
 
-对候选视频匹配/复制片段定位引擎做统一、可重复、真实素材 Benchmark，
-为后续开发 Windows + macOS 桌面软件（Edited Video → Original Video 片段定位）做技术选型。
+桌面端（Windows / macOS）视频片段定位工具的工作区。
 
-## 候选引擎
+## 当前状态
 
-| 引擎 | 定位 | 状态 |
-|---|---|---|
-| VDF (videoduplicatefinder) | 工程底座 | 见 results/vdf/ |
-| TransVCL | 精确定位（深度学习） | BLOCKED：模型在 Google Drive 无法下载 |
-| VCSL / VTA | 传统时间定位 | 最小实验实现，见 results/vcsl/ |
+```
+2026-10-06  ch61  rel:r11(win) mac:ci-artifact(unverified)
+gate  543 / 105 / 142 / 0
+q     A136-139  B131  C138  D4-9
+t     22 27 30 32   (min, 4 片, 同机同档)
+plat  H1 H2 H3 > H4(hold:no-env)
+db    GT v4+3  idx 4/4  fv 未动
+```
 
 ## 目录
 
 ```
-benchmark/
-├── environment.json        # 本机环境实测
-├── ground_truth.json       # 合成 + 真实数据集 ground truth
-├── benchmark_results.json  # 汇总结果
-├── benchmark_report.md/html
-├── ENGINE_LICENSE_MATRIX.md
-├── MODEL_LICENSES.md
-├── ARCHITECTURE_ANALYSIS.md
-├── engines/                # 各引擎源码/二进制
-├── datasets/               # synthetic/ + real/
-├── results/                # 每引擎原始结果
-└── src/                    # benchmark 框架
+mvp/          产品实现（src 后端 / api HTTP / ui Electron+Vue / tests / scripts）
+src/          早期引擎对照实验
+datasets/     素材与标注
+results/      历史实验结果
+.agent/       工程记录
+work/         运行期产物（不入库）
 ```
 
-## 运行
+## 备注
 
-```bash
-# 环境
-D:\claudework\video-dedup-tool\.venv\Scripts\python.exe src/benchmark.py --engine all --dataset synthetic
-
-# 单引擎
-... src/benchmark.py --engine vdf --dataset synthetic
-
-# 生成报告
-... src/report.py
-```
-
-## 依赖说明（本机）
-
-- Python 3.13（复用 video-dedup-tool venv）
-- ffmpeg 7.1（imageio_ffmpeg 自带 + gyan build）
-- ffprobe（static-ffmpeg 下载）
-- opencv-python 5.0 / numpy 2.5
-- 无 NVIDIA GPU（AMD RX6750），深度学习引擎仅 CPU
-
-## 测试数据集
-
-- **synthetic/**: 人工可控原片（90s，6 个不同场景）+ A1~A12 编辑变换
-- **real/**: 真实素材（用户提供）
-
-## 结论
-
-
-见 `benchmark_report.md`。所有结论基于实际实验结果，非 README 推断。
+- 提交信息里的 `chNN` 对应 `.agent/` 的章节号。
+- `rel:` 行是当前发行物，其余目录下的历史包为回滚件。
+- 未标 `verified` 的构建不作为可用产物对待。
