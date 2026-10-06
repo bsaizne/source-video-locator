@@ -68,6 +68,34 @@
 
 ## Current Task
 
+> **▶ 2026-10-06（续61 补五）— mac 包体验收脚本 + publish 门槛已接线（未跑过真 mac）【下个对话从这里读起】**
+> 动因：mac 包过去只验「构建成功 + 静态库 + ad-hoc 签名」，从未做包体实测；且 `macos-package`
+> 最后一步是**构建成功即 `gh release upload --clobber` 到公开 rolling tag `mac-alpha`**
+> （实测该 release 现有两资产，旧 `Video.Locator-0.1.0-arm64-mac.zip` dl=12）。
+> 新 `mvp/scripts/accept_packaged_bundle_mac.py`（Windows 版绑死 win-unpacked/backend.exe/三条 DML
+> 判据不可复用）= 结构+资产 sha256 · **patch/ISC 在位（缺=FAIL，可显式豁免留痕）** · 起包 ·
+> 无令牌 401 负例 · 包内 ffmpeg 现造素材端到端 locate + **中文路径** · `backend selected=mps`。
+> CI 已插在 upload 之后、publish 之前 ⇒ **FAILED>0 就不再对外发布**。
+> ⚠️ **第一次 dispatch 预期会红**（不是脚本 bug）：`build_backend_mac.py` 从未复制 patch/ISC ONNX，
+> mac 包至今缺这两份资产（= 当年 Windows 精排静默回退 CPU 慢 2.6~3.9× 的同型缺口，mac 未收）。
+> 收口办法 = 两资产随包（ONNX provider 列表本就含 CPU 兜底）。
+> ⚠️ 本脚本**从未在真 macOS 执行过**，只过了 py_compile + 平台守卫 + 接口契约核到源码。
+> 待拍板：是否 dispatch 验证本门槛（≈180 macOS 分钟，预期红）· 是否补 mac 精排/ISC 资产 ·
+> r11 档案与 LOC-1107 拆码 · 下一刀 A1→A2 ∥ A3 · 性能口径三处对齐 · 旧包删除授权。
+
+> **▶ 2026-10-06（续61 补四）— r11 已出包（三项修复入包），包体内实测进度分级；现役包 = r11【下个对话从这里读起】**
+> 现役 = `mvp/ui/release/Video-Locator-win-x64-20261006r11.zip`（981,635,025 B / 7,078 条目，head `db0d86d`）；
+> r10/r9/r8 留作回滚（未做删除授权）。验收：accept **FAILED=0**（冒烟 26.5s）· 三防 **FAILED=0** ·
+> 启动冒烟 Electron4+backend1 · zip 抽验可开读；backend.exe 尺寸逐代递增（r9 77,440,920 →
+> r10 77,441,843 → r11 77,442,958）。
+> **包体内两条硬证**：① 进度切片 —— 包内 backend headless `syn` 事件进度序列 =
+> **92.0→94.0→95.0→97.0→100**，正好落在新切四段边界（旧代码会整片停 92.x）；
+> ② 预览联动 —— 包内 `resources/app/dist/assets/ResultsPage-xeWnraUr.js` 含压缩后的 `ed:!1,og:!1`
+> （= `initialSyncState`），与 vite 产物同哈希 ⇒ 修复在包里。
+> **仍开放三件**：① 预览 pause/ended 顺序前提**没在真浏览器目检**；② LOC-1107 包体级判别复现仍缺
+> 用户 16:34 那条真项目重跑（我构造的两条素材在 r9 包上不崩）；③ macOS CI run #25（head `db0d86d`）待收。
+> 待拍板：LOC-1107 是否拆码 · 下一刀 A1→A2 ∥ A3 · 性能口径三处对齐 · 旧包（r8/r9/r10）删除授权。
+
 > **▶ 2026-10-06（续61 补三）— 预览"一路播完拽停另一路"+ 时长 00:00 已修（UI，未提交）【下个对话从这里读起】**
 > 根因：`VideoPlayer` 把 `<video>` 的 `pause` 一律上报成"用户暂停"，而**播到末尾也会 fire pause**
 > ⇒ 剪辑放完 ⇒ 共享 `playing=false` ⇒ 原片被 watch 暂停（症状单向可佐证：原片那路当时根本没接
@@ -2670,4 +2698,4 @@ test3 27.79 与 2026-09-26 border_review 独立裁决逐点吻合）; test2 **�
 
 ## Last Updated
 
-2026-10-06 18:38
+2026-10-06 19:18

@@ -46,6 +46,22 @@
 > 需起 dev 前端用真实素材目检，或 r11 由用户实测确认。
 > **待拍板（合并）**：提交本批全部（进度切片 + 计时 + 预览联动 + r10 档案）· 打 r11。
 
+> **▶ 2026-10-06（续61 补四）— r11 已出包，现役包 = r11【现读这条】**
+> 三项修复（LOC-1107 钳制 / 进度 92% 切片 / 预览联动+时长 00:00）全部入包；
+> 包体实测：accept 与三防 FAILED=0、启动冒烟过、zip 7,078 条目抽验可开；
+> 包内进度序列 92.0→94.0→95.0→97.0→100（切片生效的硬证），包内渲染层 chunk 含新状态机。
+> **仍开放**：① 预览行为需真浏览器目检一次（pause/ended 顺序前提）② LOC-1107 需用户重跑
+> 16:34 那条真项目作包体判别 ③ macOS CI #25（head `db0d86d`）待收。
+> **待拍板**：LOC-1107 拆码 · 下一刀 A1→A2 ∥ A3 · 性能口径三处对齐 · 旧包 r8/r9/r10 删除授权。
+
+> **▶ 2026-10-06（续61 补五）— mac 包体门槛已接线（未提交/未真跑）【现读这条】**
+> `accept_packaged_bundle_mac.py` + CI publish 门槛（详见 STATE 续61 补五）。
+> **预期第一次 dispatch 会红**：mac 包从未随包 patch/ISC ONNX ⇒ B 判据 FAIL
+> （= 当年 Windows 精排静默回退 CPU 的同型缺口，mac 未收）。
+> **待拍板**：① 提交并推送本批 ② 是否 dispatch 验证门槛（≈180 macOS 分钟，预期先红）
+> ③ 是否把 patch/ISC 两资产补进 mac 包（`build_backend_mac.py` 复制 + 主进程已注入
+> `SVL_PATCH_ONNX`/`SVL_ISC_ONNX` 路径，mac 上走 CPU provider）④ 旧 mac-alpha 资产是否下架。
+
 > **▶ 2026-10-06（续60）— stable 修复双链验证 PASS，续59 三项待办全结【下个对话第一件事读这条】**
 > ① 四片零差异回归（2mkv/test1/test2/test3）**逐字节 identical、diffs=0**
 > （`work/stable_sort_regress/summary.json`；对照 `work/defaults_flip_ab/<case>/on` 臂）

@@ -1243,3 +1243,54 @@ win-unpacked 01:38 全新构建，BUILD_EXIT=0）。
   "两路都完才停"两条判别锁；未装 `@vue/test-utils`，故以纯函数锁行为）。
 - **未验证面（如实）**：`pause` 与 `ended` 的先后（规范上 ended 标志先置 true 再排队 pause）
   是本次判定的前提，**没在真浏览器里跑过**；起 dev 前端用真实素材目检，或等 r11 由用户实测。
+
+## 2026-10-06（续61 补四）— r11 出包（三项修复入包）+ 包内进度分级实测
+
+- **内容**：`db0d86d` 三笔 = LOC-1107 片尾钳制（`3a6aa4c`，r10 已含）+ 进度条 92% 切片（`13e18e2`）
+  + 预览联动与时长 00:00（`dba7c00`）+ 档案。构建 PS_EXIT=0，产物 18:45
+  （`Video Locator.exe` / `backend.exe` 77,442,958 B，逐代递增 r9 77,440,920 → r10 77,441,843 → r11 77,442,958）。
+- **包体验收**：`accept_packaged_bundle.py` **FAILED=0**（资产 sha256 · 冒烟 26.5s ≤75s · DML 生效 ·
+  精排/ISC GPU 未回退）· 三防冒烟 **FAILED=0** · 启动冒烟 25s 存活 Electron 4 + backend 1 ·
+  zip `Video-Locator-win-x64-20261006r11.zip` = 981,635,025 B / 7,078 条目，抽验
+  `Video Locator.exe`、`resources\backend\backend.exe`、`resources\app\dist\assets\ResultsPage-xeWnraUr.js`、
+  ISC 权重均可开读。
+- **包内进度分级的硬证**（不只看单测）：包内 backend headless `syn` 事件流的进度值序列 =
+  **92.0 → 94.0 → 95.0 → 97.0 → 100**，正好落在新切的四段（fix 92-94 / split 94-95 /
+  patch 95-97 / isc 97-98）边界上；旧代码这一段会整片停在 92.x。
+- **渲染层进包证明**：包内 `resources/app/dist/assets/ResultsPage-xeWnraUr.js` 与 vite 产物同名哈希，
+  内含压缩后的 `ed:!1,og:!1`（= `initialSyncState` 的 `{ed:false, og:false}`）⇒ 预览联动修复在包里。
+- **仍未闭合**：① 预览"一路播完另一路继续"的 **pause/ended 事件顺序前提**没在真浏览器目检过
+  （包内只有静态与状态机证据）；② LOC-1107 的包体级判别复现仍缺用户那条 16:34 真项目重跑；
+  ③ macOS CI run #25（head `db0d86d`）结果待收。
+- **release 现状**：现役 = **r11**；r10 / r9 / r8 全部留在 `mvp/ui/release/`（三个 981MB zip + 一个 982MB，
+  磁盘 303GB 富余，未做删除授权）。zip 形态沿用 r9/r10 的"根=win-unpacked 内容"（与档案里 r4/r5 的
+  带 `win-unpacked/` 目录层口径不一致，未擅自改）。
+
+## 2026-10-06（续61 补五）— mac 包体内容验收脚本 + publish 门槛（CI）
+
+- **动因**：mac 包过去只验到「构建成功 + 静态库依赖 + ad-hoc 签名可验」，从未做包体实测
+  （违反我方纪律"打包验收必须实测包体"）；且 `macos-package` 最后一步是
+  **构建成功即 `gh release upload --clobber` 到公开 rolling tag `mac-alpha`**（实测该 release
+  现有两资产：今日 `Video-Locator-mac-arm64.zip` 640,187,762 B dl=0 + 旧
+  `Video.Locator-0.1.0-arm64-mac.zip` 571,967,939 B **dl=12**）。
+- **新脚本** `mvp/scripts/accept_packaged_bundle_mac.py`（Windows 版 `accept_packaged_bundle.py`
+  的 mac 同口径版；后者绑死 `win-unpacked`/`backend.exe`/三条 DML 判据，mac 上必然红，不可复用）：
+  A 结构（app/backend/ffmpeg/ffprobe/DINOv2 权重随包，记 sha256）·
+  B **patch/ISC 精排资产在位**（缺失=FAIL，可用 `SVL_MAC_ALLOW_MISSING_REFINE_ASSETS=1` 显式豁免并留痕）·
+  C 起包（release 通道 + 随机端口 + 临时 SVL_DATA_DIR/LOG_DIR，stdout 必须排空否则管道写满阻塞后端）·
+  D 门禁负例（无令牌打 `/api/settings/device` 应 401；`/api/health` 属放行路径不能当负例）·
+  E 端到端（包内 ffmpeg lavfi 现造 20s 原片 + 6s 剪辑 + **中文名副本**，建索引 → analyze → 轮询到终态）·
+  F 设备判据 = 日志出现 `backend selected=mps`（stdout 与 SVL_LOG_DIR 两处都扫，防"读错地方"假红）。
+- **CI 接线**：`macos-package` 在 upload-artifact 之后、publish 之前插入
+  `Accept packaged mac bundle (gate publish)` ⇒ **FAILED>0 则 publish 不执行**，
+  mac-alpha 不再"构建成功即对外发布"。
+- **预期第一次会红**（如实预告，不是脚本 bug）：mac 构建目前**只装 DINOv2 .pth**，
+  `build_backend_mac.py` 从未复制 patch 双输出 ONNX 与 ISC ONNX ⇒ B 判据必 FAIL。
+  这正是当年 Windows 上"精排静默回退 CPU、整条慢 2.6~3.9×"瞒两周的同型缺口，
+  在 mac 上至今未收。收口办法 = 把两资产随包（ONNX session 的 provider 列表本就含
+  CPU 兜底，mac 上可用 CPU 跑精排，比"静默跳过精排/ISC"更接近 Windows 行为）。
+- **未验证面**：本脚本**从未在真 macOS 上执行过**（本机 Windows+AMD），只过了
+  `py_compile` + 平台守卫（非 darwin 退出码 2）+ 接口契约核到源码
+  （`BACKEND_LISTEN <host> <port>`、task `to_dict` 含 `result`、`/api/index` 返回 `IndexResponse`、
+  设备行文本 `backend selected=mps`）。首次真跑即在 CI 里。
+- 本地门禁：workflow YAML 可解析（三 job）· 脚本 py_compile 通过。
