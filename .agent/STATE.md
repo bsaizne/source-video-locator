@@ -63,7 +63,22 @@
 
 ## Current Task
 
-> **▶ 2026-10-06（续58 补一）— r9 包真机全链复核 = PASS【醒来读这条】**
+> **▶ 2026-10-06（续59）— macOS CI 5 失败修复已推送；四片零差异回归在跑【下个对话第一件事】**
+> CI（macOS runner）在推送后跑全套抓到 5 失败（patch_refine×2 + isc_l2_index×3，Windows 全绿）。
+> **根因**：numpy SIMD 快排对精确平局跨架构顺序不同 ⇒ `_clusters` 候选代表帧不同 ⇒ 下游
+> 精扫窗/宽扫排除集漂移；生产真实 sims 连续浮点无精确平局，产品语义不受影响。
+> **修复（已提交推送 3230fad）**：两处 argsort 加 `kind="stable"` + patch 两断言更新
+> （E2 代表帧 112 ⇒ start 110）+ isc_l2 夹具真峰移库外 139-141（采纳决策与平局顺序无关）。
+> 后端 540 全绿（Windows）。**⏳ 未完项（下个对话第一优先）**：
+> ① `probe_stable_sort_regress.py` 四片零差异回归当时在跑（后台进程可能已断）——查
+>   `work/stable_sort_regress/summary.json`；不完整就重跑（~2.5h，对照 defaults_flip_ab on 臂，
+>   预期逐字节零差异 = stable 排序生产不变性证明；若有 diff ⇒ 回滚 stable 改用纯夹具方案并重推）。
+> ② 等 macOS CI 重跑结果（push 3230fad 自动触发）确认 540 全绿。
+> ③ 全过 ⇒ 归档销项；若 CI 仍有失败 ⇒ 按同思路查剩余平局敏感点（evidence_localize:168 /
+>   locator_service:1863 也有同款 argsort，本轮未动）。
+> 明细 CHANGELOG 续59。
+
+> **▶ 2026-10-06（续58 补一）— r9 包真机全链复核 = PASS
 > 口令「跑吧」：`attr_packaged_headless.py test1`（包内 backend.exe headless；**脚本 env 补齐
 > `SVL_PATCH_ONNX`/`SVL_ISC_ONNX` 注入对齐 main.ts**——r3 时代旧跑手缺这两项，不补会复现
 > 精排静默回退 CPU 事故）⇒ wall **1196.9s = 19.9min**（实验室同代码态 1320.5s，headless 无
