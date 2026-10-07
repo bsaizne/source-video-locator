@@ -44,9 +44,9 @@
       `mvp/docs/PLAN_HARDENING_SIX_ITEMS_20261007.md`，执行顺序建议：②设备回报 → ①低内存
       收缩 → ③防抖+心跳（小三件一批）→ ④独立进程监督（单独批）→ ⑤导出实得口径（与性能
       口径对齐联动）→ ⑥换形态探针族（研究线，沙盒纪律）。逐项完成打勾：
-      - [ ] ② 子进程设备回报标记（UI-P3 根因解）
-      - [ ] ① 低内存收缩 batch+预取
-      - [ ] ③ 阶段进度防抖+心跳（UX-P1 补强）
+      - [x] ② 子进程设备回报标记 = ✅（2026-10-07：backend stdout 一次性 `BACKEND_DEVICE <name> <type>` 标记行（懒构建点=真实解析点）；UI 首启 READY 前拉 actual 三元组、buildIndex 不再用索引历史标签覆盖徽标）
+      - [x] ① 低内存收缩 batch+预取 = ✅（2026-10-07：`media/resource_budget.py` 纯函数三档（unknown→全默认零语义；tight/critical 收缩），接 `_grab_frames_parallel` 线程与 `build_tp_index` 簇上限（切簇只改批次不改帧），`/api/settings/device` 补 low_memory_mode/memory_tier/grab_workers/max_cluster_frames）
+      - [x] ③ 阶段进度防抖+心跳 = ✅（2026-10-07：`api/tasks/debounce.py` ProgressDebouncer（同阶段最小间隔合并、阶段切换/终态直通、held 先补发）接 analyze/render worker；Task 补 `last_event_at` 心跳并暴露 to_dict/UI 契约；进度条 0.2s 过渡既有）
       - [ ] ④ 独立 GPU 工作进程监督（任务级隔离先行）
       - [ ] ⑤ 指标 HIT ≠ 导出实得：锚点线改「导出实得」口径
       - [ ] ⑥ 换形态探针族 4 条（a 置信非饱和 / b 两级采样 / c E3 换载体 / d 退化门换判据）

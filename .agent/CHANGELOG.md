@@ -1642,3 +1642,33 @@ STATE `Current Task` 顶部新增补八块并把补七的开放项②标为闭�
   进程隔离先行）→ ⑤ 口径批（建议与搁置的「性能口径三处对齐」同批处理对外数字）→
   ⑥ 研究线并行（沙盒纪律：零 runtime，PASS 才接线，门槛 = 三指标零回退 + 口袋救回 ≥1/3）。
 - 零代码改动；等口令选择先跑哪批。
+
+## 2026-10-07（续62 补五）— 六项立项小三件 ②①③ 落地（门禁全绿）
+
+- **② 子进程设备回报标记**（UI-P3 根因解）：
+  - backend：`locator_service.backend` 惰性解析点打一次性 stdout 标记行
+    `BACKEND_DEVICE <actual_name> <actual_type>`（与 BACKEND_LISTEN 同风格；懒构建点 = 真实解析点
+    ⇒ 必为实际值；观测行异常静默不阻断）——新增 `mvp/tests/test_device_announce.py` 2 项。
+  - UI：`session.initApp` 在 READY 前 `loadDeviceSettings()` 填徽标（此前只在断→通重连时刷）；
+    `buildIndex` 不再用索引 backend 标签（`IndexMeta.backend` = 建索引时冻结历史标签）覆盖徽标
+    ——徽标唯一权威 = `/api/settings/device` actual 三元组。新增 `sessionDeviceBadge.test.ts` 2 项。
+- **① 低内存收缩 batch+预取**：
+  - 新增 `mvp/src/media/resource_budget.py`：`compute_media_budget` 纯函数三档
+    （usable = available − 2GB reserve；≥6GB=ok 现役默认 / ≥2GB=tight(2 线程,64 帧/簇) /
+    <2GB=critical(1 线程,16 帧/簇下限)；探针不可用 ⇒ unknown 全默认零语义）；
+    `probe_memory` = GlobalMemoryStatusEx → psutil → (None,None)。
+  - 接线：`_grab_frames_parallel` 线程数与档位取 min；`isc_l2_index.build_tp_index` 新参
+    `max_cluster_frames`（簇切小只改批次不改帧，times/feats 逐字节一致）；
+    `/api/settings/device` 响应补 `low_memory_mode/memory_tier/grab_workers/max_cluster_frames`
+    （schema 同步）。新增 `mvp/tests/test_resource_budget.py` 7 项。
+- **③ 阶段进度防抖+心跳**：
+  - 新增 `mvp/api/tasks/debounce.py` `ProgressDebouncer`：同阶段连续帧按最小间隔（0.5s）合并
+    只留最新 held；阶段切换/终态(percent≥100)立即直通；held 在下次发布前先补发（旧值先于新值，
+    无信息丢失）。analyze/render 两 worker 的 on_progress 接线。新增
+    `mvp/api/tests/test_progress_debounce.py` 6 项。
+  - 心跳：`Task.last_event_at`（各状态变更打戳，to_dict 暴露，UI 契约同步）——轮询方据此区分
+    「没消息但在动」与「真卡死」（竞品 heartbeat/progress_updated_at 同语义）。
+    进度条 0.2s 宽度过渡既有，无需改 UI。
+- **门禁**：后端 **578 OK (skipped=2)**（569+9 新增）· API **111 OK**（105+6）·
+  vitest **144 全绿**（142+2）· 双 typecheck 干净。零定位语义（① 只在内存紧张档改变批次/
+  并发，宽裕档全默认；②③ 观测与发布层）。
