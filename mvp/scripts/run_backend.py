@@ -25,6 +25,12 @@ except ModuleNotFoundError:  # pragma: no cover - 源码树直跑形态
 
 
 def main() -> None:
+    import multiprocessing
+
+    # ④ 任务级进程隔离（2026-10-07）：打包态 Windows spawn 子进程会以
+    # ``backend.exe --multiprocessing-fork`` 重跑本 exe——freeze_support 必须在
+    # 任何进一步初始化之前调用（非冻结形态 = no-op）。
+    multiprocessing.freeze_support()
     host = os.environ.get("SVL_BACKEND_HOST", "127.0.0.1")
     try:
         port = int(os.environ.get("SVL_BACKEND_PORT", "8765"))

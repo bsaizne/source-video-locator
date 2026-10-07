@@ -18,6 +18,7 @@ from app.models import ProgressEvent, ProgressStage
 from infrastructure.errors import ApplicationError, public_error
 
 from .debounce import ProgressDebouncer
+from .isolated import isolation_enabled
 from .models import Task, TaskKind, TaskStage
 
 LogFn = Callable[..., None]
@@ -88,11 +89,68 @@ def map_progress_stage(ev: ProgressEvent) -> tuple[TaskStage, float]:
     return stage, float(base)
 
 
-def run_worker(task: Task, service, *, log: LogFn | None = None) -> None:
-    """后台线程入口：跑一次 locate 并更新 task 状态。永不抛出（异常转 task.error/failed）。"""
+class _NoRenderBatch(Exception):
+    """render 任务缺结果批的内部信号（对外话术 = 原样文案）。"""
+
+
+def execute_task(task: Task, service, *, on_progress) -> dict:
+    """任务主体（merge→locate / render），返回 result dict；**不碰 task 状态**。
+
+    父进程线程内路径与子进程隔离路径（``isolated._child_main``）共用。取消由
+    service 以 ApplicationError 穿透（子进程路径由父进程 terminate 收口）。
+    注意：合并原片路径下 ``task.original_path`` 的回写只发生在调用方进程内——
+    隔离子进程里的回写不影响父进程任务对象（结果批内容不受影响）。
+    """
     if task.kind is TaskKind.RENDER:
-        run_render_worker(task, service, log=log)
+        batch = task.render_batch
+        if batch is None:
+            batch = getattr(service, "last_result_batch", lambda: None)()
+        if batch is None:
+            raise _NoRenderBatch("没有可渲染的结果批（请先完成一次分析）")
+        params = dict(task.render_params or {})
+        info = service.render_movie(
+            batch,
+            out_dir=params.get("out_dir") or None,
+            min_confidence=params.get("min_confidence"),
+            low_policy=params.get("low_policy"),
+            snap_scenes=params.get("snap_scenes"),
+            on_progress=on_progress,
+            cancel_token=task.token)
+        return {"kind": "render", **info}
+    # 多原片输入（2026-09-29 video.concat 移植）：≥2 段先物理合并为单文件，
+    # 产物回写 task.original_path，下游 locate/结果/导出维持单原片口径。
+    original = task.original_path
+    sources = [p for p in task.original_paths if str(p).strip()]
+    if len(sources) > 1:
+        info = service.merge_originals(sources, on_progress=on_progress,
+                                       cancel_token=task.token)
+        original = str(info["merged_path"])
+        task.original_path = original
+    elif len(sources) == 1 and not original:
+        original = sources[0]
+    batch = service.locate(
+        task.edited_path,
+        original,
+        on_progress=on_progress,
+        cancel_token=task.token,
+        refine=task.refine,
+    )
+    return batch.to_dict() if hasattr(batch, "to_dict") else batch
+
+
+def run_worker(task: Task, service, *, log: LogFn | None = None,
+               isolated: bool = False) -> None:
+    """后台线程入口：跑一次 locate 并更新 task 状态。永不抛出（异常转 task.error/failed）。
+
+    ``isolated=True``（④ 任务级进程隔离，2026-10-07 立项）：任务在独立子进程执行
+    （硬崩只损失本任务）；spawn 不可用或 ``SVL_TASKS_IN_THREAD=1`` 时回落本线程。"""
+    if task.kind is TaskKind.RENDER:
+        run_render_worker(task, service, log=log, isolated=isolated)
         return
+    if isolated and isolation_enabled():
+        from .isolated import run_worker_isolated
+        if run_worker_isolated(task, service, log=log):
+            return
     if log is None:
         log = lambda *a, **k: None  # noqa: E731
     task.mark_running()
@@ -110,24 +168,7 @@ def run_worker(task: Task, service, *, log: LogFn | None = None) -> None:
             task.update_progress(st, p, message=msg)
 
     try:
-        # 多原片输入（2026-09-29 video.concat 移植）：≥2 段先物理合并为单文件，
-        # 产物回写 task.original_path，下游 locate/结果/导出维持单原片口径。
-        original = task.original_path
-        sources = [p for p in task.original_paths if str(p).strip()]
-        if len(sources) > 1:
-            info = service.merge_originals(sources, on_progress=on_progress,
-                                           cancel_token=task.token)
-            original = str(info["merged_path"])
-            task.original_path = original
-        elif len(sources) == 1 and not original:
-            original = sources[0]
-        batch = service.locate(
-            task.edited_path,
-            original,
-            on_progress=on_progress,
-            cancel_token=task.token,
-            refine=task.refine,
-        )
+        result = execute_task(task, service, on_progress=on_progress)
     except ApplicationError as exc:
         # cancellation 由 service 以 ApplicationError 穿透（_check_cancel）。
         if task.token.is_cancelled():
@@ -145,18 +186,22 @@ def run_worker(task: Task, service, *, log: LogFn | None = None) -> None:
         log("task %s failed [%s] %s: %s\n%s", task.task_id, pub["code"],
             type(exc).__name__, exc, traceback.format_exc())
     else:
-        result = batch.to_dict() if hasattr(batch, "to_dict") else batch
         task.mark_completed(result)
         log("task %s completed", task.task_id)
 
 
-def run_render_worker(task: Task, service, *, log: LogFn | None = None) -> None:
+def run_render_worker(task: Task, service, *, log: LogFn | None = None,
+                      isolated: bool = False) -> None:
     """后台线程入口（``kind=render``）：渲染成片并更新任务状态。永不抛出。
 
     渲染目标是**提交时**锁定的结果批（``task.render_batch``），不读会话"最新批"——
     否则用户在渲染排队期间又跑了一次定位就会渲染错批（竞态）。缺失则回退 service
     最近一次 locate 的结果批（与 ``/api/export`` 同口径）。
     """
+    if isolated and isolation_enabled():
+        from .isolated import run_worker_isolated
+        if run_worker_isolated(task, service, log=log):
+            return
     if log is None:
         log = lambda *a, **k: None  # noqa: E731
     task.mark_running()
@@ -171,23 +216,12 @@ def run_render_worker(task: Task, service, *, log: LogFn | None = None) -> None:
         for st, p, msg in deb.submit(stage, pct, message=ev.message or ""):
             task.update_progress(st, p, message=msg)
 
-    batch = task.render_batch
-    if batch is None:
-        batch = getattr(service, "last_result_batch", lambda: None)()
-    if batch is None:
-        task.mark_failed("没有可渲染的结果批（请先完成一次分析）")
+    try:
+        info = execute_task(task, service, on_progress=on_progress)
+    except _NoRenderBatch as exc:
+        task.mark_failed(str(exc))
         log("task %s failed: no batch to render", task.task_id)
         return
-    params = dict(task.render_params or {})
-    try:
-        info = service.render_movie(
-            batch,
-            out_dir=params.get("out_dir") or None,
-            min_confidence=params.get("min_confidence"),
-            low_policy=params.get("low_policy"),
-            snap_scenes=params.get("snap_scenes"),
-            on_progress=on_progress,
-            cancel_token=task.token)
     except ApplicationError as exc:
         if task.token.is_cancelled():
             task.mark_cancelled()
@@ -204,13 +238,8 @@ def run_render_worker(task: Task, service, *, log: LogFn | None = None) -> None:
         else:
             pub = public_error(exc)
             task.mark_failed(f"{pub['message']}（{pub['code']}）")
-            log("task %s render failed [%s] %s: %s", task.task_id, pub["code"],
-                type(exc).__name__, exc)
-    except Exception as exc:  # noqa: BLE001 — worker 兜住一切，转为 failed
-        pub = public_error(exc)
-        task.mark_failed(f"{pub['message']}（{pub['code']}）")
-        log("task %s render failed [%s] %s: %s", task.task_id, pub["code"],
-            type(exc).__name__, exc)
+            log("task %s render failed [%s] %s: %s\n%s", task.task_id, pub["code"],
+                type(exc).__name__, exc, traceback.format_exc())
     else:
-        task.mark_completed({"kind": "render", **info})
+        task.mark_completed(info)
         log("task %s render completed: %s", task.task_id, info.get("movie_path"))

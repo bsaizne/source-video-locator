@@ -46,7 +46,8 @@ def get_context() -> AppContext:
     service = SourceLocatorService()
     tasks_log = get_logger("tasks")
     return AppContext(service=service,
-                      task_manager=TaskManager(service, log=lambda *a, **k: tasks_log.info(*a, **k)))
+                      task_manager=TaskManager(service, log=lambda *a, **k: tasks_log.info(*a, **k),
+                                               isolated=True))  # ④ 任务级进程隔离（2026-10-07 立项）
 
 
 def get_locator_service(ctx: AppContext = Depends(get_context)) -> SourceLocatorService:

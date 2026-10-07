@@ -1672,3 +1672,32 @@ STATE `Current Task` 顶部新增补八块并把补七的开放项②标为闭�
 - **门禁**：后端 **578 OK (skipped=2)**（569+9 新增）· API **111 OK**（105+6）·
   vitest **144 全绿**（142+2）· 双 typecheck 干净。零定位语义（① 只在内存紧张档改变批次/
   并发，宽裕档全默认；②③ 观测与发布层）。
+
+## 2026-10-07（续62 补六）— ④ 独立 GPU 工作进程监督：任务级进程隔离落地（门禁全绿）
+
+- **作用**：DML 段错误/驱动崩溃不再拖垮整个后端——子进程硬崩只损失单个任务
+  （task 转 failed 带退出码），主服务与其它任务存活（续6/续43 两次段错误教训的工程收口）。
+- **新增 `mvp/api/tasks/isolated.py`**：
+  - `run_worker_isolated`：spawn 子进程 + 监督循环（进度队列 0.5s 轮询 + 存活检查）；
+    **无信封的异常退出 = 段错误/硬崩 ⇒ `mark_failed("工作进程异常退出（exitcode=…）")`**；
+    取消 = 父进程 `terminate`（立即生效，绕过协作式取消）；spawn 不可用 → 返回 False
+    ⇒ `run_worker` 回落线程内（`SVL_TASKS_IN_THREAD=1` 同样强制回落，调试逃生口）。
+  - 子进程 `_child_main`：**自建 `SourceLocatorService()`**（SVL_* env 同源），任务主体复用
+    worker 新抽的 `execute_task`（merge→locate / render 两路径父/子共用，不碰 task 状态）；
+    进度/结果/错误经 multiprocessing.Queue 信封回传；`q.close()+join_thread()` 确保 feeder 冲刷。
+  - 渲染批经 pickle 传参（提交时锁定的 ResultBatch，纯 dataclass 可序列化）。
+  - 故障注入钩子 `_test_force_hard_exit`（payload 顶层或 render_params）：`os._exit` 硬崩模拟，
+    仅供监督路径单测。
+- **接线**：`TaskManager(..., isolated=)`（dependencies 生产=True，测试默认 False）；
+  `run_worker/run_render_worker` 加 `isolated` 分流；`run_backend.main` 补
+  `multiprocessing.freeze_support()`（打包态 Windows spawn 必需；非冻结 no-op）。
+- **测试**：新增 `mvp/api/tests/test_isolated.py` 6 项——真实 spawn×3（硬崩注入 →
+  failed(exitcode=123)；应用层错误信封 → failed(LOC 话术)；提交即取消 → terminate+cancelled）
+  + payload 往返/pickle/环境开关。教训留痕：首轮硬崩用例失败 = 测试把注入键塞进了自己的
+  payload 局部变量而监督者自建 payload——钩子改经 render_params 携带后 6/6 过。
+- **边界（诚实登记）**：① 监督重启（崩溃计数+冷却）未实现——任务全为用户显式发起、
+  无自动重试消费方，等批量/自动重跑形态再立项；② 打包态 spawn（freeze_support 路径）
+  未在包内实测，验证挂 r15 accept；③ 隔离子进程不继承父进程内存缓存（索引/嵌入缓存
+  在文件层，天然共享；嵌入 memo 首任务冷启动属预期代价）。
+- **门禁**：后端 **578 OK (skipped=2)** · API **117 OK**（111+6）· vitest **144 全绿** ·
+  双 typecheck 干净。零定位语义（执行位置变化，结果口径不变）。

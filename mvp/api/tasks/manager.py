@@ -22,10 +22,13 @@ class TaskManager:
     """持有所有在跑 / 已完成的任务，提供提交、查询、取消。线程安全。"""
 
     def __init__(self, service, *, run_in_background: Callable[[Callable[[], None]], None] | None = None,
-                 log: Callable[..., None] | None = None):
+                 log: Callable[..., None] | None = None, isolated: bool = False):
         self._service = service
         self._run = run_in_background or _background_thread
         self._log = log or (lambda *a, **k: None)
+        # ④ 任务级进程隔离（2026-10-07）：True = analyze/render 在独立子进程执行
+        # （硬崩只损失本任务）。生产（dependencies）开启；测试用假 service 默认关。
+        self._isolated = isolated
         self._tasks: dict[str, Task] = {}
         self._lock = threading.Lock()
 
@@ -39,7 +42,8 @@ class TaskManager:
             self._tasks[task.task_id] = task
         self._log("task submitted task_id=%s edited=%s original=%s originals=%s",
                   task.task_id, edited_path, original_path, len(task.original_paths))
-        self._run(lambda: run_worker(task, self._service, log=self._log))
+        self._run(lambda: run_worker(task, self._service, log=self._log,
+                                    isolated=self._isolated))
         return task
 
     def submit_render(self, batch, *, out_dir: str | None = None,
