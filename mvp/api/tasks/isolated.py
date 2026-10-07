@@ -27,9 +27,14 @@ from __future__ import annotations
 import multiprocessing
 import os
 import queue as _queue
+import sys
 from typing import Callable
 
 LogFn = Callable[..., None]
+
+# 正常终态后等子进程自然退出的宽限（秒）：让它冲刷日志缓冲，别急着 SIGTERM（见
+# ``run_worker_isolated`` 的 finally）。超时就按隔离语义硬收。
+CHILD_GRACE_S = 10.0
 
 
 def isolation_enabled() -> bool:
@@ -38,8 +43,13 @@ def isolation_enabled() -> bool:
 
 
 def _payload_of(task) -> dict:
-    """子进程入参：纯可 pickle 对象（路径/参数/锁定的渲染批）。"""
+    """子进程入参：纯可 pickle 对象（路径/参数/锁定的渲染批）。
+
+    带 ``task_id`` = 父进程任务号，子进程日志用它落同一行前缀——否则父进程按
+    task_id 检索包内日志时，隔离子进程里那半段（真正干活的）无法对上。
+    """
     return {"kind": task.kind.value,
+            "task_id": task.task_id,
             "edited_path": task.edited_path,
             "original_path": task.original_path,
             "original_paths": list(task.original_paths),
@@ -50,18 +60,6 @@ def _payload_of(task) -> dict:
 
 def _task_from_payload(payload: dict):
     from .models import Task, TaskKind
-    return Task(kind=TaskKind(payload["kind"]),
-                edited_path=payload["edited_path"],
-                original_path=payload["original_path"],
-                original_paths=list(payload["original_paths"]),
-                refine=payload["refine"],
-                render_params=dict(payload["render_params"]),
-                render_batch=payload.get("render_batch"))
-
-
-def _child_main(payload: dict, q) -> None:
-    """子进程入口（spawn 按引用 pickle：勿改成 lambda/闭包）。"""
-    from .models import Task, TaskKind
     task = Task(kind=TaskKind(payload["kind"]),
                 edited_path=payload["edited_path"],
                 original_path=payload["original_path"],
@@ -69,6 +67,37 @@ def _child_main(payload: dict, q) -> None:
                 refine=payload["refine"],
                 render_params=dict(payload["render_params"]),
                 render_batch=payload.get("render_batch"))
+    # 父子日志同 task_id（售后归因：一条任务跨两个进程的日志要能串起来）
+    if payload.get("task_id"):
+        task.task_id = payload["task_id"]
+    return task
+
+
+def _child_main(payload: dict, q) -> None:
+    """子进程入口（spawn 按引用 pickle：勿改成 lambda/闭包）。"""
+    # 子进程**不走 ASGI lifespan**，而 ``configure_logging()`` 挂在 lifespan startup 上
+    # ⇒ root logger 无 handler，INFO 记录被 lastResort(WARNING) 整段丢掉。
+    # 2026-10-07 r15 accept 实测：包内 stdout 少了 `backend selected=` /
+    # `patch reranker device=dml` / `isc refine device=dml`，「精排/ISC 未回退 CPU」
+    # 两条硬断言因此误红；支持档 video_locator.log 同样缺这段——三级日志是售后
+    # 诊断能力，不是装饰，所以在这里自己配（幂等，读 SVL_LOG_DIR 与父进程同落盘）。
+    try:
+        from infrastructure.logging import configure_logging
+        configure_logging()
+    except Exception:                                      # noqa: BLE001
+        pass                                               # 日志配不上也不能带崩任务
+    # 打包态子进程 stdout 是管道 ⇒ 默认块缓冲。改行缓冲 + 退出前 flush：取消/硬崩路径
+    # 里最后几行日志（设备回报、阶段耗时）也要进得到包内 stdout。
+    for _s in (sys.stdout, sys.stderr):
+        try:
+            _s.reconfigure(line_buffering=True)
+        except Exception:                                  # noqa: BLE001
+            pass
+    # 与父进程同一份还原逻辑（勿在此重抄构造：同一段代码抄两遍就会漏接——续62 教训）
+    task = _task_from_payload(payload)
+    from infrastructure.logging import get_logger
+    get_logger("tasks").info("task %s isolated child booted pid=%s",
+                             task.task_id, os.getpid())
     try:
         # 故障注入钩子（监督路径单测）：payload 顶层或 render_params 皆可携带
         force = (payload.get("_test_force_hard_exit")
@@ -102,9 +131,16 @@ def _child_main(payload: dict, q) -> None:
     finally:
         try:
             q.close()
-            q.join_thread()                               # 确保 feeder 冲刷完再退出
+            q.join_thread()               # 确保 feeder 冲刷完再退出
         except Exception:                                 # noqa: BLE001
             pass
+        for _s in (sys.stdout, sys.stderr):               # 日志尾巴落到包内 stdout
+            try:
+                _s.flush()
+            except Exception:                             # noqa: BLE001
+                pass
+        # 自然 return（不 os._exit）：解释器收尾会把缓冲冲干净，父进程按 CHILD_GRACE_S
+        # 等这一刻。硬崩/取消由父进程 terminate，靠上面的行缓冲+flush  already 尽力留痕。
 
 
 def _traceback(exc) -> str:
@@ -198,6 +234,14 @@ def run_worker_isolated(task, service, *, log: LogFn | None = None) -> bool:
             terminal = True
         return True
     finally:
+        # 拿到终态信封的正常路径：**先等子进程自己退出**再考虑 terminate。
+        # 子进程 stdout 在打包态是管道（块缓冲），立刻 SIGTERM 会把它日志的尾巴整段吞掉——
+        # 2026-10-07 r15 accept 实测：包内 stdout 少了精排/ISC 的 device= 行，
+        # 「精排在 GPU（未回退 CPU torch）」两条硬断言直接红，而任务本身是成功的。
+        # 诊断日志是这层的产品能力（三级日志 / 客服定位真因），不能为了收得快而丢。
+        # 取消与硬崩路径不变：仍立即 terminate，那是隔离的语义。
+        if terminal and not cancelled and proc.is_alive():
+            proc.join(timeout=CHILD_GRACE_S)
         if proc.is_alive():
             proc.terminate()
         proc.join(timeout=30)

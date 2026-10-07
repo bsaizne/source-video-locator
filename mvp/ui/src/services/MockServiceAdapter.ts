@@ -289,6 +289,9 @@ export class MockServiceAdapter implements ServiceAPI {
       stage: 'idle',
       progress: 0,
       created_at: new Date().toISOString(),
+      // 心跳（③ 进度防抖+心跳，2026-10-07）：与后端同口径——建任务时还没有事件，
+      // 首次进度/状态变化才落时间戳。Mock 没有真实进度流，保持 null。
+      last_event_at: null,
       finished_at: null,
       result: null,
       error: null,
@@ -310,6 +313,7 @@ export class MockServiceAdapter implements ServiceAPI {
       stage: 'finished',
       progress: 100,
       created_at: new Date().toISOString(),
+      last_event_at: new Date().toISOString(),   // 已完成 = 终态事件时间（与后端同字段）
       finished_at: new Date().toISOString(),
       result: {
         kind: 'render',
@@ -334,18 +338,20 @@ export class MockServiceAdapter implements ServiceAPI {
 
   async getTask(taskId: string): Promise<TaskJson> {
     if (this._mockTask && this._mockTask.task_id === taskId) return { ...this._mockTask }
-    return {
+    const fallback: TaskJson = {
       task_id: taskId,
       status: 'pending',
       stage: 'idle',
       progress: 0,
       created_at: new Date().toISOString(),
+      last_event_at: null,
       finished_at: null,
       result: null,
       error: null,
       cancel_requested: false,
       message: '',
     }
+    return fallback
   }
 
   async cancelTask(taskId: string): Promise<void> {

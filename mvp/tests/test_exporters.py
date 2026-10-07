@@ -379,15 +379,17 @@ class PlanJianyingAssetsTest(unittest.TestCase):
             t += a.orig_width
 
     def test_identical_range_reuse_shares_stem(self):
-        # 非贴接且扩到同一镜头的两条 clip：区间逐字节相同 → 同名素材（同内容共文件），
-        # 不触发撞名加序号。
+        # 区间逐字节相同 → 同名素材（同内容共文件），不触发撞名加序号。
+        # 中间隔一条不同取材：既避开「紧邻同素材去重」（续63 补二会把连放两遍的相同素材
+        # 合成一条），也是真实复用在时间线上该有的形态。
         plan = [
             ExportClip("main", 0.0, 2.0, 20.0, 60.0, "HIGH", 0.9, seg_index=0),
-            ExportClip("main", 30.0, 32.0, 20.0, 60.0, "HIGH", 0.9, seg_index=1),
+            ExportClip("main", 10.0, 12.0, 300.0, 302.0, "HIGH", 0.9, seg_index=1),
+            ExportClip("main", 30.0, 32.0, 20.0, 60.0, "HIGH", 0.9, seg_index=2),
         ]
         assets = plan_jianying_assets(plan)
-        self.assertEqual(len(assets), 2)
-        self.assertEqual(assets[0].file_stem, assets[1].file_stem)
+        self.assertEqual(len(assets), 3)
+        self.assertEqual(assets[0].file_stem, assets[2].file_stem)
 
     def test_nearby_range_stem_collision_gets_suffix(self):
         # 区间不同但秒级取整撞名 → 第二条加序号，防 extract 拿错内容。
@@ -400,6 +402,40 @@ class PlanJianyingAssetsTest(unittest.TestCase):
 
     def test_empty_plan(self):
         self.assertEqual(plan_jianying_assets([]), [])
+
+    def test_adjacent_identical_material_appears_once(self):
+        """续63 补二（默认开）：剪辑序相邻 + 源区间逐字节相同 = 卷轴里同一段画面连放
+        两遍（r15 包内实测 2mkv ``og1373-1397`` 连放 24s）⇒ 后一条不出素材。"""
+        plan = [
+            ExportClip("main", 0.0, 1.1, 1373.0, 1397.0, "HIGH", 0.9, seg_index=0),
+            ExportClip("main", 2.13, 3.7, 1373.0, 1397.0, "HIGH", 0.9, seg_index=1),
+        ]
+        assets = plan_jianying_assets(plan)
+        self.assertEqual([(a.orig_start, a.orig_end) for a in assets], [(1373.0, 1397.0)])
+        self.assertEqual(assets[0].placements[0]["edited_end"], 24.0)   # 原速一条
+        # 关掉开关回到逐 clip 两条（口径可回退）
+        self.assertEqual(len(plan_jianying_assets(plan, drop_adjacent_duplicates=False)), 2)
+
+    def test_only_immediately_adjacent_and_only_exactly_equal(self):
+        """保守边界：中间隔着别条素材不算重复；嵌套前缀（不同取材）一律保留。"""
+        plan = [
+            ExportClip("main", 0.0, 1.0, 100.0, 127.0, "HIGH", 0.9, seg_index=0),
+            ExportClip("main", 2.0, 3.0, 500.0, 502.0, "HIGH", 0.9, seg_index=1),
+            ExportClip("main", 4.0, 5.0, 100.0, 127.0, "HIGH", 0.9, seg_index=2),  # 隔了一条
+            ExportClip("main", 6.0, 7.0, 100.0, 113.0, "HIGH", 0.9, seg_index=3),  # 嵌套前缀
+        ]
+        assets = plan_jianying_assets(plan)
+        self.assertEqual([(a.orig_start, a.orig_end) for a in assets],
+                         [(100.0, 127.0), (500.0, 502.0), (100.0, 127.0), (100.0, 113.0)])
+
+    def test_dedup_does_not_lose_any_footage(self):
+        """去重后并集覆盖必须不变（相同区间本就不增加覆盖）+ placement 仍首尾相接。"""
+        plan = [ExportClip("main", float(i), float(i) + 1.0, 1373.0, 1397.0,
+                           "HIGH", 0.9, seg_index=i) for i in range(4)]
+        assets = plan_jianying_assets(plan)
+        self.assertEqual(len(assets), 1)
+        for a, b in zip(assets, assets[1:]):
+            self.assertEqual(a.placements[0]["edited_end"], b.placements[0]["edited_start"])
 
 
 @unittest.skipUnless(FFMPEG.exists() and FFPROBE.exists() and SYNTH.exists(),
@@ -539,8 +575,9 @@ class TestServiceExportProject(unittest.TestCase):
         ])
         captured: dict = {}
 
-        def _fake_plan(plan):
+        def _fake_plan(plan, **kw):
             captured["plan"] = [(c.orig_start, c.orig_end) for c in plan]
+            captured["kw"] = kw
             return []
 
         with mock.patch("app.locator_service.plan_jianying_assets", _fake_plan), \

@@ -38,6 +38,12 @@ export interface DeviceSettingsJson {
   /** True when GPU/DML was requested (auto|directml) but the actual backend fell back to CPU. */
   fallback: boolean
   available_devices: string[]
+  /** ① 低内存收缩（2026-10-07）：True = 当前按可用内存降过档（非静默变慢）。 */
+  low_memory_mode?: boolean
+  /** 'ok' | 'tight' | 'critical' | 'unknown'（探针不可用=unknown，宁缺毋假）。 */
+  memory_tier?: string
+  grab_workers?: number
+  max_cluster_frames?: number
 }
 
 export interface TimeSpanJson {

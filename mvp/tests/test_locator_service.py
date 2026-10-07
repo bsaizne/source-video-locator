@@ -315,6 +315,97 @@ class PersistenceTest(unittest.TestCase):
         self.assertEqual(loaded.to_dict(), batch.to_dict())
 
 
+class FixChainTickTest(unittest.TestCase):
+    """修复链两条重腿必须**逐段**发进度（2026-10-07 续63 补五）。
+
+    旧形态：整腿只有边界一条事件 ⇒ 打包日志实测进度条能静止几分钟
+    （10-06 那次：shot_split 18:11:36 → patch_refine 18:20:41 → isc_refine 18:29:55），
+    用户观感就是"卡住了"。两条重腿（fast_global / dense_recheck 每段抓密帧+嵌入）
+    的循环都在 service 里 ⇒ 加 on_tick 逐段回报。
+    """
+
+    @staticmethod
+    def _results(n=5):
+        out = []
+        for i in range(n):
+            r = Result(edited=TimeSpan(i * 4.0, i * 4.0 + 2.0),
+                       original=TimeSpan(40.0 + i * 5.0, 45.0 + i * 5.0),
+                       confidence=Confidence(ConfidenceLevel.HIGH, 0.9))
+            out.append(r)
+        return out
+
+    @staticmethod
+    def _shots(n=5):
+        rng = np.random.RandomState(7)
+        feats = _l2(rng.randn(n, 6, 384).astype(np.float32))
+        times = (np.arange(6) * 0.5).astype(np.float32)
+        return [ShotSegment(TimeSpan(i * 4.0, i * 4.0 + 2.5), feats[i], times)
+                for i in range(n)]
+
+    def _service(self):
+        class _Back:
+            def embed_frames(self, frames, batch_size=8):
+                return np.zeros((len(frames), 384), dtype=np.float32)
+
+            def device_name(self):
+                return "cpu"
+
+        return SourceLocatorService(ffmpeg=_EmptyFFmpeg(), backend=_Back())
+
+    def test_dense_start_recheck_ticks_once_per_result(self):
+        srv = self._service()
+        seen: list[tuple[int, int]] = []
+        srv._apply_dense_start_recheck(self._results(5), self._shots(5), Path("x.mkv"),
+                                       cfg=srv.config.pipeline, cancel_token=None,
+                                       on_tick=lambda done, total: seen.append((done, total)))
+        self.assertEqual([d for d, _ in seen], [0, 1, 2, 3, 4])
+        self.assertTrue(all(total == 5 for _, total in seen), seen)
+
+    def test_fast_global_anchor_ticks_once_per_result(self):
+        bundle, _orig, _times = _continuous_bundle()
+        srv = self._service()
+        seen: list[tuple[int, int]] = []
+        srv._apply_fast_global_anchor(self._results(4), self._shots(4), bundle, "ed.mp4",
+                                      cfg=srv.config.pipeline, cancel_token=None,
+                                      on_tick=lambda done, total: seen.append((done, total)))
+        self.assertEqual([d for d, _ in seen], [0, 1, 2, 3])
+        self.assertTrue(all(total == 4 for _, total in seen), seen)
+
+    def test_text_anchor_ticks_once_per_result(self):
+        """第三条重腿（OCR 字牌复核）也要逐段报——实测它能让进度停 4.2 分钟。"""
+        class _FakeOcr:
+            def ensure(self):
+                return True
+
+            def lines(self, frames):
+                return []
+
+        srv = self._service()
+        srv._ocr_engine = _FakeOcr()
+        seen: list[tuple[int, int]] = []
+        srv._apply_text_anchor(self._results(4), Path("ed.mp4"), "om.mkv",
+                               cfg=srv.config.pipeline, cancel_token=None,
+                               on_tick=lambda done, total: seen.append((done, total)))
+        self.assertEqual([d for d, _ in seen], [0, 1, 2, 3])
+        self.assertTrue(all(total == 4 for _, total in seen), seen)
+
+    def test_legs_still_work_without_a_tick_callback(self):
+        """on_tick 是可选参数：不传时两条腿照常跑（生产默认路径不能依赖回调存在）。"""
+        bundle, _orig, _times = _continuous_bundle()
+        srv = self._service()
+        srv._apply_dense_start_recheck(self._results(2), self._shots(2), Path("x.mkv"),
+                                       cfg=srv.config.pipeline, cancel_token=None)
+        srv._apply_fast_global_anchor(self._results(2), self._shots(2), bundle, "ed.mp4",
+                                      cfg=srv.config.pipeline, cancel_token=None)
+        class _NoOcr:
+            def ensure(self):
+                return False
+
+        srv._ocr_engine = _NoOcr()
+        srv._apply_text_anchor(self._results(2), Path("ed.mp4"), "om.mkv",
+                               cfg=srv.config.pipeline, cancel_token=None)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
 

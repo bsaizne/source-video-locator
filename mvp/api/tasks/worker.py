@@ -52,10 +52,16 @@ _STAGE_RANGES: dict[ProgressStage, tuple[TaskStage, int, int]] = {
 # 真正耗时的逐段精排又被单调钳制挡住。⇒ 按 phase 切成互不重叠的小段，各自推进且不回退。
 # 该表内 current 语义 = **已完成数**（0-based），插值用 current/total（不再 +1）。
 _PHASE_RANGES: dict[tuple[ProgressStage, str], tuple[TaskStage, float, float]] = {
-    (ProgressStage.REFINE, "fix"): (TaskStage.RETRIEVAL, 92, 2),      # 全局修复链（逐步）
-    (ProgressStage.REFINE, "split"): (TaskStage.RETRIEVAL, 94, 1),    # 切镜拆分
-    (ProgressStage.REFINE, "patch"): (TaskStage.RETRIEVAL, 95, 2),    # patch 逐段精排
-    (ProgressStage.REFINE, "isc"): (TaskStage.RETRIEVAL, 97, 1),      # ISC 第二意见逐段
+    # 显示宽度 = 实测耗时占比（run1 1274s + run3 复核：修复链 370s/28% · 拆分 36s/3% ·
+    # patch 495s/38% · ISC 430s/31%，共 6 个点）。
+    # 教训（2026-10-07 三轮才修对）：**按腿的数量平分 = 错**。这个项目 9 条修复腿里
+    # 字牌 OCR 一条就占 363s，锚点 6s、其余合计 2s；按数量分会让重腿挤在 0.2 个点里，
+    # 逐段 tick 发了也被四舍五入成同一个读数（run3 实测 92.8 停 363 秒）。
+    # 跳格间隔估算 = 点数 / 段数 × 每段秒数，run3 的 patch 段实测 18~42s 与该模型一致。
+    (ProgressStage.REFINE, "fix"): (TaskStage.RETRIEVAL, 92.0, 1.7),    # 全局修复链（逐段 tick）
+    (ProgressStage.REFINE, "split"): (TaskStage.RETRIEVAL, 93.7, 0.2),  # 切镜拆分
+    (ProgressStage.REFINE, "patch"): (TaskStage.RETRIEVAL, 93.9, 2.3),  # patch 逐段精排
+    (ProgressStage.REFINE, "isc"): (TaskStage.RETRIEVAL, 96.2, 1.8),    # ISC 第二意见逐段
 }
 
 

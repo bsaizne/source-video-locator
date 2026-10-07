@@ -473,6 +473,10 @@ class ExportConfig:
     #    对既有 clip 维持"只告警不裁剪"(LOC-2001, 反馈既有拍板)不变。
     boundary_split_enabled: bool = True
     boundary_min_piece_s: float = 0.5
+    # 卷轴去「紧邻同素材重复」（2026-10-07 续63 补二，默认开）：卷轴紧凑拼接，
+    # 剪辑序相邻且源区间逐字节相同的两条会在剪映里把同一段画面连放两遍（r15 包内
+    # 实测 2mkv ``og1373-1397`` 连放 24s）。只砍**完全相同**的紧邻条，嵌套前缀型保留。
+    jianying_drop_adjacent_duplicates: bool = True
 
 
 @dataclass

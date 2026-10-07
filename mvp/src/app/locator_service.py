@@ -31,8 +31,7 @@ from engine.confidence import ConfidenceEngine
 from engine.feature_store import FeatureStore, FeatureStoreError, IndexBundle
 from engine.localization.evidence_localize import EvidenceLocalizer, EvidenceResult
 from engine.localization.degradation_gate import (apply_degradation_gate,
-                                                  duplicate_claim_warnings,
-                                                  fragment_warnings)
+                                                  duplicate_claim_warnings)
 from engine.localization.dense_start_check import dense_start_shift
 from engine.localization.patch_refine import apply_patch_refine
 from engine.localization import isc_l2_index as engine_isc_l2
@@ -67,11 +66,9 @@ from media.ffmpeg import FFmpegIO, MediaError
 from media.ffmpeg.source_merge import SourceVideoMerger
 from media.ffmpeg.timeline_render import TimelineMovieRenderer
 
-from .exporters import (EXPORT_FORMATS, ExportClip, build_export_plan,
-                        create_jianying_draft_dir, expand_material_spans,
-                        plan_jianying_assets, split_clips_at_boundaries,
+from .exporters import (EXPORT_FORMATS, ExportClip, create_jianying_draft_dir,
+                        plan_jianying_assets, prepare_channel_plan,
                         render_edl, render_fcp7_xml, seconds_to_frames,
-                        snap_clips_to_scenes, trim_adjacent_source_overlaps,
                         write_jianying_draft)
 from .models import CancellationToken, ProgressEvent, ProgressStage
 
@@ -678,7 +675,7 @@ class SourceLocatorService:
                        applied, n, cfg.vote_prior_min_support, cfg.vote_prior_max_shift_s)
 
     def _apply_fast_global_anchor(self, results, shots, bundle, edited, *,
-                                  cfg, cancel_token) -> None:
+                                  cfg, cancel_token, on_tick=None) -> None:
         """快速全局锚定（PROJECT_FAST_GLOBAL_ANCHOR, 2026-09-28 立项"立"）。
 
         vote_prior 同内核超集: 输入=8fps dense 缓存降采样至 fast_global_fps(默认3fps, 零额外解码),
@@ -710,6 +707,8 @@ class SourceLocatorService:
         applied = 0
         for idx, (result, shot) in enumerate(zip(results, shots)):
             self._check_cancel(cancel_token)
+            if on_tick is not None:
+                on_tick(idx, n)     # 逐段报一次（本腿每段都要密帧+锚定，整腿可达分钟级）
             if result.failure_reason or result.not_in_source:
                 continue
             span = result.original
@@ -765,7 +764,7 @@ class SourceLocatorService:
                        cfg.fast_global_fps)
 
     def _apply_dense_start_recheck(self, results, shots, orig_path, *,
-                                   cfg, cancel_token) -> None:
+                                   cfg, cancel_token, on_tick=None) -> None:
         """P0 密集起点复核（竞品 dense_alignment 语义重建, DECISIONS 2026-09-26 豁免裁决）。
 
         已定位主 span 起点 ±margin @10fps 密集窗, 查询侧取段内采样帧 3 个均匀代表帧做
@@ -777,6 +776,8 @@ class SourceLocatorService:
         n = len(results)
         applied = 0
         for idx, (result, shot) in enumerate(zip(results, shots)):
+            if on_tick is not None:
+                on_tick(idx, n)     # 本腿逐段抓密集窗，整腿可达分钟级
             if result.failure_reason or result.not_in_source:
                 continue
             span = result.original
@@ -914,9 +915,9 @@ class SourceLocatorService:
         - **紧凑拼接**：按记录（剪辑）时间轴顺序取主定位 clip，逐段从**原片**取
           ``[orig_start, orig_end]``；未定位/被排除/门槛之下的段**直接跳过**，
           不填黑场（竞品有黑场腿，我方明确不落地）。成片时长 = Σ 片段时长。
-        - clip 来源与 NLE 工程**同一套计划代码**：``build_export_plan``（门槛/不导规则）
-          → ``snap_clips_to_scenes``（切点吸附）→ ``split_clips_at_boundaries``
-          （真实转场切点展开 + 单帧守卫），保证成片与 EDL/XML 的时间线内容一致。
+        - clip 来源与 NLE 工程**同一套计划代码**：``exporters.prepare_channel_plan``
+          （``channel="movie"``）——门槛/不导规则 → 切点吸附 → 转场展开 → 去重叠，
+          四通道（成片/EDL/FCP7 XML/剪映卷轴）共用同一序列，保证时间线内容一致。
         - **音轨 = 原片对应区间音频**（统一 aac/48k/stereo），不用解说轨。
         - 逐段帧数校验 + 输出总帧数校验；硬件 H.264 失败拉黑回退 libx264；
           停滞看门狗与取消在 ``media.ffmpeg.timeline_render`` 内。
@@ -938,8 +939,6 @@ class SourceLocatorService:
             raise ApplicationError(f"invalid low_policy: {lp!r}")
 
         orig_path = Path(batch.original_video)
-        plan = build_export_plan(batch, min_confidence=mc, low_policy=lp,
-                                 include_subs=False)
         scenes, orig_duration = None, None
         try:
             bundle = self.store.load_index(orig_path)
@@ -949,20 +948,18 @@ class SourceLocatorService:
             if do_snap:
                 self._log.warning("render: scene snap skipped, index unavailable for %s",
                                   orig_path.name)
-        if do_snap and plan:
-            snap_clips_to_scenes(plan, scenes, tol_s=float(xcfg.snap_tolerance_s),
-                                 orig_duration=orig_duration)
-        if xcfg.boundary_split_enabled and plan and scenes is not None:
-            split_clips_at_boundaries(plan, scenes,
-                                      min_piece_s=float(xcfg.boundary_min_piece_s),
-                                      orig_duration=orig_duration)
-        # 相邻贴接段源区间去重叠（2026-10-06 修「成片里同一画面出现两次」）：
-        # 定位段源窗有 min_span_s=2.0 地板，短剪辑段必然与邻段交叠。
-        # 这里不额外 ffprobe（编排层不探测）：单帧守卫只是"别切出 1 帧闪烁段"的兜底，
-        # 25fps 名义帧长足够；真实帧数校验在渲染层 expected_frames/verify_segment_frames。
-        n_trim = trim_adjacent_source_overlaps(plan)
-        if n_trim:
-            self._log.info("adjacent dedup: %d 对贴接段源区间被裁到不重叠", n_trim)
+        # 计划 = 四通道共用序列 ``prepare_channel_plan``（2026-10-07 收口：原先三处各抄一遍，
+        # 去重叠接线漏过剪映通道 ⇒ 序列差异本身就是漏接的载体）。
+        # 成片口径：不额外 ffprobe（编排层不探测），去重叠的单帧守卫用 25fps 名义帧长；
+        # 真实帧数校验在渲染层 expected_frames/verify_segment_frames。
+        plan, stats = prepare_channel_plan(
+            batch, channel="movie", min_confidence=mc, low_policy=lp,
+            scenes=scenes, orig_duration=orig_duration, fps=25.0,
+            snap_scenes=do_snap, snap_tolerance_s=float(xcfg.snap_tolerance_s),
+            boundary_split_enabled=bool(xcfg.boundary_split_enabled),
+            boundary_min_piece_s=float(xcfg.boundary_min_piece_s))
+        if stats["n_trim"]:
+            self._log.info("adjacent dedup: %d 对贴接段源区间被裁到不重叠", stats["n_trim"])
         # 紧凑拼接：按记录时间轴顺序取源片区间；零宽/负宽段由渲染层再过滤一次
         clips = [(c.orig_start, c.orig_end) for c in plan
                  if c.kind in ("main", "low") and c.orig_end > c.orig_start]
@@ -1042,23 +1039,40 @@ class SourceLocatorService:
         # 统一发 REFINE 阶段事件；首条落在链入口（此前此处到导出之间零消息 ⇒ UI 卡感）。
         # 子阶段切片（2026-10-06 修「92% 卡死」）：修复链原先整段只有这一条 current=0 事件
         # ⇒ 实测几分钟停在 92.1。改为按 5 个粗步发 phase="fix" 事件（current=已完成步数）。
-        _FIX_STEPS = 5
-        _fix_done = [0]
+        # 进度口径（2026-10-07 续63 补五）：原先 5 个粗步把 9 条腿挤在一起，而两条重腿
+        # （fast_global / dense_recheck 逐段抓密帧+嵌入）内部**一条事件都不发**
+        # ⇒ 打包日志实测单条腿能让进度条静止几分钟（18:11:36 → 18:20:41 → 18:29:55）。
+        # 改为按工作量加权的连续 ramp：每条腿有"进入/完成"边界事件，两条逐段重腿在腿内
+        # 按段插值。**只改进度发射**——腿的顺序、开关、结果口径逐字不变。
+        _FIX_UNITS = 48
+        _fix_pos = [0]
 
-        def _fix_step(label: str) -> None:
-            _fix_done[0] += 1
-            self._notify(on_progress, ProgressStage.REFINE, current=_fix_done[0],
-                         total=_FIX_STEPS, phase="fix", message=label)
+        def _fix_to(units: int, label: str) -> None:
+            """把修复链进度推到 units（单调钳制，不回退；同值不重发）。"""
+            target = max(_fix_pos[0], min(_FIX_UNITS, int(units)))
+            if target == _fix_pos[0] and target != 0:
+                return
+            _fix_pos[0] = target
+            self._notify(on_progress, ProgressStage.REFINE, current=target,
+                         total=_FIX_UNITS, phase="fix", message=label)
 
-        self._notify(on_progress, ProgressStage.REFINE, current=0,
-                     total=_FIX_STEPS, phase="fix", message="画面深度复核：整体一致性校验")
+        def _fix_tick(lo: int, hi: int, label: str):
+            """生成腿内 tick：把 done/total 映射进 [lo, hi) 的 90%（末 10% 留给收尾边界）。"""
+            def _tick(done: int, total: int) -> None:
+                n = max(int(total), 1)
+                _fix_to(lo + int((hi - lo) * 0.9 * done / n), label)
+            return _tick
+
+        _fix_to(0, "画面深度复核：整体一致性校验")
+        _fix_to(1, "画面深度复核：全局锚点复核")
         if getattr(self.config.pipeline, "fast_global_enabled", False):
             # 快速全局锚定（立项 2026-09-28）: vote_prior 同内核超集(密帧/无帽/分散度门/保宽度),
             # 启用时**替换** vote_prior 应用点, 同一机制不叠加二次平移。
             try:
                 self._apply_fast_global_anchor(results, shots, bundle, edited,
                                                cfg=self.config.pipeline,
-                                               cancel_token=cancel_token)
+                                               cancel_token=cancel_token,
+                                               on_tick=_fix_tick(1, 6, "画面深度复核：全局锚点复核"))
             except ApplicationError:
                 raise
             except Exception:
@@ -1074,23 +1088,28 @@ class SourceLocatorService:
                 raise
             except Exception:
                 self._log.exception("offset vote prior failed (non-fatal)")
+        _fix_to(6, "画面深度复核：全局锚点复核")
         if getattr(self.config.pipeline, "dense_recheck_enabled", False):
             # P0 密集起点复核（续10i/k, DECISIONS 2026-09-26 豁免裁决）: 在全部定位/重排之前
             # 修正主 span 起点, 让下游(text_anchor/seq_dp/temporal_repair)看到修正后的位置。
             try:
                 self._apply_dense_start_recheck(results, shots, orig_path,
                                                 cfg=self.config.pipeline,
-                                                cancel_token=cancel_token)
+                                                cancel_token=cancel_token,
+                                                on_tick=_fix_tick(7, 9,
+                                                                  "画面深度复核：起点密集复核"))
             except ApplicationError:
                 raise
             except Exception:
                 self._log.exception("dense start recheck failed (non-fatal)")
-        _fix_step("画面深度复核：全局锚点复核")
+        _fix_to(9, "画面深度复核：起点密集复核")
+        _fix_to(10, "画面深度复核：字牌复核")
         if self.config.pipeline.text_anchor_enabled:
             try:
                 self._apply_text_anchor(results, edited, orig_path,
                                         cfg=self.config.pipeline,
-                                        cancel_token=cancel_token)
+                                        cancel_token=cancel_token,
+                                        on_tick=_fix_tick(10, 42, "画面深度复核：字牌复核"))
             except ApplicationError:
                 raise
             except Exception:
@@ -1104,7 +1123,9 @@ class SourceLocatorService:
                 raise
             except Exception:
                 self._log.exception("sequence rerank failed (non-fatal)")
-        _fix_step("画面深度复核：字牌与序列复核")
+        _fix_to(42, "画面深度复核：字牌复核")
+        _fix_to(44, "画面深度复核：序列复核")
+        _fix_to(45, "画面深度复核：时序复核")
         if self.config.pipeline.temporal_repair_enabled:
             try:
                 self._apply_temporal_repair(results, bundle, edited,
@@ -1131,7 +1152,7 @@ class SourceLocatorService:
                 raise
             except Exception:
                 self._log.exception("temporal ambiguity failed (non-fatal)")
-        _fix_step("画面深度复核：时序与冲突复核")
+        _fix_to(47, "画面深度复核：冲突与歧义复核")
         # E1 连续重复起点修正（竞品 resolve_consecutive_scene_offsets 语义重建, 默认关）:
         # 放在全部定位/重排之后、退化门前 = 看到的是最终主 span; 平移只动后段起点。
         if getattr(self.config.pipeline, "resolve_consecutive_enabled", False):
@@ -1157,7 +1178,7 @@ class SourceLocatorService:
                 raise
             except Exception:
                 self._log.exception("consecutive offset resolve failed (non-fatal)")
-        _fix_step("画面深度复核：连续重复修正")
+        _fix_to(48, "画面深度复核：连续重复与一致性校验")
         # 退化拒绝门 + 场景覆盖门槛（竞品 results.validation 语义, 2026-09-28 续19; 默认关）。
         # 放在全部定位/重排之后 = 看到的是最终主 span 归属, 重复率判定才有意义。
         gate = apply_degradation_gate(
@@ -1170,7 +1191,6 @@ class SourceLocatorService:
             self._log.info("degradation gate rejected=%d subs_dropped=%d subs_kept=%d",
                            len(gate.rejected), gate.subs_dropped, gate.subs_kept)
         self._last_gate_stats = gate
-        _fix_step("画面深度复核：整体一致性校验")
         # 段级拆分（2026-09-30 续32 形态4 runtime 化, engine/localization/shot_split.py;
         # 2026-10-01 续35 默认开）。放在全部定位/门/重排之后 = 看到最终主 span；宽 span 保全 ⇒
         # 严格口径结构性零回退；导出/渲染契约不变（仍每条结果导主 span）。
@@ -1519,13 +1539,6 @@ class SourceLocatorService:
         orig_path = Path(batch.original_video)
 
         self._notify(on_progress, ProgressStage.EXPORT, message=f"正在导出 {fmt}")
-        # 计划：门槛 + 不导规则 + 主 span 展平（候选子 span 不进剪辑软件——反馈二轮）
-        plan = build_export_plan(batch, min_confidence=mc, low_policy=lp, include_subs=False)
-        # 导出前碎片告警（竞品 segments.builder 语义）：只告警不裁剪，透传给 UI 由用户决定。
-        self.last_export_warnings = fragment_warnings(
-            plan, min_clip_s=float(self.config.export.min_clip_s))
-        for w in self.last_export_warnings:
-            self._log.warning("export guard: %s", w)
         # 场景切点吸附（TODO 第 2 项）：scenes.npy 边界 ±tol；索引不可用则降级
         scenes, orig_duration, bundle = None, None, None
         try:
@@ -1540,35 +1553,38 @@ class SourceLocatorService:
         if width_mode not in ("scene", "core"):
             raise ApplicationError(f"invalid material_width: {width_mode!r}")
         do_expand = width_mode == "scene"
-        n_snapped = 0
-        if do_snap and plan:
-            n_snapped = snap_clips_to_scenes(
-                plan, scenes, tol_s=float(xcfg.snap_tolerance_s),
-                orig_duration=orig_duration)
-        # 展示层两件套①（竞品 boundary_guard._record_boundary_split 语义, 2026-09-29）:
-        # 跨镜头主 clip 在内部真实转场切点上展开成多段（记录侧等比分配, 单帧守卫=
-        # <min_piece_s 碎片并入邻段）; 索引不可用则降级跳过。
-        n_split = 0
-        if xcfg.boundary_split_enabled and plan and scenes is not None:
-            n_split = split_clips_at_boundaries(
-                plan, scenes, min_piece_s=float(xcfg.boundary_min_piece_s),
-                orig_duration=orig_duration)
-            if n_split:
-                self._log.info("boundary split: %d clips expanded (min_piece=%.2fs)",
-                               n_split, float(xcfg.boundary_min_piece_s))
-        # 元数据：源片/编辑片 fps（timecode 换算）+ 分辨率（XML/剪映字段）
+        # 元数据：源片/编辑片 fps（timecode 换算 + 去重叠单帧守卫）+ 分辨率（XML/剪映字段）
         meta = self._probe_meta(orig_path)
         rec_meta = self._probe_meta(Path(batch.edited_video)) if batch.edited_video else None
         source_fps = (meta.get("fps") if meta else None) or 25.0
         record_fps = (rec_meta.get("fps") if rec_meta else None) or source_fps
 
-        # 相邻贴接段源区间去重叠（2026-10-06，同成片渲染口径）：EDL/XML 是"逐段取材再
-        # 拼接"的时间线，交叠不裁就会在成片里重复同一画面。2026-10-07 统一语义：
-        # 剪映卷轴分支也施加同一函数（在取材扩展之后，见下），四通道一套去重。
-        if fmt in ("edl", "fcp7_xml"):
-            n_trim = trim_adjacent_source_overlaps(plan, fps=float(source_fps))
-            if n_trim:
-                self._log.info("export adjacent dedup: %d 对贴接段源区间已裁开", n_trim)
+        # 计划 = 四通道**共用**序列 ``prepare_channel_plan``（2026-10-07 收口：原先在本函数
+        # 与 render_movie 里各抄一遍，去重叠接线漏过剪映通道）。通道差异只允许是参数差异：
+        # 剪映在序列内做取材扩宽（扩宽**之后**才去重叠，否则被撑回的交叠漏裁），EDL/XML 不扩。
+        plan, stats = prepare_channel_plan(
+            batch, channel=fmt, min_confidence=mc, low_policy=lp,
+            scenes=scenes, orig_duration=orig_duration, fps=float(source_fps),
+            snap_scenes=do_snap, snap_tolerance_s=float(xcfg.snap_tolerance_s),
+            boundary_split_enabled=bool(xcfg.boundary_split_enabled),
+            boundary_min_piece_s=float(xcfg.boundary_min_piece_s),
+            material_expand=(fmt == "jianying" and xcfg.material_expand
+                             and do_expand and bundle is not None),
+            min_clip_s=float(xcfg.min_clip_s))
+        n_snapped = stats["n_snapped"]
+        # 导出前碎片告警（竞品 segments.builder 语义）：门槛后、吸附前算，只告警不裁剪，
+        # 透传给 UI 由用户决定（口径与收口前一致）。
+        self.last_export_warnings = list(stats["warnings"])
+        for w in self.last_export_warnings:
+            self._log.warning("export guard: %s", w)
+        if stats["n_split"]:
+            self._log.info("boundary split: %d clips expanded (min_piece=%.2fs)",
+                           stats["n_split"], float(xcfg.boundary_min_piece_s))
+        if stats["n_expanded"]:
+            self._log.info("material expand widened=%d", stats["n_expanded"])
+        if stats["n_trim"]:
+            self._log.info("export adjacent dedup%s: %d 对贴接段源区间已裁开",
+                           " (jianying)" if fmt == "jianying" else "", stats["n_trim"])
 
         out_root = Path(out_dir) if out_dir else self.export_root
         stem = Path(batch.edited_video).stem if batch.edited_video else "results"
@@ -1597,19 +1613,13 @@ class SourceLocatorService:
                 height=int((meta or {}).get("height") or 1080))
             clips_dir = draft_dir / "clips"
             clips_dir.mkdir(parents=True, exist_ok=True)
-            # 取材扩展 v5（反馈四轮）：核心窗口扩成所在完整原片镜头（scenes.npy 定界）
-            if xcfg.material_expand and do_expand and bundle is not None:
-                n_exp = expand_material_spans(plan, bundle.scenes)
-                self._log.info("material expand widened=%d", n_exp)
-            # 相邻贴接段源区间去重叠（2026-10-07 统一语义）：与成片/EDL/XML 同一套
-            # ``trim_adjacent_source_overlaps``，取代本函数旧"重叠回并"——回并会把
-            # 非贴接的真实复用一并吞掉、与时间线三通道不一致。必须在取材扩展**之后**
-            # 执行（扩宽会把相邻段重新撑出交叠）。
-            n_trim = trim_adjacent_source_overlaps(plan, fps=float(source_fps))
-            if n_trim:
-                self._log.info("export adjacent dedup (jianying): %d 对贴接段源区间已裁开",
-                               n_trim)
-            assets = plan_jianying_assets(plan)
+            # 取材扩宽与去重叠都已在 ``prepare_channel_plan(channel="jianying")`` 内完成
+            # （扩宽在前、去重叠在后——顺序反过来会漏裁被扩宽重新撑出的交叠）。
+            # 逐 clip 一条素材（2026-10-07 统一语义，取代旧"重叠回并"：回并只看源区间，
+            # 会把非贴接的真实复用与源序回跳段一并吞掉）。
+            assets = plan_jianying_assets(
+                plan, drop_adjacent_duplicates=bool(
+                    xcfg.jianying_drop_adjacent_duplicates))
             n_clips = len(assets)
             for i, asset in enumerate(assets):
                 self._check_cancel(cancel_token)
@@ -2063,7 +2073,8 @@ class SourceLocatorService:
 
     def _apply_text_anchor(self, results: list[Result], edited: Path, original: str,
                            *, cfg: PipelineConfig,
-                           cancel_token: CancellationToken | None = None) -> None:
+                           cancel_token: CancellationToken | None = None,
+                           on_tick=None) -> None:
         """OCR 文字锚点重排(Phase 21 首选第二信号,非致命)。
 
         查询段帧有内容文字(过滤 TikTok 水印)时,对每个候选窗(主 span/子 span ±2s)
@@ -2078,8 +2089,11 @@ class SourceLocatorService:
             return
         orig = Path(original)
         n_promoted = 0
-        for r in results:
+        n = len(results)
+        for idx, r in enumerate(results):
             self._check_cancel(cancel_token)
+            if on_tick is not None:
+                on_tick(idx, n)     # 每段要抽 2×候选窗帧并跑 OCR，整腿可达分钟级（实测 4.2 分钟）
             if r.not_in_source:
                 continue
             windows: list[tuple[str, float, float]] = [

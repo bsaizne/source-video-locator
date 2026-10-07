@@ -106,6 +106,28 @@ def main() -> int:
         check("冒烟耗时在阈值内", summary.get("wall_s", 1e9) <= SMOKE_WALL_S,
               "%.1fs <= %.1fs" % (summary.get("wall_s", 1e9), SMOKE_WALL_S))
         check("定位出结果", summary.get("segments", 0) > 0, "segments=%s" % summary.get("segments"))
+        # 打包态任务级进程隔离（六项立项 ④，2026-10-07 续62 补六；r14 及以前没有此项 ⇒ 红）：
+        # PyInstaller 下 spawn 子进程必须起得来（入口 freeze_support 已接），
+        # 证据 = 包内后端 stdout 的隔离启动行。起不来会静默回落线程内执行，
+        # 那正是本项要防的「一崩全崩」形态，所以回落也算失败。
+        check("打包态任务隔离子进程在跑（spawn）",
+              "isolated child started pid=" in text,
+              "缺启动行=未隔离或 spawn 回落线程（r14 无此项属预期红）")
+        # 子进程不走 ASGI lifespan ⇒ 必须自己 configure_logging()。漏了它，root logger
+        # 无 handler，INFO 被 lastResort 丢弃：包内 stdout 与支持档 video_locator.log
+        # 一起失去分析过程记录（2026-10-07 r15 accept 首跑实测，靠下面这条硬断言抓到）。
+        check("隔离子进程日志进得到包内（INFO 未被吞）",
+              "isolated child booted pid=" in text,
+              "缺此行=子进程没配日志，售后档会缺整段分析记录")
+        # 收割状态只作信息打印，不做硬断言：正常终态路径父进程会先等子进程自然退出
+        # （CHILD_GRACE_S），而本冒烟在任务 completed 后立刻收后端 ⇒ 这行常常来不及打。
+        # 真正要守的是「任务成功 + 子进程日志齐」，已由上面三条覆盖。
+        reaped = [ln for ln in text.splitlines() if "isolated child reaped" in ln]
+        print("[info] 隔离子进程收割：%s" % (reaped[-1].split(" - ")[-1] if reaped
+                                            else "未打印（冒烟先收了后端，正常）"), flush=True)
+        check("隔离子进程未被误判为硬崩",
+              "isolated child DIED without envelope" not in text,
+              "出现即子进程崩了没留信封")
     else:
         check("冒烟产物可读", False, str(summary_path))
 

@@ -63,7 +63,11 @@ class TaskManager:
             self._tasks[task.task_id] = task
         self._log("task submitted (render) task_id=%s original=%s edited=%s",
                   task.task_id, task.original_path, task.edited_path)
-        self._run(lambda: run_worker(task, self._service, log=self._log))
+        # ④ 隔离标志必须与 submit_analyze 同源传递：漏了就走默认 False ⇒ 渲染永远在线程内跑，
+        # 而 DML/ffmpeg 崩溃照样拖垮整个后端（2026-10-07 r15 包内成片实测抓到：
+        # 日志里没有 `isolated child started`，也没有 spawn 回落留痕 ⇒ 分支根本没进）。
+        self._run(lambda: run_worker(task, self._service, log=self._log,
+                                     isolated=self._isolated))
         return task
 
     def get(self, task_id: str) -> Task | None:

@@ -47,7 +47,8 @@ describe('session 设备回报徽标', () => {
   it('buildIndex 的索引历史 backend 标签不覆盖徽标（actual 保持权威）', async () => {
     const getDeviceSettings = vi.fn(async () => device())
     const stale: IndexStatus = {
-      status: 'VALID',
+      indexMeta: null,
+      validation: { status: 'VALID', reason: null },
       backend: { deviceName: 'cpu', deviceType: 'cpu', isAccelerator: false, fallback: false },
     }
     const buildIndex = vi.fn(async () => stale)
@@ -62,7 +63,7 @@ describe('session 设备回报徽标', () => {
     await session.loadDeviceSettings()
     expect(session.backend?.deviceType).toBe('amd')
     await session.buildIndex('D:/m/source.mkv')
-    expect(session.indexStatus?.status).toBe('VALID')   // 索引状态照常更新
+    expect(session.indexStatus?.validation.status).toBe('VALID')   // 索引状态照常更新
     expect(session.backend?.deviceType).toBe('amd')     // 徽标不被历史标签拉成 cpu
     setServiceForTest(null)
   })

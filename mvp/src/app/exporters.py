@@ -39,10 +39,14 @@ __all__ = [
     "seconds_to_frames", "timecode_ndf", "render_edl", "render_fcp7_xml",
     "plan_jianying_assets", "create_jianying_draft_dir", "write_jianying_draft",
     "expand_material_spans",
-    "EXPORT_FORMATS",
+    "EXPORT_FORMATS", "CHANNELS", "prepare_channel_plan", "audit_source_overlaps",
 ]
 
 EXPORT_FORMATS = ("edl", "fcp7_xml", "jianying")
+# 四个产物出口（2026-10-07 常态守卫）：成片渲染 + 三种 NLE 工程。
+# 历史教训：同一套计划序列写三遍，「去重叠」接线时漏了剪映（续62 主件改了
+# 成片/EDL/XML，补二才统一）⇒ 通道差异只允许是 prepare_channel_plan 的参数差异。
+CHANNELS = ("movie", "edl", "fcp7_xml", "jianying")
 JIANYING_APP_VERSION = "5.9.0"   # beta 锁定目标版本（真机验收前不升级承诺）
 
 # main span 与子 span 去重容差（秒）：子 span 与主 span 几乎重合时不重复导出
@@ -389,6 +393,122 @@ def trim_adjacent_source_overlaps(plan: list[ExportClip], *, fps: float = 25.0,
 
 
 # --------------------------------------------------------------------- #
+# 四通道共用编排（2026-10-07 常态守卫）
+# --------------------------------------------------------------------- #
+def prepare_channel_plan(batch: ResultBatch, *, channel: str,
+                         min_confidence: str = "MEDIUM",
+                         low_policy: str = "exclude",
+                         scenes=None, orig_duration: float | None = None,
+                         fps: float = 25.0,
+                         snap_scenes: bool = True,
+                         snap_tolerance_s: float = 1.0,
+                         boundary_split_enabled: bool = True,
+                         boundary_min_piece_s: float = 0.5,
+                         material_expand: bool = False,
+                         min_clip_s: float | None = None
+                         ) -> tuple[list[ExportClip], dict]:
+    """四个产物出口**共用**的导出计划序列（纯函数，不探测、不 IO）。
+
+    动因：同一套五步序列原先在 ``locator_service`` 里抄了三遍（成片 / EDL+XML / 剪映），
+    重复的编排代码本身就是「改一处漏一处」的载体——去重叠接线第一次就漏了剪映通道。
+    收成唯一入口后，通道之间**只允许有参数差异**，不允许有序列差异。
+
+    顺序硬固定（改了会改产物）：
+    ``build_export_plan``（门槛/不导规则，主 span only）→
+    ``fragment_warnings``（只告警不裁，LOC-2001）→ ``snap_clips_to_scenes``（切点吸附）→
+    ``split_clips_at_boundaries``（真实转场展开 + 单帧守卫）→
+    可选 ``expand_material_spans``（剪映取材扩宽）→
+    ``trim_adjacent_source_overlaps``（去重叠；**必须在扩宽之后**，否则被撑回的交叠漏裁）。
+
+    ``channel`` 只进 ``stats`` 供留痕与守卫核对；**唯一的通道硬约束**是取材扩宽：
+    ``expand_material_spans`` 是剪映卷轴专属（把核心窗扩成所在整镜头），时间线三通道
+    （成片/EDL/FCP7 XML）从不扩宽——2026-10-07 收口当日就把这参数误透给三通道，
+    EDL 并集覆盖 134s→531s（画面被撑成整镜头），靠包体探针抓回，故改为硬报错。
+    返回 ``(plan, stats)``，``stats`` = ``{channel, n_built, n_snapped, n_split,
+    n_expanded, n_trim, warnings, audit_pre_trim, audit}``。
+    """
+    if channel not in CHANNELS:
+        raise ValueError(f"invalid channel: {channel!r} (expected one of {CHANNELS})")
+    if material_expand and channel != "jianying":
+        raise ValueError(f"material_expand 只允许 channel='jianying'（当前 {channel!r}）："
+                         "时间线通道扩宽会改变导出画面范围，不是参数差异而是语义差异")
+    plan = build_export_plan(batch, min_confidence=min_confidence,
+                             low_policy=low_policy, include_subs=False)
+    warns: list[str] = []
+    if min_clip_s is not None and plan:
+        from engine.localization.degradation_gate import fragment_warnings
+        warns = list(fragment_warnings(plan, min_clip_s=float(min_clip_s)))
+    n_snapped = 0
+    if snap_scenes and plan:
+        n_snapped = snap_clips_to_scenes(plan, scenes, tol_s=float(snap_tolerance_s),
+                                         orig_duration=orig_duration)
+    n_split = 0
+    if boundary_split_enabled and plan and scenes is not None:
+        n_split = split_clips_at_boundaries(plan, scenes,
+                                            min_piece_s=float(boundary_min_piece_s),
+                                            orig_duration=orig_duration)
+    n_expanded = 0
+    if material_expand and plan and scenes is not None:
+        n_expanded = expand_material_spans(plan, scenes)
+    # 去重叠**之前**的计划层体检（只读）：与之后各算一次，供调用方/验收断言
+    # 「重复裁到 0、并集覆盖一块不丢、真实复用没被动」。见 ``audit_source_overlaps``。
+    audit_pre = audit_source_overlaps(plan)
+    n_trim = trim_adjacent_source_overlaps(plan, fps=float(fps)) if plan else 0
+    return plan, {"channel": channel, "n_built": len(plan), "n_snapped": n_snapped,
+                  "n_split": n_split, "n_expanded": n_expanded, "n_trim": n_trim,
+                  "warnings": warns,
+                  "audit_pre_trim": audit_pre, "audit": audit_source_overlaps(plan)}
+
+
+def audit_source_overlaps(plan: list[ExportClip], *,
+                          adjacency_tol_s: float = _ADJACENCY_TOL_S) -> dict:
+    """计划层**只读**体检：量化源区间的重复、真实复用、并集覆盖（不改任何东西）。
+
+    动因：三指标读 ``Result`` 字段，只发生在**导出/渲染计划层**的缺陷在指标口径下完全
+    不可见——2026-10 连续两批真缺陷（相邻段交叠致成片重复画面；旧卷轴回并静默吞段，
+    2mkv 覆盖 152s→4.28s）都是用户肉眼 + 临时回放脚本发现的，不是任何指标报的。
+    把探针口径固化成常态可断言的量，四通道同一把尺子。
+
+    按**编辑时间序**考察每一对 clip 的源区间交叠（与 ``trim_adjacent_source_overlaps``
+    同一判据口径，但扫全对而非只看紧邻——真实复用常隔着中间那段）：
+    - 贴接（``gap ≤ adjacency_tol_s``）且源区间交叠 = **违规重复**（成片/时间线会出两次画面）；
+    - 中间还夹着别的记录内容且交叠 = **真实复用**（连续场景内切多镜头，档案目检确证多数
+      正确）——只计数，trim 不动它。
+    ``union_coverage_s`` 是"裁重复不许丢画面"的硬不变式：改前改后各跑一次断言 Δ=0。
+    """
+    clips = sorted((c for c in plan if c.kind in ("main", "low")),
+                   key=lambda c: (c.edited_start, c.edited_end))
+    zero_width = sum(1 for c in clips if c.orig_end - c.orig_start <= 0)
+    adj_pairs = adj_ov = reuse_pairs = 0
+    adj_dup = reuse_dup = 0.0
+    for i, a in enumerate(clips):
+        if i + 1 < len(clips) and clips[i + 1].edited_start - a.edited_end <= adjacency_tol_s:
+            adj_pairs += 1
+        for b in clips[i + 1:]:
+            ov = min(a.orig_end, b.orig_end) - max(a.orig_start, b.orig_start)
+            if ov <= 0:
+                continue
+            if b.edited_start - a.edited_end <= adjacency_tol_s:
+                adj_ov += 1
+                adj_dup += ov
+            else:
+                reuse_pairs += 1
+                reuse_dup += ov
+    merged: list[list[float]] = []
+    for s, e in sorted((c.orig_start, c.orig_end) for c in clips
+                       if c.orig_end - c.orig_start > 0):
+        if merged and s <= merged[-1][1] + 1e-9:
+            merged[-1][1] = max(merged[-1][1], e)
+        else:
+            merged.append([s, e])
+    return {"n_clips": len(clips), "adjacent_pairs": adj_pairs,
+            "adjacent_overlap_pairs": adj_ov, "adjacent_dup_s": round(adj_dup, 3),
+            "reuse_pairs": reuse_pairs, "reuse_dup_s": round(reuse_dup, 3),
+            "union_coverage_s": round(sum(e - s for s, e in merged), 3),
+            "zero_width": zero_width}
+
+
+# --------------------------------------------------------------------- #
 # 时间换算
 # --------------------------------------------------------------------- #
 def seconds_to_frames(t: float, fps: float) -> int:
@@ -700,7 +820,8 @@ def expand_material_spans(plan: list[ExportClip], scenes, *,
     return changed
 
 
-def plan_jianying_assets(plan: list[ExportClip]) -> list[JianyingAsset]:
+def plan_jianying_assets(plan: list[ExportClip], *,
+                         drop_adjacent_duplicates: bool = True) -> list[JianyingAsset]:
     """纯函数：只取 main/low 主定位，**全部 1.0 原速**首尾相接排成一条素材卷轴，
     每个 clip 一条素材、按剪辑序排列。
 
@@ -710,6 +831,16 @@ def plan_jianying_assets(plan: list[ExportClip]) -> list[JianyingAsset]:
     回并把非贴接的真实复用一并吞掉、并把包含形态（外层挖洞成头/尾两条）的卷轴顺序
     抹平成一段，与时间线三通道不一致。候选子 span（original_segments）只在结果页
     复核，不进剪辑软件。
+
+    ``drop_adjacent_duplicates``（2026-10-07 续63 补二，默认开）：卷轴是**紧凑拼接**的
+    （placement 按素材宽度累加），所以两条**剪辑序相邻且源区间逐字节相同**的 clip 会在
+    剪映里把同一段画面连放两遍（r15 包内实测 2mkv：``og1373-1397`` 连放 24s）。
+    这类重复由「取材扩宽到整镜头 × 紧凑拼接」组合产生，信息量为零 ⇒ 后一条直接不出素材。
+    口径边界（保守，只砍纯重复）：
+    - 区间**不完全相同**的一律保留（含嵌套前缀型，如 27s 整镜头后跟它的 13s 前缀——
+      那是两条不同 clip 的不同取材，砍了会丢画面）；
+    - 中间隔着别条素材的不算（``a,b,a`` 里两个 a 都保留——它们之间播的是 b，不是卡带）；
+    - 只影响卷轴素材清单，``Result``/时间线三通道/并集覆盖均不变（相同区间不增加覆盖）。
     """
     clips = sorted((c for c in plan if c.kind in ("main", "low")),
                    key=lambda x: (x.edited_start, x.edited_end))
@@ -718,7 +849,12 @@ def plan_jianying_assets(plan: list[ExportClip]) -> list[JianyingAsset]:
     # 防止后面 extract 抽取阶段拿错内容。
     stem_owner: dict[str, tuple[float, float]] = {}
     assets: list[JianyingAsset] = []
+    prev_range: tuple[float, float] | None = None
     for c in clips:
+        if drop_adjacent_duplicates and prev_range is not None \
+                and (c.orig_start, c.orig_end) == prev_range:
+            continue   # 紧邻同素材连放 = 纯重复，不出第二条
+        prev_range = (c.orig_start, c.orig_end)
         stem = f"og{int(round(c.orig_start))}-{int(round(c.orig_end))}"
         rng = (c.orig_start, c.orig_end)
         if stem in stem_owner and stem_owner[stem] != rng:

@@ -200,15 +200,25 @@ class StageMappingTest(unittest.TestCase):
         def ev(phase, cur, tot):
             return ProgressEvent(ProgressStage.REFINE, cur, tot, "", phase)
 
-        self.assertEqual(map_progress_stage(ev("fix", 0, 5)), (TaskStage.RETRIEVAL, 92.0))
-        self.assertEqual(map_progress_stage(ev("fix", 3, 5)), (TaskStage.RETRIEVAL, 93.2))
-        self.assertEqual(map_progress_stage(ev("fix", 5, 5)), (TaskStage.RETRIEVAL, 94.0))
-        self.assertEqual(map_progress_stage(ev("split", 0, 1)), (TaskStage.RETRIEVAL, 94.0))
-        self.assertEqual(map_progress_stage(ev("split", 1, 1)), (TaskStage.RETRIEVAL, 95.0))
-        self.assertEqual(map_progress_stage(ev("patch", 41, 82)), (TaskStage.RETRIEVAL, 96.0))
-        self.assertEqual(map_progress_stage(ev("patch", 82, 82)), (TaskStage.RETRIEVAL, 97.0))
-        self.assertEqual(map_progress_stage(ev("isc", 0, 1)), (TaskStage.RETRIEVAL, 97.0))
+        # 显示宽度 = 实测耗时占比（run1+run3：修复链 28% · 拆分 3% · patch 38% · ISC 31%）。
+        # 中间点用容差断言：一位小数四舍五入正好压在 .x5 上时浮点表示会抖。
+        def near(pct, want):
+            self.assertAlmostEqual(pct, want, delta=0.06)
+
+        self.assertEqual(map_progress_stage(ev("fix", 0, 48)), (TaskStage.RETRIEVAL, 92.0))
+        self.assertEqual(map_progress_stage(ev("fix", 48, 48)), (TaskStage.RETRIEVAL, 93.7))
+        near(map_progress_stage(ev("fix", 10, 48))[1], 92.35)             # 字牌腿起点
+        near(map_progress_stage(ev("fix", 42, 48))[1], 93.48)             # 字牌腿终点
+        self.assertEqual(map_progress_stage(ev("split", 0, 1)), (TaskStage.RETRIEVAL, 93.7))
+        self.assertEqual(map_progress_stage(ev("split", 1, 1)), (TaskStage.RETRIEVAL, 93.9))
+        self.assertEqual(map_progress_stage(ev("patch", 0, 67)), (TaskStage.RETRIEVAL, 93.9))
+        near(map_progress_stage(ev("patch", 33, 67))[1], 95.05)
+        self.assertEqual(map_progress_stage(ev("patch", 67, 67)), (TaskStage.RETRIEVAL, 96.2))
+        self.assertEqual(map_progress_stage(ev("isc", 0, 1)), (TaskStage.RETRIEVAL, 96.2))
         self.assertEqual(map_progress_stage(ev("isc", 1, 1)), (TaskStage.RETRIEVAL, 98.0))
+        # 跳格间隔模型：字牌腿 32/48 单位 × 1.7 点 = 1.13 点 ÷ 67 段 ⇒ 0.1 读数约每 6 段一跳
+        step_s = round(0.1 / (1.7 * 32 / 48 / 67) * (363 / 67))
+        self.assertLessEqual(step_s, 40, f"字牌腿预计跳格 {step_s}s，应 ≤40s")
         # 无 phase = 旧行为逐位不变（回归锁）
         self.assertEqual(map_progress_stage(ProgressEvent(ProgressStage.REFINE, 0, 82)),
                          (TaskStage.RETRIEVAL, 92.1))
