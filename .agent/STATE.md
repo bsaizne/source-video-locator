@@ -95,6 +95,15 @@
 > 三防 **FAILED=0**（`three_defense_smoke_r7.py`）· 启动冒烟 Electron 4 + backend 1 存活 25s，
 > 用完即清 AFTER_KILL=0。构建日志 `work/build_r14.log`，验收日志 `work/accept_r14.log` /
 > `work/three_defense_r14.log` / `work/zip_r14.log`。
+> **✅ 剪映卷轴去重语义已统一（2026-10-07 续62 补二，用户拍板「先统一」）**：
+> 剪映分支在取材扩展**之后**施加同一 `trim_adjacent_source_overlaps`（挂错在扩展前会失效），
+> `plan_jianying_assets` 删除"重叠回并"改逐 clip 一素材（+撞名守卫）。四通道一套语义：
+> 贴接对裁开、非贴接=真实复用保留。**顺带发现旧回并真缺陷**：条件只看源区间 ⇒ 源序回跳
+> clip 被静默吞掉——四片回放旧卷轴 84/55/67/103 段只剩 5/49/22/3 条素材，
+> 并集覆盖 4.28/123.01/37.05/14.61s（真实 152/129/97/167s，2mkv 丢 ~97%）。
+> 门禁：后端 **569 OK**（+4 锁）· API **105 OK** · 四片回放 + 2mkv 真代码端到端 PASS
+> （`work/jianying_unify_{replay,e2e}_20261007.py`）。代价：素材逐 clip ⇒ 抽取次数上升。
+> **r14 不含本批**（进包需下次出包授权）；明细 CHANGELOG 续62 补二。
 > **✅ 包体级判别已闭合（2026-10-07 续62 补一，双臂 A/B）**：不再等用户真项目——
 > `work/r14_trim_pkg/r14_trim_pkg_probe.py` 打包态 headless 起 r13 与 r14 两臂
 > （唯一变量 = backend.exe；ffmpeg/ffprobe/模型/env/数据目录/输入/导出参数逐字相同，
@@ -2776,4 +2785,4 @@ test3 27.79 与 2026-09-26 border_review 独立裁决逐点吻合）; test2 **�
 
 ## Last Updated
 
-2026-10-07（续62 补一：包体级判别双臂 A/B 闭合）
+2026-10-07（续62 补二：剪映去重语义统一 + 旧回并丢素材缺陷发现）

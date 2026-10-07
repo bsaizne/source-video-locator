@@ -701,30 +701,34 @@ def expand_material_spans(plan: list[ExportClip], scenes, *,
 
 
 def plan_jianying_assets(plan: list[ExportClip]) -> list[JianyingAsset]:
-    """纯函数：候选轨取消（用户反馈二轮）——只取 main/low 主定位，按剪辑顺序
-    合并重叠源区间、去重，**全部 1.0 原速**首尾相接排成一条素材卷轴。
+    """纯函数：只取 main/low 主定位，**全部 1.0 原速**首尾相接排成一条素材卷轴，
+    每个 clip 一条素材、按剪辑序排列。
 
-    v2 的「记录槽对齐编辑时间轴」设计被用户否决（原片 6s 塞进剪辑 2s 槽
-    导致全部片段变速）；用户要的是可自行重编的原速镜头序列。候选子 span
-    （original_segments）只在结果页复核，不进剪辑软件。
+    去重语义（2026-10-07 统一）：与成片/EDL/XML 同一套 ``trim_adjacent_source_overlaps``
+    ——由调用方在对 plan 取材扩展**之后**、调用本函数**之前**施加（生产接线在
+    ``locator_service.export_project`` 剪映分支）。本函数不再做 v2 的"重叠回并"：
+    回并把非贴接的真实复用一并吞掉、并把包含形态（外层挖洞成头/尾两条）的卷轴顺序
+    抹平成一段，与时间线三通道不一致。候选子 span（original_segments）只在结果页
+    复核，不进剪辑软件。
     """
     clips = sorted((c for c in plan if c.kind in ("main", "low")),
                    key=lambda x: (x.edited_start, x.edited_end))
+    # 素材名带原片时间区间（反馈四轮：时间线上直接可溯源）。区间逐字节相同的 clip
+    # （真实复用且扩到同一镜头）共用同名素材文件；仅当区间不同而秒级取整撞名时加序号，
+    # 防止后面 extract 抽取阶段拿错内容。
+    stem_owner: dict[str, tuple[float, float]] = {}
     assets: list[JianyingAsset] = []
-    cur: JianyingAsset | None = None
-    cur_is_split = False
     for c in clips:
-        # 切点展开段（split_index>=0）不回并: 时间线上要呈现真实转场切点（展示层两件套①）；
-        # 严格重叠（非贴接）仍并入当前素材，避免重复片段。
-        if (cur is not None and c.orig_start < cur.orig_end - 1e-6
-                and not cur_is_split and c.split_index < 0):
-            cur.orig_end = max(cur.orig_end, c.orig_end)
-            continue
-        # 素材名带原片时间区间（反馈四轮：时间线上直接可溯源）
-        cur = JianyingAsset(file_stem=f"og{int(round(c.orig_start))}-{int(round(c.orig_end))}",
-                            orig_start=c.orig_start, orig_end=c.orig_end)
-        cur_is_split = c.split_index >= 0
-        assets.append(cur)
+        stem = f"og{int(round(c.orig_start))}-{int(round(c.orig_end))}"
+        rng = (c.orig_start, c.orig_end)
+        if stem in stem_owner and stem_owner[stem] != rng:
+            k = 2
+            while f"{stem}#{k}" in stem_owner:
+                k += 1
+            stem = f"{stem}#{k}"
+        stem_owner[stem] = rng
+        assets.append(JianyingAsset(file_stem=stem,
+                                    orig_start=c.orig_start, orig_end=c.orig_end))
     # 顺序卷轴：原速、首尾相接
     t = 0.0
     for a in assets:

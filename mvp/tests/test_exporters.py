@@ -20,6 +20,7 @@ import tempfile
 import unittest
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))  # -> mvp/src
 
@@ -337,25 +338,65 @@ class ExpandMaterialSpansTest(unittest.TestCase):
 
 
 class PlanJianyingAssetsTest(unittest.TestCase):
-    """剪映素材计划 v3（反馈二轮）：只出主定位单轨、合并重叠、原速顺序卷轴。"""
+    """剪映素材计划（2026-10-07 语义统一）：逐 clip 一条素材、原速顺序卷轴；
+    去重统一由上游 ``trim_adjacent_source_overlaps`` 承担（不再回并）。"""
 
-    def test_merge_overlap_and_sequential(self):
+    def test_no_merge_one_asset_per_clip(self):
         plan = [
             ExportClip("main", 0.0, 2.0, 2154.0, 2156.0, "HIGH", 0.9, seg_index=0),
-            ExportClip("main", 2.5, 4.5, 2155.0, 2157.0, "HIGH", 0.9, seg_index=1),  # 重叠 1s → 合并
-            ExportClip("main", 5.0, 9.0, 2180.0, 2182.0, "HIGH", 0.9, seg_index=2),  # 有间隔 → 独立
+            ExportClip("main", 2.5, 4.5, 2155.0, 2157.0, "HIGH", 0.9, seg_index=1),  # 非贴接重叠=真实复用，保留
+            ExportClip("main", 5.0, 9.0, 2180.0, 2182.0, "HIGH", 0.9, seg_index=2),
             ExportClip("sub", 5.0, 6.0, 2200.0, 2201.0, "HIGH", 0.8, seg_index=2, sub_index=0),  # 候选 → 不出
         ]
         assets = plan_jianying_assets(plan)
+        self.assertEqual(len(assets), 3)
+        self.assertEqual((assets[0].orig_start, assets[0].orig_end), (2154.0, 2156.0))
+        self.assertEqual((assets[1].orig_start, assets[1].orig_end), (2155.0, 2157.0))
+        self.assertEqual((assets[2].orig_start, assets[2].orig_end), (2180.0, 2182.0))
+        # 顺序卷轴：0-2s、2-4s、4-6s；全部原速
+        p0, p1, p2 = (a.placements[0] for a in assets)
+        self.assertEqual((p0["edited_start"], p0["edited_end"]), (0.0, 2.0))
+        self.assertEqual((p1["edited_start"], p1["edited_end"]), (2.0, 4.0))
+        self.assertEqual((p2["edited_start"], p2["edited_end"]), (4.0, 6.0))
+        self.assertTrue(all(p["speed"] == 1.0 for p in (p0, p1, p2)))
+
+    def test_trimmed_adjacent_pair_yields_disjoint_assets(self):
+        # 生产接线（export_project 剪映分支）= 取材扩展后先 trim 再组卷轴：
+        # 贴接对源区间交叠 1s，trim 中点切开后两条素材源区间相接不重叠。
+        from app.exporters import trim_adjacent_source_overlaps
+        plan = [
+            ExportClip("main", 0.0, 2.0, 100.0, 102.0, "HIGH", 0.9, seg_index=0),
+            ExportClip("main", 2.0, 4.0, 101.0, 103.0, "HIGH", 0.9, seg_index=1),
+        ]
+        self.assertEqual(trim_adjacent_source_overlaps(plan, fps=25.0), 1)
+        assets = plan_jianying_assets(plan)
         self.assertEqual(len(assets), 2)
-        self.assertEqual((assets[0].orig_start, assets[0].orig_end), (2154.0, 2157.0))
-        self.assertEqual((assets[1].orig_start, assets[1].orig_end), (2180.0, 2182.0))
-        # 顺序卷轴：0-3s、3-5s；全部原速
-        p0, p1 = assets[0].placements[0], assets[1].placements[0]
-        self.assertEqual((p0["edited_start"], p0["edited_end"]), (0.0, 3.0))
-        self.assertEqual((p1["edited_start"], p1["edited_end"]), (3.0, 5.0))
-        self.assertEqual(p0["speed"], 1.0)
-        self.assertEqual(p1["speed"], 1.0)
+        self.assertEqual(assets[0].orig_end, assets[1].orig_start)   # 相接
+        self.assertEqual(assets[1].orig_end, 103.0)                  # 并集右界不变
+        t = 0.0
+        for a in assets:
+            self.assertEqual(a.placements[0]["edited_start"], round(t, 3))
+            t += a.orig_width
+
+    def test_identical_range_reuse_shares_stem(self):
+        # 非贴接且扩到同一镜头的两条 clip：区间逐字节相同 → 同名素材（同内容共文件），
+        # 不触发撞名加序号。
+        plan = [
+            ExportClip("main", 0.0, 2.0, 20.0, 60.0, "HIGH", 0.9, seg_index=0),
+            ExportClip("main", 30.0, 32.0, 20.0, 60.0, "HIGH", 0.9, seg_index=1),
+        ]
+        assets = plan_jianying_assets(plan)
+        self.assertEqual(len(assets), 2)
+        self.assertEqual(assets[0].file_stem, assets[1].file_stem)
+
+    def test_nearby_range_stem_collision_gets_suffix(self):
+        # 区间不同但秒级取整撞名 → 第二条加序号，防 extract 拿错内容。
+        plan = [
+            ExportClip("main", 0.0, 2.0, 20.4, 60.4, "HIGH", 0.9, seg_index=0),
+            ExportClip("main", 30.0, 32.0, 20.6, 60.6, "HIGH", 0.9, seg_index=1),
+        ]
+        assets = plan_jianying_assets(plan)
+        self.assertNotEqual(assets[0].file_stem, assets[1].file_stem)
 
     def test_empty_plan(self):
         self.assertEqual(plan_jianying_assets([]), [])
@@ -369,13 +410,16 @@ class WriteJianyingDraftIntegrationTest(unittest.TestCase):
     def test_draft_written(self):
         import json
         from media.ffmpeg import FFmpegIO
-        from app.exporters import (create_jianying_draft_dir, write_jianying_draft)
+        from app.exporters import (create_jianying_draft_dir, write_jianying_draft,
+                                   trim_adjacent_source_overlaps)
 
         io = FFmpegIO(ffmpeg=FFMPEG, ffprobe=FFPROBE)
         plan = [
             ExportClip("main", 0.0, 2.0, 0.0, 2.0, "HIGH", 0.9, seg_index=0),
-            ExportClip("main", 2.0, 3.0, 1.5, 3.0, "HIGH", 0.9, seg_index=1),  # 重叠 → 合并为 0-3s
+            ExportClip("main", 2.0, 3.0, 1.5, 3.0, "HIGH", 0.9, seg_index=1),  # 贴接重叠 → trim 中点切开
         ]
+        # 生产同款接线：组卷轴前先施加统一去重（export_project 剪映分支同参）
+        self.assertEqual(trim_adjacent_source_overlaps(plan, fps=25.0), 1)
         assets = plan_jianying_assets(plan)
         out_root = Path(tempfile.mkdtemp())
         draft_dir, script = create_jianying_draft_dir(out_root, "it draft", fps=30.0,
@@ -394,18 +438,16 @@ class WriteJianyingDraftIntegrationTest(unittest.TestCase):
         tracks = content["tracks"]
         self.assertEqual([t.get("name") for t in tracks], ["located"])   # 单轨，无候选轨
         segs = [s for t in tracks for s in t["segments"]]
-        self.assertEqual(len(segs), 1)                                   # 重叠合并 → 1 段
-        self.assertEqual(len(content["materials"]["videos"]), 1)
-        self.assertEqual(segs[0]["speed"], 1.0)                          # 原速
-        self.assertEqual(segs[0]["target_timerange"]["duration"], 3_000_000)  # 0-3s
-        # 速度语义：剪辑 2s / 源 2s → speed 1.0；素材路径指向草稿内 clips
+        self.assertEqual(len(segs), 2)                                   # trim 后两条素材（不再回并）
+        self.assertEqual(len(content["materials"]["videos"]), 2)
+        self.assertTrue(all(s["speed"] == 1.0 for s in segs))            # 原速
+        # 并集保持：两条素材首尾相接铺满 0-3s（交叠只裁掉重复那份）
+        total = sum(s["target_timerange"]["duration"] for s in segs)
+        self.assertAlmostEqual(total / 1_000_000, 3.0, delta=0.15)
+        self.assertEqual(segs[0]["target_timerange"]["start"], 0)
+        # 素材路径指向草稿内 clips；时间单位必须为微秒（trange float 陷阱回归）
         for v in content["materials"]["videos"]:
             self.assertTrue((Path(v["path"])).exists())
-        # 时间单位必须为微秒（trange float 陷阱回归）
-        main_track = next(t for t in tracks if t.get("name") == "located")
-        s0 = main_track["segments"][0]
-        self.assertEqual(s0["target_timerange"]["start"], 0)
-        self.assertEqual(s0["target_timerange"]["duration"], 3_000_000)   # 合并后 0-3s
 
 
 # --------------------------------------------------------------------- #
@@ -484,6 +526,29 @@ class TestServiceExportProject(unittest.TestCase):
         out = tempfile.mkdtemp()
         with self.assertRaises(Exception):
             svc.export_project(self._batch(), fmt="jianying", out_dir=out)
+
+    def test_jianying_branch_trims_before_planning(self):
+        """接线锁（2026-10-07 语义统一）：剪映分支在取材扩展后、组卷轴前施加
+        ``trim_adjacent_source_overlaps`` ⇒ 传给 ``plan_jianying_assets`` 的计划
+        已无贴接交叠（与成片/EDL/XML 一套去重）。"""
+        svc = self._service(bundle=_FakeBundle(scenes=None))
+        out = tempfile.mkdtemp()
+        batch = _batch([
+            _result(ed=(0.0, 2.0), orig=(100.0, 102.0), level="HIGH"),
+            _result(ed=(2.0, 4.0), orig=(101.0, 103.0), level="HIGH"),   # 贴接重叠 1s
+        ])
+        captured: dict = {}
+
+        def _fake_plan(plan):
+            captured["plan"] = [(c.orig_start, c.orig_end) for c in plan]
+            return []
+
+        with mock.patch("app.locator_service.plan_jianying_assets", _fake_plan), \
+                mock.patch("app.locator_service.create_jianying_draft_dir",
+                           return_value=(mock.MagicMock(), mock.MagicMock())), \
+                mock.patch("app.locator_service.write_jianying_draft"):
+            svc.export_project(batch, fmt="jianying", out_dir=out)
+        self.assertEqual(captured["plan"], [(100.0, 101.5), (101.5, 103.0)])
 
     def test_export_results_json_still_works(self):
         svc = self._service()

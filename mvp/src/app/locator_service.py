@@ -1538,8 +1538,8 @@ class SourceLocatorService:
         record_fps = (rec_meta.get("fps") if rec_meta else None) or source_fps
 
         # 相邻贴接段源区间去重叠（2026-10-06，同成片渲染口径）：EDL/XML 是"逐段取材再
-        # 拼接"的时间线，交叠不裁就会在成片里重复同一画面。剪映卷轴走
-        # ``plan_jianying_assets`` 的重叠回并（已有去重语义），此处不重复施加。
+        # 拼接"的时间线，交叠不裁就会在成片里重复同一画面。2026-10-07 统一语义：
+        # 剪映卷轴分支也施加同一函数（在取材扩展之后，见下），四通道一套去重。
         if fmt in ("edl", "fcp7_xml"):
             n_trim = trim_adjacent_source_overlaps(plan, fps=float(source_fps))
             if n_trim:
@@ -1576,6 +1576,14 @@ class SourceLocatorService:
             if xcfg.material_expand and do_expand and bundle is not None:
                 n_exp = expand_material_spans(plan, bundle.scenes)
                 self._log.info("material expand widened=%d", n_exp)
+            # 相邻贴接段源区间去重叠（2026-10-07 统一语义）：与成片/EDL/XML 同一套
+            # ``trim_adjacent_source_overlaps``，取代本函数旧"重叠回并"——回并会把
+            # 非贴接的真实复用一并吞掉、与时间线三通道不一致。必须在取材扩展**之后**
+            # 执行（扩宽会把相邻段重新撑出交叠）。
+            n_trim = trim_adjacent_source_overlaps(plan, fps=float(source_fps))
+            if n_trim:
+                self._log.info("export adjacent dedup (jianying): %d 对贴接段源区间已裁开",
+                               n_trim)
             assets = plan_jianying_assets(plan)
             n_clips = len(assets)
             for i, asset in enumerate(assets):

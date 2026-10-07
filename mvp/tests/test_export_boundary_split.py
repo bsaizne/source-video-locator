@@ -100,17 +100,18 @@ class BoundarySplitTest(unittest.TestCase):
         self.assertEqual((plan[0].orig_start, plan[0].orig_end), (100.0, 104.0))
 
     def test_jianying_assets_keep_split_pieces_separate(self):
-        # 展开段首尾贴接不得回并成一条素材（时间线要呈现真实切点）;
-        # 未切分的重叠 clip 仍回并（既有去重语义）。
+        # 2026-10-07 语义统一后 plan_jianying_assets 不再回并：每个 clip 一条素材，
+        # 贴接交叠由上游 trim_adjacent_source_overlaps 裁开（生产在取材扩展后施加）。
         p1, p2 = _clip(100.0, 104.0), _clip(104.0, 110.0)
         p1.split_index, p2.split_index = 0, 1
         assets = plan_jianying_assets([p1, p2])
         self.assertEqual(len(assets), 2)
-        # 未切段: 重叠回并
+        # 未切段的重叠交叠同样原样出两条（真实复用/待上游裁开），不再回并
         a, b = _clip(100.0, 106.0), _clip(104.0, 110.0)
         assets2 = plan_jianying_assets([a, b])
-        self.assertEqual(len(assets2), 1)
-        self.assertEqual((assets2[0].orig_start, assets2[0].orig_end), (100.0, 110.0))
+        self.assertEqual(len(assets2), 2)
+        self.assertEqual((assets2[0].orig_start, assets2[0].orig_end), (100.0, 106.0))
+        self.assertEqual((assets2[1].orig_start, assets2[1].orig_end), (104.0, 110.0))
 
 
 if __name__ == "__main__":
