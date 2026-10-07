@@ -1530,3 +1530,29 @@ STATE `Current Task` 顶部新增补八块并把补七的开放项②标为闭�
 - 分发包保留：r10/r11 已删（~1.9GB），留 r13（回滚）+ r14（现役）。
   ⚠️ 用户口令原话是"只留 r12、r13"，但 r12 在续61 补七 已按其上一条口令删除 ⇒ 出包前列 release/ 实况
   再按「最新+上一档」执行，这次他随即确认"只留 r13 和 r14"。
+
+## 2026-10-07（续62 补一）— 包体级判别闭合：r13 vs r14 双臂 A/B 实测，重叠在包内确实被裁开
+
+- **缺口**：续62 出包时登记"包体级『相邻重叠被裁开』未实测"（accept 冒烟素材只出 1 段，
+  构造不出贴接重叠，原本等用户真项目渲染/导出）。本批改为**自己闭合**，且做成判别性双臂：
+  唯一变量 = backend.exe（r13 `52ca8c225bbc3683` = 修复前 vs r14 `4f5631af9e4ea51f` = 修复后），
+  其余（ffmpeg/ffprobe/模型/SVL env/数据目录/结果输入/导出参数）逐字相同——
+  r13/r14 包内 ffmpeg.exe/ffprobe.exe 先断言逐字节同，r13 臂用 zip 抽出的完整 onedir 树
+  （backend.exe 是 PyInstaller onedir，单抽 exe 缺 `_internal/` 秒退，第一次踩坑留痕）。
+- **驱动**：`work/r14_trim_pkg/r14_trim_pkg_probe.py` 打包态 headless 起包 →
+  `POST /api/results/load` 灌真实四片结果批（`work/stable_sort_regress/*.results.json`）→
+  `POST /api/export`（edl + fcp7_xml，`min_confidence=LOW + low_policy=backup` 全量超集门槛，
+  两臂同参）→ 2mkv 另跑 `POST /api/tasks/render` 渲染成片。两臂均 DirectML 生效。
+- **导出腿判读**（EDL 解析 `* LOCATOR orig=` 秒制区间；XML 解析 clipitem in/out）：
+  - r13 臂（修复前）：贴接重叠对 EDL **4/2/4/16**（2mkv/test1/test2/test3），
+    重复秒 **4.98/1.32/3.73/11.06** ⇒ **用户报的症状在修复前包内完整复现**；
+  - r14 臂（修复后）：四片 EDL+XML **全部 0 对 / 0 重复秒**；
+  - **并集覆盖两臂逐 case 完全相等（Δ=0.00）** ⇒ 裁掉的只是重复那份，一块画面没丢。
+- **渲染腿判读**（render 结果 `clips` 只是计数不含计划 ⇒ 用成片时长做行为判别）：
+  r13 成片 **166.020s**（84 clips）vs r14 **160.974s**（86 clips，+2 = 包含形态外层挖洞的头/尾条），
+  **时长差 5.046s ≈ EDL 重复秒 4.98s**（差 0.066s = 逐段取帧取整）⇒ 重复画面确实从成片里消失。
+  两臂均 h264_amf / mode=copy / 72.1s 完成。
+- 产物：`work/r14_trim_pkg/report.json` + `probe_run.log` + 两臂 EDL/XML/成片落盘可复查。
+- ⚠️ 口径说明：这是**结果批回放**（load 已有 results → 导出/渲染），不重跑定位——定位语义零改动
+  由续62 构造性论证 + 565 单测承担；本批闭合的是"trim 接线在包内真实生效"这最后一环。
+  剪映卷轴仍是既有回并语义（未拍板统一），jy_draft 通道未在本探针覆盖。
