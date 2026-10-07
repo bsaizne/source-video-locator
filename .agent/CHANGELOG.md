@@ -1710,3 +1710,7 @@ STATE `Current Task` 顶部新增补八块并把补七的开放项②标为闭�
 - 现状不受影响：并列口径 `main_hit` 与 LOC-2003 导出告警**此前已落地**，指标/导出的差异
   已有告警可观测；本次搁置的只是"锚点线切换 + 对外数字改口径"这最后一步。
 - 六项立项剩余 = **⑥ 换形态探针族**（研究线，沙盒纪律）。
+
+### Notes
+
+- Created `checkpoint-2026-10-07-1103.md` checkpoint (1 modified/untracked file(s)).
