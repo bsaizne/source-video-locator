@@ -119,3 +119,4 @@ Only load the minimum information required to continue the project.
 - **结构损坏时运行 `agent-context repair`**：补齐缺失章节、合并重复章节（不丢内容），不要手工重建文件
 - 编辑 `STATE.md` 时保持 12 个章节齐全：`Project` / `Current Phase` / `Current Task` / `Completed` / `Current Problem` / `Current Implementation` / `Current Decision` / `Next Actions` / `Important Constraints` / `Known Issues` / `Last Updated`
 - `STATE.md` 表示**当前状态而非历史日志**；`TODO.md` 保持短小。历史条目请迁往 `CHANGELOG.md` 或 `.agent/archive/`
+- **档案防复发纪律（2026-10-07，用户拍板）**：在 STATE.md `Current Task` 顶部新增 ▶ 块时，同批把超限旧块**逐字**迁 `.agent/archive/`——`Current Task` 保持 ≤3 块；TODO.md P0 保持 ≤1 块；`Next Actions` 只放真正开放的行动项，不放交接长文（交接细节进 archive/CHANGELOG，长期教训浓缩进 `Known Issues`）。迁移用带锚点断言的脚本做，迁前先 `git commit` 留回滚点
