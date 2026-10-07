@@ -180,13 +180,15 @@
 > `.agent/archive/STATE_history_20261007.md`（续55「交接要点」与 (c) 关键新知识七条在其中，
 > 后者已浓缩为 `Known Issues` 的「工程教训速查」）。
 
-1. **git 提交（等口令）**：续63 一批改动未提交（`mvp/src/app/exporters.py`+`locator_service.py`
-   收口、`mvp/api/tasks/isolated.py` 三处修复、UI 两处类型修复、新测试 24 项、
-   入库常态脚本、accept 清单扩 4 条、档案）。推送已由用户口令完成（`6a0ef88..aba3a21`）。
-2. **r16 出包（等授权）**：源码树三件事不在 r15 包里 —— 渲染隔离修复、
-   卷轴去紧邻同素材重复（默认开）、①③ 的 UI 接线。出包后必跑
-   `accept_packaged_bundle.py` + `accept_packaged_render.py`（后者对 r15 如实报红）
-   + 三防 + 启动冒烟 + `check_export_plan_invariants.py`。
+1. **git 推送（等口令）**：本地领先 origin **3 笔未推** —— `a792693` feat(mvp) 续63 全部代码
+   + 测试 + 入库脚本、`7f253e2` docs(agent) 续63 补一~补五档案、`21ddf5a` chore(agent) checkpoint。
+   工作树干净（`git status --porcelain` = 0）。上一批 11 笔已推（`6a0ef88..aba3a21`）。
+2. **r16 出包（等授权）**：三件在源码树、r15 包里没有 —— ① `submit_render` 漏传 `isolated`
+   的修复（渲染此前从未进隔离子进程）；② 卷轴去「紧邻同素材连放」（默认开）；
+   ③ 进度链按耗时分配宽度 + 三条重腿逐段 tick。
+   （①③ 的 UI 显示已被用户裁决删除，不进包。）出包后必跑 `accept_packaged_bundle.py`
+   + `accept_packaged_render.py`（**这条对 r15 如实报 R2 红 = 隔离修复未进包**，
+   r16 应转绿）+ 三防 + 启动冒烟 + `check_export_plan_invariants.py`。
 3. **⑥ 换形态探针族**（唯一剩余立项项）：建议**只跑 b**且**判据换掉**——档案已有
    「2fps vs 1fps 密度探针：生产严格净 0、建索引 ×2 耗时」⇒ 密度↑不改落点，b 的收益面在
    **建索引耗时/首屏延迟**（现役 22~31min/片），门槛应为「三指标零回退 + 建索引耗时达标」；
@@ -267,4 +269,4 @@
 
 ## Last Updated
 
-2026-10-08 01:09
+2026-10-08 01:20（交接完成：已提交 3 笔、工作树干净、待推）
