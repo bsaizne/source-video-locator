@@ -74,6 +74,9 @@ class Task:
     progress: float = 0
     created_at: str = field(default_factory=_now_iso)
     finished_at: str | None = None
+    # ③ 心跳（2026-10-07 立项）：最近一次状态变更时刻——轮询方据此区分
+    # 「没消息但在动」与「真的卡死」（竞品 heartbeat/progress_updated_at 同语义）。
+    last_event_at: str | None = None
     result: dict | None = None
     error: str | None = None
     cancel_requested: bool = False
@@ -146,6 +149,7 @@ class Task:
     def mark_running(self) -> None:
         with self._lock:
             self.status = TaskStatus.RUNNING
+            self.last_event_at = _now_iso()
             subs = list(self._subscribers)
             frame = self._frame()
         self._send(frame, subs)
@@ -154,6 +158,7 @@ class Task:
         with self._lock:
             if self.status is TaskStatus.PENDING:
                 self.status = TaskStatus.RUNNING
+            self.last_event_at = _now_iso()
             self.stage = stage
             self.progress = max(0, min(100, percent))
             if message:
@@ -165,6 +170,7 @@ class Task:
     def mark_completed(self, result: dict) -> None:
         with self._lock:
             self.status = TaskStatus.COMPLETED
+            self.last_event_at = _now_iso()
             self.stage = TaskStage.FINISHED
             self.progress = 100
             self.finished_at = _now_iso()
@@ -176,6 +182,7 @@ class Task:
     def mark_failed(self, error: str) -> None:
         with self._lock:
             self.status = TaskStatus.FAILED
+            self.last_event_at = _now_iso()
             self.finished_at = _now_iso()
             self.error = error
             subs = list(self._subscribers)
@@ -185,6 +192,7 @@ class Task:
     def mark_cancelled(self) -> None:
         with self._lock:
             self.status = TaskStatus.CANCELLED
+            self.last_event_at = _now_iso()
             self.finished_at = _now_iso()
             subs = list(self._subscribers)
             frame = self._frame()
@@ -208,6 +216,7 @@ class Task:
                 "stage": self.stage.value,
                 "progress": self.progress,
                 "created_at": self.created_at,
+                "last_event_at": self.last_event_at,
                 "finished_at": self.finished_at,
                 "result": self.result,
                 "error": self.error,

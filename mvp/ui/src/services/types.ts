@@ -249,6 +249,8 @@ export interface TaskJson {
   stage: TaskStage
   progress: number
   created_at: string
+  /** ③ 心跳（2026-10-07）：最近一次状态变更时刻，轮询方据此区分「在动」与「卡死」。 */
+  last_event_at: string | null
   finished_at: string | null
   result: ResultBatchJson | RenderMovieJson | null
   error: string | null

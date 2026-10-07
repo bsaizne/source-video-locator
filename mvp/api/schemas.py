@@ -123,3 +123,8 @@ class DeviceSettingsResponse(BaseModel):
     is_accelerator: bool
     fallback: bool
     available_devices: list[str]
+    # ① 低内存收缩（2026-10-07 立项）：降档可观测（竞品 low_memory_mode 同语义）
+    low_memory_mode: bool = False
+    memory_tier: str = "unknown"
+    grab_workers: int = 4
+    max_cluster_frames: int = 120

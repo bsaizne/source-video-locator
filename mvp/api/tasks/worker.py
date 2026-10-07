@@ -17,6 +17,7 @@ from typing import Callable
 from app.models import ProgressEvent, ProgressStage
 from infrastructure.errors import ApplicationError, public_error
 
+from .debounce import ProgressDebouncer
 from .models import Task, TaskKind, TaskStage
 
 LogFn = Callable[..., None]
@@ -96,6 +97,8 @@ def run_worker(task: Task, service, *, log: LogFn | None = None) -> None:
         log = lambda *a, **k: None  # noqa: E731
     task.mark_running()
     last_pct = 0
+    # ③ 防抖（2026-10-07 立项）：同阶段连续帧按最小间隔合并（阶段切换/终态直通）。
+    deb = ProgressDebouncer()
 
     def on_progress(ev: ProgressEvent) -> None:
         nonlocal last_pct
@@ -103,7 +106,8 @@ def run_worker(task: Task, service, *, log: LogFn | None = None) -> None:
         # 单调钳制：检索/定位/置信事件交错、阶段边界事件缺 total 时百分比不回跳。
         pct = max(pct, last_pct)
         last_pct = pct
-        task.update_progress(stage, pct, message=ev.message or "")
+        for st, p, msg in deb.submit(stage, pct, message=ev.message or ""):
+            task.update_progress(st, p, message=msg)
 
     try:
         # 多原片输入（2026-09-29 video.concat 移植）：≥2 段先物理合并为单文件，
@@ -157,13 +161,15 @@ def run_render_worker(task: Task, service, *, log: LogFn | None = None) -> None:
         log = lambda *a, **k: None  # noqa: E731
     task.mark_running()
     last_pct = 0
+    deb = ProgressDebouncer()   # ③ 防抖（同 analyze；渲染帧率低，防抖是保险）
 
     def on_progress(ev: ProgressEvent) -> None:
         nonlocal last_pct
         stage, pct = map_progress_stage(ev)
         pct = max(pct, last_pct)
         last_pct = pct
-        task.update_progress(stage, pct, message=ev.message or "")
+        for st, p, msg in deb.submit(stage, pct, message=ev.message or ""):
+            task.update_progress(st, p, message=msg)
 
     batch = task.render_batch
     if batch is None:

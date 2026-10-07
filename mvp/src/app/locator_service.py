@@ -177,7 +177,25 @@ class SourceLocatorService:
     def backend(self) -> DeviceBackend:
         if self._backend is None:
             self._backend = pick_best_available(self.config)
+            self._announce_device()
         return self._backend
+
+    def _announce_device(self) -> None:
+        """stdout 回报**实际**设备（② 子进程设备回报标记，2026-10-07 立项）。
+
+        与 ``BACKEND_LISTEN`` 同风格的机器可 grep 标记行：懒构建点 = 真实解析点，
+        此处打印的必然是实际值而非配置意图（UI-P3 徽标误标的根因 = 展示配置意图）。
+        Electron 不解析此行（UI 走 /api/settings/device 的 actual 三元组），
+        打印对象是 headless 验收 harness 与日志取证。一次性（进程内只打一次）。
+        """
+        if getattr(self, "_device_announced", False):
+            return
+        self._device_announced = True
+        try:
+            print(f"BACKEND_DEVICE {self._backend.device_name()} "
+                  f"{self._backend.device_type()}", flush=True)
+        except Exception:                       # noqa: BLE001 — 观测行绝不阻断主流程
+            pass
 
     @property
     def store(self) -> FeatureStore:
@@ -222,6 +240,8 @@ class SourceLocatorService:
             available.append("directml")
         if sys.platform == "darwin" and mps_available()[0]:
             available.append("mps")
+        from media.resource_budget import current_budget
+        budget = current_budget()
         return {
             "preferred": self.device_preference,
             "actual_device_name": b.device_name(),   # cpu / directml
@@ -229,6 +249,11 @@ class SourceLocatorService:
             "is_accelerator": b.device_type() != "cpu",
             "fallback": self.device_preference in ("auto", "directml") and b.device_name() == "cpu",
             "available_devices": available,
+            # ① 低内存收缩（2026-10-07 立项）：降档可观测（竞品 low_memory_mode 同语义）
+            "low_memory_mode": budget.low_memory_mode,
+            "memory_tier": budget.tier,
+            "grab_workers": budget.grab_workers,
+            "max_cluster_frames": budget.max_cluster_frames,
         }
 
     # ------------------------------------------------------------------ #
@@ -2414,6 +2439,9 @@ class SourceLocatorService:
           同语义，逐字节验收见 test_ffmpeg_io）；ffmpeg spawn 次数从 O(帧数) 降到 O(簇数)。
         - 默认 False = 续34 形态（每帧独立 ffmpeg 进程, 线程池并发; grab 是纯 IO+解码,
           帧结果与串行逐字节一致）。patch rerank 358 帧 spawn 占 111s(探针实测), 并发 4 → 逼近 /4。
+
+        ① 低内存收缩（2026-10-07 立项）：线程数再与 ``media.resource_budget`` 的当前档位
+        取 min——可用内存紧张时降到 2/1（帧结果不变，只慢不崩；宽裕档 = 现役默认零语义）。
         """
         times = list(times)
         if len(times) <= 1:
@@ -2422,7 +2450,9 @@ class SourceLocatorService:
             return self._grab_frames_window(path, times)
         from concurrent.futures import ThreadPoolExecutor
 
-        with ThreadPoolExecutor(max_workers=min(max_workers, len(times))) as ex:
+        from media.resource_budget import current_budget
+        workers = min(max_workers, current_budget().grab_workers)
+        with ThreadPoolExecutor(max_workers=min(workers, len(times))) as ex:
             return list(ex.map(lambda t: self._grab_frame_cached(path, t), times))
 
     def _grab_frames_window(self, path, times):
@@ -2520,8 +2550,10 @@ class SourceLocatorService:
 
         self._log.info("isc l2 index build started path=%s", p)
         try:
+            from media.resource_budget import current_budget
             T, F, _meta = engine_isc_l2.build_tp_index(
-                src, ffmpeg=self.ffmpeg, scorer=self._isc_scorer, on_frame=_prog)
+                src, ffmpeg=self.ffmpeg, scorer=self._isc_scorer, on_frame=_prog,
+                max_cluster_frames=current_budget().max_cluster_frames)
             engine_isc_l2.save_index(p, T, F, _meta)
         except Exception as exc:
             self._log.warning("isc l2 index build failed path=%s err=%s; fallback", p, exc)

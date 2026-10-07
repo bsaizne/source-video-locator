@@ -67,6 +67,9 @@ export const useSessionStore = defineStore('session', () => {
     // data dir is writable (the backend does the real download on first use).
     initState.value = 'CHECKING_MODEL'
     initProgress.value = 70
+    // ② 设备回报（2026-10-07 立项）：首启即拉一次 actual 设备三元组填徽标——
+    // 此前只在断→通重连时刷新，首启徽标可能空挂或被索引历史标签占位。
+    await loadDeviceSettings()
     await sleep(400)
     initState.value = 'READY'
     initProgress.value = 100
@@ -117,7 +120,9 @@ export const useSessionStore = defineStore('session', () => {
   async function buildIndex(originalPath: string): Promise<void> {
     const st = await service.buildIndex(originalPath)
     indexStatus.value = st
-    backend.value = st.backend
+    // ② 设备回报（2026-10-07 立项）：不用索引的 backend 标签覆盖侧栏徽标——
+    // 那是「建这条索引时」的冻结历史标签（IndexMeta.backend），不是当前实际设备；
+    // 徽标的唯一权威来源 = /api/settings/device 的 actual 三元组（loadDeviceSettings）。
   }
 
   function setBackendFromDeviceSettings(ds: DeviceSettingsJson): void {

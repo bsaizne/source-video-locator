@@ -89,6 +89,7 @@ def _capped_target_n(ffmpeg, src: Path, dur: float, fps: float) -> int:
 
 def build_tp_index(source: str | Path, *, ffmpeg, scorer, fps: float = 1.0,
                    limit_s: float = 0.0, cluster_s: float = 120.0,
+                   max_cluster_frames: int | None = None,
                    on_frame=None) -> tuple[np.ndarray, np.ndarray, dict]:
     """构建 tp 索引：目标网格 k/fps → ``grab_grid``（select 抽取，first_ge）→ ISC 嵌入。
 
@@ -96,7 +97,10 @@ def build_tp_index(source: str | Path, *, ffmpeg, scorer, fps: float = 1.0,
     网格帧攒在内存再统一嵌入，test3（47GB）被换页拖慢 3×+，续52-G 修复）。片尾守卫 =
     目标网格先按最后一个视频帧 pts 截断（``_capped_target_n``，2026-10-05），EOF 硬失败
     仍按「渐进裁剪该簇尾部目标」兜底；**整簇不可取 = 跳过该簇**（c0 必须前进，防死循环）。
-    ``on_frame(done, total)`` 可选进度回调。"""
+    ``on_frame(done, total)`` 可选进度回调。
+    ``max_cluster_frames``（2026-10-07 ① 低内存收缩）：单簇在飞帧数上限——默认 None =
+    无额外约束（现役 120 帧/簇）；低内存档由 ``media.resource_budget`` 给 64/16。簇切小
+    只改批次不改帧（times/feats 逐字节一致）。"""
     src = Path(source)
     info = ffmpeg.metadata(src)
     dur = float(info.duration)
@@ -111,6 +115,8 @@ def build_tp_index(source: str | Path, *, ffmpeg, scorer, fps: float = 1.0,
     c0 = 0.0
     while c0 * fps < n:                       # 逐簇：grab → embed → 释放帧
         planned = min(int(cluster_s * fps), n - int(c0 * fps))
+        if max_cluster_frames is not None and max_cluster_frames > 0:
+            planned = min(planned, int(max_cluster_frames))
         if planned <= 0:
             break
         grid: dict = {}
