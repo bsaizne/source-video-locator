@@ -47,6 +47,29 @@
   ⚠️ 未证面：本机无令牌取不到 draft release 元数据 ⇒ 三资产真实 `id`/`size` 没本地核过，
   等值校验首次生效即在 CI；第四轮若仍红 56 就不再当抖动处理，改走 `gh release download`
   或 `releases/download/<tag>/<name>` 并留对照证据。
+- **第四轮（同批追加）— 加固版仍红 56 ⇒ 不再押根因，改结构：多通道 + 「元数据死≠资产死」+ fail-fast**：
+  run `37795700737`（head `cf4b61f`，**已含** `--retry 5` + 整发 3 次）第 11 步仍 `exit code 56`，
+  `mvp-tests-macos` 继续绿。观测通道换了：**check annotations 是公共端点**
+  （`GET /repos/…/check-runs/<job_id>/annotations` 无令牌 = 200），这一轮只有 3 条注解
+  （Node 20 弃用 / exit 56 / arm64 排队），**我上轮加的 `::warning::` 一条没出**
+  ⇒ 死在元数据那一发（`json="$(curl …)"` 在 `set -e` 下直接判死整步），6 次尝试全同码
+  ⇒ **上轮「偶发网络」定性作废**。根因仍未定，候选三条（IPv6 路由 / HTTP/2 复位 /
+  draft release 的 `tags` 端点行为）—— 本轮把它们变成**可读数据**，而不是押其中一个。
+  ⇒ 四处改动：① 元数据四条独立入口（`api/tags` 与 `api/list?per_page=100` × `curl(-4 --http1.1)` 与
+  `gh api` 独立实现）；② 资产三通道（A=api octet by id / B=gh api by id / C=`github.com` 直链），
+  每发把 `rc`/`http_code`/stderr 头打进注解；③ **解耦**：元数据全灭不再整步死 ⇒ 改走
+  「直链 + 仓库内 `asset.json` 的 sha256 当场判」（只字不碰 `api.github.com`；sha256 与文件名在仓里，
+  与 `verify_model_asset_shas.py` 同源）；④ **fail-fast**：整步上移到 `Download DINOv2 weights` 之前
+  ⇒ 红一轮从 ≈19 分钟降到 ≈2-3 分钟（已核 `build_backend_mac.py` 只 rmtree DIST/WORK/BACKEND_DIR，
+  不清 `resources/models` ⇒ 先取资产安全）。
+  彩排升级：不再手抄逻辑，`work/r17_mac_log/extract_step11.py` **从 workflow 原样抽出 run 块**，
+  `step11_harness3.sh` + `stubs3/{curl,gh,python3,sleep}` 顶掉网络跑四情形，全 PASS：
+  N1「api 双实现全挂、直链给满字节」= 本轮 CI 形态 → rc0 走直链+sha；N2「连直链也 404」→ rc90 且注解带
+  `-6/-4` 路由对照；N3「tags 挂、list 成」→ rc0(ch2+A)；N4「元数据只有 gh 成、curl 资产恒截断」→ rc0(ch3+B)。
+  ⚠️ 未证面（下一轮 CI 才定）：`-4`/`--http1.1` 是否命中根因、`gh api` 在 mac runner 取 draft 资产能否通、
+  **直链对 draft release 是 200 还是 404**（③能否兜住的关键；本机无令牌测不了，也不为此去取凭据）。
+  若直链也 404，下一步只能动资产存放位置 —— 那要用户裁决：把 `model-assets` 由 draft 改 published
+  会让 NC 许可的权重公开，我不自己动。
 - **档案瘦身（同批，按 2026-10-07 用户拍板的防复发纪律）**：`Current Task` ▶ 块 4 → 3，
   最旧的「续63 补八」块用带锚点断言的脚本 `work/r17_docs/migrate_state_bu8.py` **逐字**迁往
   `.agent/archive/STATE_history_20261008.md`（43 行 / 2515 字，脚本断言迁移块内含关键句 + 迁后恰 3 块）。

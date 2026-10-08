@@ -97,7 +97,38 @@
 > ⚠️ 未证面：本机取不到 `model-assets` 元数据（无令牌 404，该 release 是 draft；不为本机答案去取凭据）
 > ⇒ **三个资产的 `id`/`size` 真实值没在本地核过**，等值校验首次生效就在 CI 上。若第四轮仍红在 56，
 > 就不再当抖动处理：改走 `gh release download` 或 `releases/download/<tag>/<name>` 并留对照证据。
-> **下一步（需用户口令/手动）**：第四轮 dispatch `h3-macos-mps.yml`（push 不触发）⇒
+> **下一步（需用户口令/手动）**：再 dispatch 一轮 ⇒ 结果见下面「第四轮」
+>
+> **第四轮 — 加固版仍红在 56 ⇒ 定性改判「这条入口当下不通」，并把「拿不到元数据」与「拿不到资产」解耦**
+> run `37795700737`（head `cf4b61f`，**已含上一轮的 --retry 5 + 整发 3 次**）= `macos-package`
+> 第 11 步仍然 `exit code 56`，`mvp-tests-macos` 继续绿。
+> **关键观测（不用令牌就能拿到的通道 = check annotations）**：
+> `GET /repos/.../check-runs/<job_id>/annotations` 对本公共仓库返回 200，而这一轮注解里
+> **只有 3 条**（Node 20 弃用告警 / exit 56 / arm64 排队提示），**我上一轮加的 `::warning::` 一条都没出现**
+> ⇒ 脚本死在**元数据那一发**（`json="$(curl …)"` 在 `set -e` 下直接把整步判死），根本没走到下载循环
+> ⇒ 同一发请求 6 次尝试全同码 ⇒ **上一轮「偶发网络抖动」的定性是错的**：当下 `api.github.com`
+> 这个入口对该 runner 就是拿不通（根因未定，候选＝IPv6 路由 / HTTP/2 复位 / draft release 的
+> tags 端点行为 —— 三条都只是**假设**，本轮把它们变成可读数据而不是赌其中一个）。
+> ⇒ 这一轮不再猜，改结构（四处）：
+> ① **元数据四条独立入口**：`api/tags`、`api/list?per_page=100`（draft release 走列表更稳）
+>   × `curl`（`-4 --http1.1`）与 `gh api`（Go 独立实现）；
+> ② **资产三条通道**：A=api octet-stream by id、B=gh api by id、C=`github.com/.../releases/download`
+>   直链，每条的 `rc` / `http_code` / stderr 头**全部打进注解**；
+> ③ **解耦**：元数据全灭**不再等于整步死** —— 改走「直链 + 仓库内 `asset.json` 的 sha256 当场比对」
+>   （那条路一个字都不碰 `api.github.com`；sha256 与文件名在仓里，`verify_model_asset_shas.py` 同源）
+>   ⇒ 「api 今天不通」这类事从「出不了包」降级为「慢一点、少一道 size 闸」；
+> ④ **fail-fast 换位**：整步上移到 `Download DINOv2 weights` 之前 ⇒ 红一轮从 ≈19 分钟降到 ≈2-3 分钟
+>   （已核 `Build backend bundle` 不清 `resources/models`，先取资产安全）。
+> 本地彩排升级为**直接跑 workflow 原样抽出的脚本**（`extract_step11.py` 抽取 → `step11_harness3.sh`
+> 用 `stubs3/{curl,gh,python3,sleep}` 顶掉网络，不手抄）四情形全 PASS：
+> N1「api 双实现全挂、直链给满字节」⇒ **rc0 走直链+sha**（就是本轮 CI 形态）；
+> N2「连直链也 404」⇒ rc90 且注解带 `-6/-4` 路由对照；N3「tags 挂、list 成」⇒ rc0 走 ch2+A；
+> N4「元数据只有 gh 成、curl 资产恒截断」⇒ rc0 走 ch3+B。
+> ⚠️ 仍未证面（如实登记）：`-4`/`--http1.1` 是否命中根因、`gh api` 在 mac runner 取 draft 资产能否通、
+> **直链对 draft release 到底 200 还是 404**（这是③能不能真兜住的关键，本机无令牌测不了）
+> —— 全都只能由下一轮 CI 定；若直链也 404，下一步就得改资产存放位置（需用户裁决：把 `model-assets`
+> 从 draft 改成 published 会让 NC 许可的权重公开，不能我自己动）。
+> **下一步（需用户口令/手动）**：下一轮 dispatch `h3-macos-mps.yml` ⇒
 > `mvp-tests-macos` 绿 → `macos-package` → 包侧门槛 `accept_packaged_bundle_mac.py`（该脚本**无**
 > 腿埋点/降噪断言，本次改动不会给它添新红点）→ `gh release upload mac-alpha --clobber`
 > ⇒ 下载链 `https://github.com/bsaizne/source-video-locator/releases/download/mac-alpha/Video-Locator-mac-arm64.zip`。
