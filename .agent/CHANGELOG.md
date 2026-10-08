@@ -1,5 +1,26 @@
 # CHANGELOG
 
+## 2026-10-08（续63 补十一）— mac CI 唯一红点：Windows 字面量断言（测试层，已修并 push）
+
+- **现象**：用户手动 dispatch 的 run `37782689308`（head `382d3ac`）= `mvp-tests-macos` failure
+  （`Ran 617 tests … FAILED (failures=1, skipped=48)`）⇒ `macos-package` **skipped** ⇒ `mac-alpha`
+  没出新包。
+- **取不到 job 日志**（无令牌 `/actions/jobs/<id>/logs` = 403；本机 GCM 不弹令牌不重试）⇒ 改从计数反推：
+  `errors=0` 排除「构造异常对象本身抛错」，`failures=1` 只与「某条断言字面量落空」相容 ⇒ 锁定
+  `test_logging.py::ProactorNoiseFilterTest::test_our_module_connection_reset_still_error` 的
+  `assertIn("WinError 10054", main)`。
+- **根因 = 断言把平台文案当跨平台事实**：CPython 非 Windows 平台**忽略** `OSError` 的 `winerror`
+  入参（`exc.winerror` 恒 None），渲染成 `[Errno 10054]`；降噪判定本身在 mac 上走
+  「winerror 缺省退 errno」分支、行为正确。
+- **改动**（`d78e13a`）：`_reset()` 按平台给形态 / 新增 `_code_token()` 供 ERROR 侧断言 /
+  新增常驻锁 `test_errno_only_shape_still_downgraded`（用「没有 winerror」的形态压 errno 回退分支，
+  Windows 本机即可跑）。
+- **验证面**：Windows `mvp.tests.test_logging` **31 OK**（30→31）；mac 侧**未本机实测**，
+  判据 = 官方文档 + 现役判定分支 + run 计数相容性，最终由下一次 dispatch 定论。
+- **教训 ⑮** 已写进 `STATE.md` 工程教训速查；同批更正 `Current Problem` 里「工作树仍未提交」的过期表述
+  （补九/补十 已按口令提交 push）。
+- ⚠️ 自伤留痕：push 时误打 `HEAD:main`（本仓默认分支 = **master**）⇒ 已补推 master 并删除远端 `main`。
+
 ## 2026-10-06（续57 夜间批二）— 计划项 1「ISC margin 门标定」= 判负关闭（两级探针 + 机制否证，已回滚）
 
 - **立项修正**：材料复读发现 t1r08c/t1r12a 非子镜头族，而是 ISC margin 卡门（探针口径

@@ -42,6 +42,33 @@
 
 ## Current Task
 
+> **▶ 2026-10-08（续63 补十一）— mac CI 唯一红点定位并修掉：断言把 Windows 文案当成跨平台事实**
+> 用户手动 dispatch 的 run `37782689308`（head `382d3ac`）：`mvp-tests-macos` = failure
+> （`Ran 617 tests … FAILED (failures=1, skipped=48)`）⇒ 依赖它的 `macos-package` 被 **skipped**
+> ⇒ `mac-alpha` 没出包。job 日志无令牌取到 403，改从「failures=1 且 errors=0」这个数字反推：
+> **红点是 `mvp/tests/test_logging.py::ProactorNoiseFilterTest.test_our_module_connection_reset_still_error`
+> 里的 `assertIn("WinError 10054", main)`**。CPython 在非 Windows 平台**忽略** `OSError` 的
+> `winerror` 入参（官方文档原话 "On other platforms, the winerror argument is ignored"），
+> `exc.winerror` 恒 None ⇒ 日志渲染成 `[Errno 10054]`，那个 Windows 字面量在 mac 上永不出现。
+> **降噪判定本身在 mac 上是对的**（走 `is_benign_connection_noise()` 的「winerror 缺省退 errno」
+> 分支），错的是断言。⇒ 三条改动（`d78e13a`，已 push origin/master）：
+> ① `_reset()` 按平台给形态（nt=5 元组真机样 / 其余=2 元组），不再在 mac 上造出真机不存在的对象；
+> ② 新增 `_code_token()`，ERROR 侧断言取平台对应字面量（`WinError`/`Errno`），支持档侧同理；
+> ③ 新增**常驻锁** `test_errno_only_shape_still_downgraded`：用「没有 winerror」的跨平台形态直接
+> 压 errno 回退分支（本机实测：2 元组 → `[Errno 10054] msg`，5 元组 → `[WinError 10054] msg`），
+> 把 mac 那半边从「等 CI 替我验」变成每平台都验。
+> 验证面（如实登记）：Windows 本机 `mvp.tests.test_logging` **31 tests OK**（原 30 + 新增 1）；
+> **mac 侧未本机实测**（无 mac 环境，`os.name` 打补丁模拟会被 pathlib/tempfile 反咬，已放弃那条路），
+> 判据 = 文档 + 现役判定分支 + 「failures=1 且 errors=0」这个只与「断言落空」相容的计数。
+> 教训并入 [[verification-must-be-multimodal]] 同族：**跨平台断言里「日志字面量」是平台产物，
+> 不是逻辑事实**；测另一平台的分支要在本机用「该平台的对象形态」造出来当常驻锁。
+> **下一步（需用户口令/手动）**：再 dispatch 一次 `h3-macos-mps.yml`（push 不触发）⇒
+> `mvp-tests-macos` 绿 → `macos-package` → 包侧门槛 `accept_packaged_bundle_mac.py`（该脚本**无**
+> 腿埋点/降噪断言，本次改动不会给它添新红点）→ `gh release upload mac-alpha --clobber`
+> ⇒ 下载链 `https://github.com/bsaizne/source-video-locator/releases/download/mac-alpha/Video-Locator-mac-arm64.zip`。
+> ⚠️ 顺手登记一次自伤：本次 push 先误打 `HEAD:main`（本仓默认分支是 **master**）⇒ 远端多出一个
+> `main` 分支，已 `push origin master:master` + `push origin --delete main` 复原，现远端仅 master。
+
 > **▶ 2026-10-08（续63 补十）— r17 出包：补九 三件进包 + 包侧两条新锁（腿埋点已实测进档）【下个对话从这里读起】**
 > 口令「先出包吧」。构建 = `mvp/ui/scripts/build-release.ps1` 一条链（vite → compile:electron →
 > PyInstaller → electron-builder dir），`PS_EXIT=0`；zip = `Compress-Archive win-unpacked\*` Optimal
@@ -208,8 +235,10 @@
   `isolated`（渲染此前从未隔离）+ 卷轴去紧邻同素材重复（默认开）+ ①③ 的 UI 接线。
 
 ## Current Problem
-- **无阻塞项**（2026-10-08 续63 补十 更新）。现役包 = **r17**（补九 三件已进包并包内实测全绿，
-  含两条新包侧锁）；工作树 = 补九 + 补十 全部改动，**仍未提交**（等口令）。回滚档 = r16，r15 待删口令。
+- **无阻塞项**（2026-10-08 续63 补十一 更新）。补九/补十 已按口令提交并 push（`ba5bedd` 代码 +
+  `382d3ac` 档案 + `d78e13a` mac 断言修复），现役包 = **r17**（Windows，包内实测全绿含两条新包侧锁）。
+  **mac 侧唯一未结 = 等用户再 dispatch 一次 workflow**（补九 的 Windows 字面量断言已修，见补十一）。
+  回滚档 = r16，r15 待删口令。
   => 腿边界埋点与支持档降噪**已在包内支持档实测生效**（`locate leg=` 12 行原文见 Current Task 补十 块）。
 - ~~两处新 UI 缺浏览器目检~~ = 已目检（续63 补三）并**按用户裁决删除显示**（续63 补四）；
   ①③ 只到后端 API/契约层，界面上不呈现。
@@ -319,6 +348,13 @@
   往 `router.on_startup` 挂东西根本不执行；3.13 的 `default_exception_handler` 要**异常对象**，
   传 `(type,val,tb)` 会让处理器自己抛 `AttributeError`、档里整片变成
   "Exception in default exception handler"（我两版因此把读数全数错分类）。
+  ⑮ **日志里的「错误码字面量」是平台产物，不是逻辑事实**（2026-10-08：一条 Windows 专属字面量
+  断言让 mac 出包整轮卡住，`macos-package` 被 skip）：
+  `OSError` 在 Windows 渲染 `[WinError 10054]`，在非 Windows **忽略** `winerror` 入参、渲染
+  `[Errno 10054]`（官方文档原话）⇒ `assertIn("WinError 10054")` 这类断言换平台必然落空，而**被测逻辑
+  可以完全正确**。⇒ 跨平台文案断言一律走「按平台取字面量」的小 helper；要在 Windows 上验 mac 那半边，
+  就用**另一平台的对象形态**造样本当常驻锁（本机 2 元组 `ConnectionResetError(10054, msg)` 的
+  `winerror` 也是 None，正好等价于 mac 真机形态）。
 - **mac 包会多带 ≈88MB 死资产**（续36）：`PatchReranker._try_onnx` 只认 DmlExecutionProvider，
   macOS/MPS 侧本就走 torch；`extraResources` 是整目录复制，H3 正式化时需按平台裁剪。
 
@@ -367,4 +403,4 @@
 
 ## Last Updated
 
-2026-10-08 20:45
+2026-10-08 21:55
