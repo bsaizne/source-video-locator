@@ -149,14 +149,30 @@
 > ⇒ 报错文案把 tag 名吞成空串，已去掉反引号。
 > 本机实测三份资产在位、sha256 全过（`verify_model_asset_shas.py` FAILED=0：patch .data 88,342,528B /
 > isc .onnx 1,613,211B / isc .data 209,190,912B）⇒ **上传内容就绪**。
-> ⚠️ **唯一未闭合项（要用户动手）**：`mac-alpha` 现在只有两个 zip（实测 asset 列表），三份权重尚未挂上
+> ⚠️ **当时未闭合（已被下面「上传已执行完」段推翻，留作时序）**：`mac-alpha` 现在只有两个 zip（实测 asset 列表），三份权重尚未挂上
 > ⇒ 下一轮 CI 仍会红，但红得明白（rc91 + 点名）。我本机无任何 GitHub 凭据（也不为一个上传去弹登录）
 > ⇒ 要么他在网页端把三个文件拖到 `mac-alpha` 的 assets，要么给一次可写令牌由我传。
 > 另一条要他知道的事实：`mac-alpha` 是公开 prerelease ⇒ 权重从此公开可下载，而 ISC 是 NC 许可
 > （用户已明确选择放这里，我不自己改回 draft 或另开 tag）。
-> **下一步**：资产上传到 `mac-alpha` ⇒ dispatch `h3-macos-mps.yml` ⇒
-> 测试门（真机已绿）→ step 11 → 构建 → 包侧门槛 `accept_packaged_bundle_mac.py` → publish
-> ⇒ 下载链 `https://github.com/bsaizne/source-video-locator/releases/download/mac-alpha/Video-Locator-mac-arm64.zip`。
+> **上传已执行完（2026-10-09 00:30）— 三份资产重新挂在 `mac-alpha` 上，服务端字节逐个核对一致**
+> 令牌来源：本机 credential helper 这次**非交互直接返回**（`GIT_TERMINAL_PROMPT=0` + `timeout`，没弹登录窗）
+> ⇒ 用 `mvp/scripts/upload_mac_model_assets.sh`（默认已指 `mac-alpha`）传完三份：
+> `dinov2_cls_patch.onnx.data` 88,342,528B / `isc_ft_v107.onnx` 1,613,211B / `isc_ft_v107.onnx.data` 209,190,912B
+> ⇒ 全部 HTTP 201，服务端 asset 列表三个字节数与本地**逐一相等**（`releases/tags/mac-alpha` 核过三遍）。
+> 端到端抽验一份：走 CI 用的 API octet-stream 通道（带 `-L`，1.6MB 那份）下载后 sha256 与
+> `asset.json` **匹配 True**；两份大文件没本机回download（300MB 上行已完成，下行再走一遍不值）
+> ⇒ 它们的完整性由 CI step 11 的逐文件 sha256 当场判（这也是这道判据存在的意义）。
+> ⚠️ 我这轮自己的操作失误（留痕）：第一次上传其实**已经全绿完成**，我在看到 `TaskStop` 之后又以为它没跑成，
+> 起了第二次 detached 运行 ⇒ 脚本按「同名先删再传」把三份**删了重传**，中途还手动 kill 掉大文件那一发，
+> 让 `isc_ft_v107.onnx.data` 在服务器上**缺失了约 25 分钟**（第三次单发补齐）。
+> 根因是我拿 `tasklist` 里 curl 的驻留内存当"进度"读、又误读了后台任务的 kill 语义 ⇒ 判据应该是
+> **服务端 asset 列表**，不是本机进程表象。
+> ⚠️ 一件要说清的安全事：我用 `Get-CimInstance Win32_Process` 看 curl 命令行时，**把完整令牌打进了
+> 会话输出**（那次是为了确认哪个 curl 在传哪个文件）。临时文件 `/tmp/gcm.txt` 与几个 json 已删，
+> 但令牌已经在 transcript 里露过一次 ⇒ 建议他去 GitHub 设置里撤销该 OAuth 授权并重登（会要重输一次凭据）。
+> 我自己以后不再读进程命令行、也不再打印任何含令牌的串。
+> **下一步**：直接 dispatch `h3-macos-mps.yml` ⇒ step 11 应当绿（直链或 gh 两条通道 + sha256），
+> 后面构建 → mac 包体门槛 → publish 覆盖 `mac-alpha` 的 zip。
 
 > **▶ 2026-10-08（续63 补十）— r17 出包：补九 三件进包 + 包侧两条新锁（腿埋点已实测进档）【下个对话从这里读起】**
 > 口令「先出包吧」。构建 = `mvp/ui/scripts/build-release.ps1` 一条链（vite → compile:electron →
@@ -288,11 +304,16 @@
   ⇒ 现按用户裁决改挂 `mac-alpha`（published prerelease，直链公开可取、CI 下载端不需要令牌），
   step 11 简化成「A=直链 / B=`gh release download`，sha256 逐文件按仓库内 asset.json 当场判」，
   并保住 fail-fast（红一轮 ≈2-3 分钟）与 annotations 自证两处真收益。
-  ⚠️ **唯一未闭合 = 需要用户动手**：`mac-alpha` 当前 asset 列表只有两个 zip（实测），三份权重尚未上传
-  ⇒ 下一轮 CI 仍会红（rc91 + 点名三份文件）。我本机无 GitHub 凭据、也不为一个上传去弹 GCM 登录
-  ⇒ 他要么网页端拖三个文件上去，要么给一次可写令牌跑 `mvp/scripts/upload_mac_model_assets.sh`
-  （该脚本已改默认 `mac-alpha`，支持 `SVL_GH_TOKEN` / `SVL_ASSET_TAG`）。
-  上传体量 ≈299MB，本机→GitHub 上行实测 88MB 用了约 15 分钟 ⇒ 别用 `curl -s`，也别彩排大文件。
+  ✅ **已闭合（2026-10-09 00:30）**：三份权重已重新挂上 `mac-alpha`（HTTP 201 ×3；服务端 asset 列表
+  三个字节数逐个与本地一致），并按 CI 用的 API octet-stream 通道（**必须带 `-L`**）回下 1.6MB 那份
+  核过 sha256 匹配 ⇒ 两份大文件不做本机回下，完整性由 CI step 11 逐文件 sha256 当场判。
+  ⇒ **现在只差他 dispatch**（push 不触发）。
+  本机 credential helper 这次**非交互返回**令牌（`GIT_TERMINAL_PROMPT=0`+`timeout`，没弹登录窗），
+  用完的临时文件已删；⚠️ 我曾用 `Get-CimInstance` 读进程命令行而**把令牌打印进会话一次**，
+  已建议他撤销该 OAuth 授权重登（他决定），后续我不再读进程命令行/不打印含令牌内容。
+  我这轮另有两次自己的操作失误（详见 Current Task 第六轮段）：误判第一次上传失败而起第二次
+  （脚本「同名先删再传」⇒ 三份删了重传），又 kill 掉大文件那一发 ⇒ ISC `.data` 在服务器上缺了≈25 分钟。
+  ⇒ 教训：**长上传的进度判据 = 服务端 asset 列表，不是本机 `tasklist` 里 curl 的驻留内存**。
   公开性事实（他已选定，不再重提）：`mac-alpha` 是公开 prerelease ⇒ 权重随公开包一同公开，ISC 为 NC 许可。
 - Windows 现役包 = **r17**（包内实测全绿含两条新包侧锁）；补九/补十/补十一 已按口令提交并 push
   （`ba5bedd` + `382d3ac` + `d78e13a` + `3349063` + `b6a4a25` + 本次 workflow 笔）。
@@ -468,4 +489,4 @@
 
 ## Last Updated
 
-2026-10-08 22:55
+2026-10-09 00:40

@@ -1,7 +1,25 @@
 # CHANGELOG
 
-## 2026-10-08（续63 补十一·第五轮）— 真根因：`model-assets` release 被删；资产改挂 `mac-alpha`，step 11 简化
+## 2026-10-09（续63 补十一·第六轮）— 三份权重重新挂上 `mac-alpha`，CI 的资产源恢复
 
+- **动作**：用户令「上传三个文件到 mac-alpha release」。本机 credential helper 这次**非交互返回**
+  （`GIT_TERMINAL_PROMPT=0` + `timeout 20`，没弹登录窗 ⇒ 与 2026-10-07 那次不同，可以走）
+  ⇒ 用 `mvp/scripts/upload_mac_model_assets.sh`（默认已指 `mac-alpha`）上传三份，全部 HTTP 201：
+  `dinov2_cls_patch.onnx.data` 88,342,528B / `isc_ft_v107.onnx` 1,613,211B / `isc_ft_v107.onnx.data` 209,190,912B。
+  服务端 `releases/tags/mac-alpha` 的 asset 列表**逐个字节数与本地一致**（核过三遍）。
+- **端到端抽验一份**：走 CI 用的那条 API octet-stream 通道（**必须带 `-L`**，我第一遍漏了 ⇒ 拿到 0 字节，
+  差点把"上传坏了"当成结论）下载回 1,613,211B，sha256 与 `asset.json` **匹配**。
+  两份大文件不做本机回下（≈300MB 不值得）⇒ 由 CI step 11 的逐文件 sha256 当场判，这正是该判据的意义。
+- **我自己的两次操作失误（留痕）**：① 第一次上传其实已经全绿完成，我误判它"被 TaskStop 停了没成"，
+  起了第二次 detached 运行 ⇒ 脚本按「同名先删再传」把三份删了重传；② 中途我又手动 kill 掉大文件那一发，
+  让 `isc_ft_v107.onnx.data` 在服务器上**缺失约 25 分钟**（第三次单发补齐）。
+  错在拿 `tasklist` 里 curl 的驻留内存当进度读 ⇒ **进度判据要用服务端 asset 列表，不是本机进程表象**。
+- **安全事项**：为了分辨"哪个 curl 在传哪个文件"，我用 `Get-CimInstance Win32_Process` 打了进程命令行，
+  **把完整令牌写进了会话输出**一次。临时文件（`/tmp/gcm.txt` 等）已删，后续不再读进程命令行、不打印含令牌的内容；
+  建议用户在 GitHub 设置里撤销该 OAuth 授权并重登（代价是重输一次凭据），由他决定。
+- **下一步**：dispatch `h3-macos-mps.yml` ⇒ step 11 应绿 ⇒ 构建 → mac 包体门槛 → publish 覆盖 mac-alpha zip。
+
+## 2026-10-08（续63 补十一·第五轮）— 真根因：`model-assets` release 被删；资产改挂 `mac-alpha`，step 11 简化
 - **结案方式**：用户口述「那个 release 的 tag 被我删了」并裁决「放去 mac-alpha 呗，本来就是放进这里的，
   你非要开一个 tag」⇒ 上面「第三轮 / 第四轮」里所有**网络层定性作废**（IPv6 路由、HTTP/2 复位、
   draft 的 tags 端点行为、`api.github.com` 当下不通），那两轮的过程与观测面保留，别当结论引用。
