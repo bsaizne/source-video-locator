@@ -280,15 +280,20 @@
   `isolated`（渲染此前从未隔离）+ 卷轴去紧邻同素材重复（默认开）+ ①③ 的 UI 接线。
 
 ## Current Problem
-- **mac 出包链 = 唯一活跃项**（2026-10-08 续63 补十一 第三轮）。**测试门已真机转绿**
-  （run `37791429326` 的 `mvp-tests-macos` = success，618 条全过 + MPS 冒烟），前两轮那两处
-  跨平台断言缺陷（Windows 字面量 / 「winerror 属性不存在」）都被 mac 结清 ⇒ **`mvp/src` 侧无遗留**。
-  现在卡在 `macos-package` 第 11 步「取 model-assets 资产」：`curl` 退出码 56（对端中途断流），
-  同一步骤 2026-10-06 run `37471104792` 是绿的 ⇒ 判为偶发网络，已给该步补韧性（元数据也重试 +
-  整发 3 次 + 按 API `size` 逐字节等值校验），**待第四轮 dispatch 定论**。
-  ⚠️ 未证面如实登记：本机无令牌取不到 draft release 元数据（不为答案去取凭据），三个资产的
-  `id`/`size` 真实值没在本地核过 ⇒ 等值校验第一次生效就在 CI 上；若第四轮仍红 56，改走
-  `gh release download` 或 `releases/download/<tag>/<name>` 并留对照证据。
+- **mac 出包链 = 唯一活跃项**（2026-10-08 续63 补十一 第五轮 更正）。**测试门已真机转绿**
+  （run `37795700737` 的 `mvp-tests-macos` = success，618 条全过 + MPS 冒烟）⇒ `mvp/src` 侧无遗留。
+  `macos-package` 第 11 步红了四轮，**真因由用户口述结案：`model-assets` 那个 release 被他删了**
+  ⇒ 我先前写的「偶发网络」与「`api.github.com` 这条 HTTP/2 通道当下对该 runner 不通」**都是错的定性**，
+  过程留在 Current Task 第三/四轮但**别再当结论引用**；教训：**先验被访问对象是否还存在，再谈通道**。
+  ⇒ 现按用户裁决改挂 `mac-alpha`（published prerelease，直链公开可取、CI 下载端不需要令牌），
+  step 11 简化成「A=直链 / B=`gh release download`，sha256 逐文件按仓库内 asset.json 当场判」，
+  并保住 fail-fast（红一轮 ≈2-3 分钟）与 annotations 自证两处真收益。
+  ⚠️ **唯一未闭合 = 需要用户动手**：`mac-alpha` 当前 asset 列表只有两个 zip（实测），三份权重尚未上传
+  ⇒ 下一轮 CI 仍会红（rc91 + 点名三份文件）。我本机无 GitHub 凭据、也不为一个上传去弹 GCM 登录
+  ⇒ 他要么网页端拖三个文件上去，要么给一次可写令牌跑 `mvp/scripts/upload_mac_model_assets.sh`
+  （该脚本已改默认 `mac-alpha`，支持 `SVL_GH_TOKEN` / `SVL_ASSET_TAG`）。
+  上传体量 ≈299MB，本机→GitHub 上行实测 88MB 用了约 15 分钟 ⇒ 别用 `curl -s`，也别彩排大文件。
+  公开性事实（他已选定，不再重提）：`mac-alpha` 是公开 prerelease ⇒ 权重随公开包一同公开，ISC 为 NC 许可。
 - Windows 现役包 = **r17**（包内实测全绿含两条新包侧锁）；补九/补十/补十一 已按口令提交并 push
   （`ba5bedd` + `382d3ac` + `d78e13a` + `3349063` + `b6a4a25` + 本次 workflow 笔）。
   回滚档 = r16，r15 待删口令。

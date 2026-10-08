@@ -4,7 +4,7 @@
 用途两处：
 - 本地/CI 在把资产放进 `mvp/ui/resources/models/` 之后跑一遍 ⇒ 传错包不了（构建前就红）；
 - mac 打包链尤其需要：patch/ISC 的 `.data` 外部权重不入库（ISC 209MB 超 GitHub 单文件硬限），
-  由 CI 从 `model-assets` release 下载 ⇒ 下载完整性必须有独立判据，不能只看 curl 退出码。
+  由 CI 从滚动发布 release `mac-alpha` 直链下载 ⇒ 下载完整性必须有独立判据，不能只看 curl 退出码。
 
 用法: python mvp/scripts/verify_model_asset_shas.py <dir> [<dir> ...]
       dir = 含 asset.json 的模型目录（如 mvp/ui/resources/models/isc_ft_v107）

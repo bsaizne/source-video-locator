@@ -1,19 +1,22 @@
 #!/usr/bin/env bash
-# upload_mac_model_assets.sh — 把 mac CI 需要的三份模型资产挂到 rolling tag `model-assets`
+# upload_mac_model_assets.sh — 把 mac CI 需要的三份模型资产挂到滚动发布 release `mac-alpha`
 #
 # 为什么走 release 而不是 git：这三份里 ISC 外部权重 209MB，超 GitHub 单文件 100MB 硬限；
 # 而"CI 现场导出"锁不住 sha256（export_patch_onnx.py 重导出的图文件只差元数据但字节不同，
 # accept_packaged_bundle.py 与 Windows 包用同一份 asset.json 做硬比对 ⇒ 一改 sha 锁 Windows 验收就红）。
-# 泄露面为零：这三份字节本就随 r9/r11 的 win 包与 mac-alpha 的 mac 包对外分发。
+# 资产源历史：原先单开内部 draft tag `model-assets`，2026-10-08 用户删除并裁决「放去 mac-alpha 呗，
+# 本来就是放进这里的」⇒ 现源=mac-alpha（published prerelease，直链公开可取、CI 下载端不需要令牌；
+# 代价是权重随公开包一同公开，ISC 是 NC 许可 —— 这条由用户明确选定，别再自行改回 draft）。
 #
-# 用法（在仓库根）:  bash mvp/scripts/upload_mac_model_assets.sh
-# 依赖: curl；令牌从 git credential helper 取（不落盘、不打印）
+# 用法（在仓库根）:  SVL_GH_TOKEN=<可写令牌> bash mvp/scripts/upload_mac_model_assets.sh
+#                   换源用 SVL_ASSET_TAG=<tag> 覆盖（默认 mac-alpha）
+# 依赖: curl + node；令牌优先环境变量。**不要依赖 helper 兜底**（GCM 会弹登录窗，本机纪律禁止）
 set -euo pipefail
 
 API="https://api.github.com"
 UPLOADS="https://uploads.github.com"
 OWNER_REPO="bsaizne/source-video-locator"
-TAG="model-assets"
+TAG="${SVL_ASSET_TAG:-mac-alpha}"
 M="mvp/ui/resources/models"
 
 FILES=(
