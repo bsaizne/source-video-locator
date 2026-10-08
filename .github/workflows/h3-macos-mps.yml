@@ -185,7 +185,12 @@ jobs:
         run: |
           set -euo pipefail
           M=mvp/ui/resources/models
-          json="$(curl -sfL --max-time 60 -H "Authorization: Bearer $GH_TOKEN" \
+          # 元数据那一发也要重试：2026-10-08 run 37791429326 就折在 `curl` 退出码 56
+          # （recv failure，对端中途断流）上 —— 资产下载本来有 --retry 5，但**取 release JSON
+          # 这一发一次都没重试**，一次抖动就把整轮（≈19 min，且后面步骤全没跑）判死。
+          # 判据：同一步骤 2026-10-06 run 37471104792 是绿的 ⇒ 属偶发网络形态，不改逻辑只补韧性。
+          json="$(curl -sfL --retry 5 --retry-delay 5 --retry-all-errors --retry-connrefused \
+            --max-time 120 -H "Authorization: Bearer $GH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
             "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/tags/model-assets")"
           fetch() {
@@ -193,18 +198,32 @@ jobs:
             # 走 API 的 octet-stream 端点而不是 releases/download：后者依赖公共重定向主机
             # （本机实测该路径连不上，connect=0/21s 无首字节，而 api.github.com 0.8s 正常），
             # 且仓库若转私有 releases/download 需要额外鉴权。
-            aid="$(printf '%s' "$json" | python3 -c "import sys,json;a=json.load(sys.stdin)['assets'];print(next(x['id'] for x in a if x['name']=='$name'))")"
+            meta="$(printf '%s' "$json" | python3 -c "import sys,json;a=json.load(sys.stdin)['assets'];x=next(v for v in a if v['name']=='$name');print(x['id'],x['size'])")"
+            aid="${meta%% *}"; asize="${meta##* }"
             mkdir -p "$dest"
-            # 重试 + 低速判定：截断/半速卡死都会显式失败，绝不静默交半成品
-            # （本地彩排实测截断过一次 ⇒ 下面 verify_model_asset_shas 是第二道闸）
-            curl -sfL --retry 5 --retry-delay 5 --retry-all-errors \
-              --speed-time 120 --speed-limit 20000 --max-time 1200 \
-              -H "Authorization: Bearer $GH_TOKEN" \
-              -H "Accept: application/octet-stream" \
-              -o "$dest/$name" \
-              "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/assets/$aid"
-            test "$(wc -c < "$dest/$name")" -gt 0 || { echo "::error::$name 下载为空"; exit 1; }
-            echo "fetched $name -> $dest/$name ($(wc -c < "$dest/$name") B)"
+            # 整发下载最多 3 次；每发内部 curl 自己再重试 5 次 + 低速判定。
+            # **按 API 报的字节数做等值校验**（原来只判 >0 ⇒ 截断成半体能过闸，只有 sha 那道才兜得住；
+            # 现在截断当场重试，不用等到 sha 校验把整轮打死）。
+            for try in 1 2 3; do
+              if curl -sfL --retry 5 --retry-delay 5 --retry-all-errors --retry-connrefused \
+                   --speed-time 120 --speed-limit 20000 --max-time 1200 \
+                   -H "Authorization: Bearer $GH_TOKEN" \
+                   -H "Accept: application/octet-stream" \
+                   -o "$dest/$name" \
+                   "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/assets/$aid"; then
+                actual="$(wc -c < "$dest/$name" | tr -d ' ')"
+                if [ "$actual" = "$asize" ]; then
+                  echo "fetched $name -> $dest/$name ($actual B, aid=$aid, try=$try)"
+                  return 0
+                fi
+                echo "::warning::$name 收到 $actual/$asize B（截断），第 $try 次整发重试"
+              else
+                echo "::warning::$name 第 $try 次下载失败（curl rc=$?），整发重试"
+              fi
+              rm -f "$dest/$name"; sleep 10
+            done
+            echo "::error::$name 三次整发下载都没拿到 $asize B"
+            exit 1
           }
           fetch dinov2_cls_patch.onnx.data "$M/dinov2_cls_patch"
           fetch isc_ft_v107.onnx "$M/isc_ft_v107"

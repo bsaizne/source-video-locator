@@ -32,6 +32,24 @@
   mac 支持档 12 行 `locate leg=` 顺序与区间全对（`global_anchor 0->6/48` …
   `consecutive_resolve 44->48/48`，`patch_refine elapsed=91.1s` 走 MPS），降噪 7 条在 mac 全绿。
   ④ 教训补写进 `STATE.md` ⑮：**「另一平台的属性缺省」有两种形态（None / 属性不存在），只有真机能区分**。
+- **第三轮（同批追加）— 测试门真机转绿，卡点搬到 `macos-package` 第 11 步**：run `37791429326`
+  （head `b6a4a25`）= `mvp-tests-macos` **success**（618 全过 + MPS 冒烟）⇒ 前两轮改动被真机结清；
+  `macos-package` 首跑红在 `Fetch model assets for mac bundle`，报
+  `Run set -euo pipefail / Error: Process completed with exit code 56`（curl recv failure = 对端中途断流）。
+  定性：同一步骤在 run `37471104792`（2026-10-06，head `7589659`）为 success 且此后未改 ⇒ 偶发网络，
+  但**代价不对称**（抖动一次 = 19 分钟 + 后续步骤全没跑），而当时只有资产下载带 `--retry 5`，
+  **取 release JSON 那一发一次重试都没有**。
+  ⇒ workflow 加固（逻辑不变，只补韧性）：元数据 `curl` 补 `--retry 5 --retry-all-errors --retry-connrefused`；
+  `fetch()` 外套**整发 3 次**；完成判据由「>0 字节」升级为**与 API 报的 `size` 逐字节等值**（旧口径截断成
+  半体能过闸，要等 sha 校验才打死整轮）；每发失败打 `::warning::` 带 try 次与 curl rc。
+  本地彩排 `work/r17_mac_log/step11_harness.sh`（桩 curl 三情形）：截断→二发齐 = rc0 恢复 /
+  三发全截断 = `::error::` rc1 / 一发即齐 = 原路径 rc0；YAML 解析 + `bash -n` 过。
+  ⚠️ 未证面：本机无令牌取不到 draft release 元数据 ⇒ 三资产真实 `id`/`size` 没本地核过，
+  等值校验首次生效即在 CI；第四轮若仍红 56 就不再当抖动处理，改走 `gh release download`
+  或 `releases/download/<tag>/<name>` 并留对照证据。
+- **档案瘦身（同批，按 2026-10-07 用户拍板的防复发纪律）**：`Current Task` ▶ 块 4 → 3，
+  最旧的「续63 补八」块用带锚点断言的脚本 `work/r17_docs/migrate_state_bu8.py` **逐字**迁往
+  `.agent/archive/STATE_history_20261008.md`（43 行 / 2515 字，脚本断言迁移块内含关键句 + 迁后恰 3 块）。
 
 ## 2026-10-06（续57 夜间批二）— 计划项 1「ISC margin 门标定」= 判负关闭（两级探针 + 机制否证，已回滚）
 

@@ -42,7 +42,7 @@
 
 ## Current Task
 
-> **▶ 2026-10-08（续63 补十一）— mac CI 唯一红点定位并修掉：断言把 Windows 文案当成跨平台事实**
+> **▶ 2026-10-08（续63 补十一）— mac 出包三轮 CI 往返：①Windows 字面量断言 ②「属性不存在」≠「为 None」③资产下载抖动加固【真机已结清前两处】**
 > 用户手动 dispatch 的 run `37782689308`（head `382d3ac`）：`mvp-tests-macos` = failure
 > （`Ran 617 tests … FAILED (failures=1, skipped=48)`）⇒ 依赖它的 `macos-package` 被 **skipped**
 > ⇒ `mac-alpha` 没出包。job 日志无令牌取到 403，改从「failures=1 且 errors=0」这个数字反推：
@@ -60,9 +60,11 @@
 > 验证面（如实登记）：Windows 本机 `mvp.tests.test_logging` **31 tests OK**（原 30 + 新增 1）；
 > **mac 侧未本机实测**（无 mac 环境，`os.name` 打补丁模拟会被 pathlib/tempfile 反咬，已放弃那条路），
 > 判据 = 文档 + 现役判定分支 + 「failures=1 且 errors=0」这个只与「断言落空」相容的计数。
-> 教训并入 [[verification-must-be-multimodal]] 同族：**跨平台断言里「日志字面量」是平台产物，
+> ⚠️ 第一轮顺手登记一次自伤：本次 push 先误打 `HEAD:main`（本仓默认分支是 **master**）⇒ 远端多出一个
+> `main` 分支，已 `push origin master:master` + `push origin --delete main` 复原，现远端仅 master。
+> 教训（同一族，见 `Known Issues` 教训速查 ⑮）：**跨平台断言里「日志字面量」是平台产物，
 > 不是逻辑事实**；测另一平台的分支要在本机用「该平台的对象形态」造出来当常驻锁。
-> **▶ 2026-10-08（续63 补十一·第二轮）— 用户递来包内日志（`D:\mvp-macos-test-log.zip`），红点搬家到**我新加的那条常驻锁****
+> **第二轮（用户递来包内日志 `D:\mvp-macos-test-log.zip`）— 红点搬家到我新加的那条常驻锁**
 > 用户提供 mac 测试日志（zip 内只有 `mvp_test_macos.log`）⇒ run `37787565939`（head `3349063`，
 > 用户 dispatch）：`Ran 618 tests in 995.344s / FAILED (**errors=1**, skipped=48)`。
 > ① **第一轮的修复已被真机证明有效**：`test_our_module_connection_reset_still_error` 在 mac 上
@@ -78,12 +80,27 @@
 > ③ **顺带拿到 mac 侧腿埋点真机证据**（此前只有 Windows 包内）：mac 支持档出现 12 行 `locate leg=`
 > 且区间/顺序正确（`global_anchor 0->6/48` … `consecutive_resolve 44->48/48`，
 > `patch_refine elapsed=91.1s` 在 MPS 上），`locate refine start legs=` 亦在 ⇒ 埋点跨平台成立。
-> **下一步（需用户口令/手动）**：第三轮 dispatch `h3-macos-mps.yml`（push 不触发）⇒
+> **第三轮 — mac 测试门真机转绿；卡点搬到 `macos-package` 第 11 步（资产下载抖动）**
+> run `37791429326`（head `b6a4a25`）：**`mvp-tests-macos` = success**（618 条全过，MPS 冒烟也跑了）
+> ⇒ 补十一 两轮的判断到此被真机结清（断言按平台取字面量 + `getattr` 取 winerror，两处都对）。
+> **`macos-package` 首跑即红**，红在第 11 步 `Fetch model assets for mac bundle` =
+> `Run set -euo pipefail / Error: Process completed with exit code 56`（curl 56 = 对端中途断流）。
+> ⇒ 定性依据：同一步骤在 run `37471104792`（2026-10-06，head `7589659`）是 **success**，且那之后
+> 这一步的代码没动过 ⇒ 偶发网络形态，不是新缺陷。**但代价不对称**：一次抖动 = 整轮 19 分钟 +
+> 后面步骤全没跑，而当时只有资产下载带 `--retry 5`，**取 release JSON 那一发一次重试都没有**。
+> ⇒ 加固（不改逻辑，只补韧性）：① 元数据 `curl` 补 `--retry 5 --retry-all-errors --retry-connrefused`；
+> ② `fetch()` 外面再套**整发 3 次重试**；③ 完成判据从「>0 字节」升级成**与 API 报的 `size` 逐字节等值**
+> （旧口径截断成半体能过闸，要等 sha 校验才打死整轮）；④ 每发失败都打 `::warning::` 带 try 次与 curl rc，
+> 下次读日志不用再猜。
+> 本地彩排（`work/r17_mac_log/step11_harness.sh`，桩 curl 三情形）：首发截断→二发齐 = 恢复 rc=0；
+> 三发全截断 = `::error::` rc=1；一发即齐 = 走原路径 rc=0。YAML 解析 + `bash -n` 均过。
+> ⚠️ 未证面：本机取不到 `model-assets` 元数据（无令牌 404，该 release 是 draft；不为本机答案去取凭据）
+> ⇒ **三个资产的 `id`/`size` 真实值没在本地核过**，等值校验首次生效就在 CI 上。若第四轮仍红在 56，
+> 就不再当抖动处理：改走 `gh release download` 或 `releases/download/<tag>/<name>` 并留对照证据。
+> **下一步（需用户口令/手动）**：第四轮 dispatch `h3-macos-mps.yml`（push 不触发）⇒
 > `mvp-tests-macos` 绿 → `macos-package` → 包侧门槛 `accept_packaged_bundle_mac.py`（该脚本**无**
 > 腿埋点/降噪断言，本次改动不会给它添新红点）→ `gh release upload mac-alpha --clobber`
 > ⇒ 下载链 `https://github.com/bsaizne/source-video-locator/releases/download/mac-alpha/Video-Locator-mac-arm64.zip`。
-> ⚠️ 顺手登记一次自伤：本次 push 先误打 `HEAD:main`（本仓默认分支是 **master**）⇒ 远端多出一个
-> `main` 分支，已 `push origin master:master` + `push origin --delete main` 复原，现远端仅 master。
 
 > **▶ 2026-10-08（续63 补十）— r17 出包：补九 三件进包 + 包侧两条新锁（腿埋点已实测进档）【下个对话从这里读起】**
 > 口令「先出包吧」。构建 = `mvp/ui/scripts/build-release.ps1` 一条链（vite → compile:electron →
@@ -195,50 +212,6 @@
 > isc_refine_enabled = True`（随「ISC L2 画面索引宽扫」在提交 7c6e485 一起翻的默认）⇒ 就地改注释，
 > 未动行为。
 
-> **▶ 2026-10-08（续63 补八）— 进度链跳格独占实测 + 包内支持档文件侧闭合【下个对话从这里读起】**
-> 用户裁决「先 1（真机自然运行复核）+ 埋点下一批」。三条产物：
-> `mvp/scripts/review_progress_chain.py`（源码树记 on_progress 事件流，读数经产品自己的
-> `map_progress_stage` + `ProgressDebouncer` 换算，与 `work/fixramp_run1_table.txt` 同列可比）、
-> `mvp/scripts/review_packaged_support_log.py`（事后核真实支持档）、
-> `work/name_probe/packaged_index_probe.py`（包内特殊文件名 + 隔离任务文件侧）。
->
-> **进度链 test2 独占实测（locate 全程 1476.5s=24.6min，67 段）**：字牌腿 302.6→551.5s 共
-> **249s / 10 个跳格 ⇒ 均值 24.9s、最大停留 41.6s**；ISC 腿 41 格最大 37.3s；全程最大 41.6s；
-> 读数单调不回退；防抖合并 113→109 格（全是亚 0.5s 突发）且**未放大可见停留**（raw 41.6 =
-> debounced 41.6）。对照：改前实测「字牌 363s 一动不动 / ISC 40~58s」⇒ **改善成立且量级 8.7×**。
-> **但模型预测口径要更正**：`test_tasks.py:220` 那条 `step_s = 0.1/(1.7*32/48/67)*(363/67) = 32s`
-> 算的是**均匀假设下的均值**，实测均值 24.9s 优于它，而用户感知的是**最大值 41.6s**（段间成本
-> 不均，最坏单格 1.67× 均值）⇒ 超阈值 1.6s 不是"改善没生效"，是**锁的口径选错了**。
-> 建议（待拍板，未动代码）：把该锁改成按实测最大值口径 + 登记 41.6s，**不**加宽字牌腿显示宽度
-> （会挤占 patch/ISC，且 1.6s 不构成体验问题）。
-> **测量卫生（本批踩过两次，已写进脚本 docstring）**：① 首跑我在重叠窗口里跑了包内探针（同块
-> DML），字牌腿被抬到 52.8s ⇒ 整趟作废重跑，污染趟产物已删以防被误引；② 探针首版在任务
-> completed 后 1s 就 terminate，把父进程 `isolated child reaped` 行自己切掉 = 假红，
-> 改成等收割行出现（≤25s 宽限）再收。
->
-> **支持档「文件侧」两条老欠账今天首次实测闭合**：① 打包态子进程 INFO 真进
-> `video_locator.log`——完整链 `started(父) -> booted(子, 同 pid 同 task_id) -> 子进程 locate
-> 内部 INFO -> reaped exitcode=0`（此前只在 stdout 断言过）；② 特殊文件名：支持档里
-> 2026-08-27 两条 `index failed: Dune (2021).mkv / Interstellar (2014).mkv` 真因挖出 =
-> 当年 ffprobe 命令被**手工加单引号**（Windows 不认单引号 => 收到带引号字面名），
-> 现包内对 `Dune (2021) 沙丘 test.mp4` 建索引/回读 VALID/目录名 `...__dcadb7f3.idx` 全过
-> （FAILED=0）=> 历史缺陷，已闭。
-> **顺带捞出的产品级欠账（未动）**：真实支持档 492 条 ERROR 里 **485 条 = asyncio proactor
-> `WinError 10054` 连接重置噪声**（客户端强关，非故障）=> 支持档信噪比 1.4%，客服看档会被
-> 淹没；降噪（过滤该 callback 或降级）与「修复链腿边界埋点」同批做最合适。
-
-> **包内真机复核已闭合（同批追加，`work/r16_pkg/packaged_cadence_probe.py`）**：轮询 UI 同一个读数源
-> （`GET /api/tasks/{id}` 的 `progress`，服务端已过 `map_progress_stage`+防抖）量 test2 打包态跳格，
-> **不需要等埋点**（埋点只影响售后事后能否查）。结果与源码树同口径几乎逐格对齐：
-> 墙钟 **1407.5s vs 源码树 1476.5s（0.95x，无包体劣化）**、92→100 跳格 **54 vs 55**、
-> 全程最大停留 **41.4s vs 41.6s**、字牌腿最大 41.4s / 均值 23.7s（源码树 41.6 / 24.9）、
-> ISC 腿最大 **33.8s vs 37.3s**、结果段数 67 = 源码树一致、读数单调不回退。
-> **C5 支持档文件侧隔离链在真实 25 分钟任务上完整**：父 `started` / 子 `booted`（同 task_id）/
-> 子进程 `locate finished` INFO / `reaped exitcode=0` 全在 `video_locator.log` 里。FAILED=0（C1-C6）。
-> 自纠一处：探针首版按 `(pct,stage,message)` 变化折叠采样，**消息换了而读数没换会被当成"动了"**
-> => 低估可见冻结（首跑报 145 格）；已改成与源码树同的 **pct 变化**折叠并重出读数表。
-> 分发包：已按口令删 r13+r14，留 **r16 现役 + r15 回滚**。本批未提交（等口令）。
-
 ## Completed
 
 - 历史完成项见 `.agent/archive/STATE_history_20261007.md`（Current Task 退休块续14~续61）、
@@ -251,11 +224,20 @@
   `isolated`（渲染此前从未隔离）+ 卷轴去紧邻同素材重复（默认开）+ ①③ 的 UI 接线。
 
 ## Current Problem
-- **无阻塞项**（2026-10-08 续63 补十一 更新）。补九/补十 已按口令提交并 push（`ba5bedd` 代码 +
-  `382d3ac` 档案 + `d78e13a` mac 断言修复），现役包 = **r17**（Windows，包内实测全绿含两条新包侧锁）。
-  **mac 侧唯一未结 = 等用户再 dispatch 一次 workflow**（补九 的 Windows 字面量断言已修，见补十一）。
+- **mac 出包链 = 唯一活跃项**（2026-10-08 续63 补十一 第三轮）。**测试门已真机转绿**
+  （run `37791429326` 的 `mvp-tests-macos` = success，618 条全过 + MPS 冒烟），前两轮那两处
+  跨平台断言缺陷（Windows 字面量 / 「winerror 属性不存在」）都被 mac 结清 ⇒ **`mvp/src` 侧无遗留**。
+  现在卡在 `macos-package` 第 11 步「取 model-assets 资产」：`curl` 退出码 56（对端中途断流），
+  同一步骤 2026-10-06 run `37471104792` 是绿的 ⇒ 判为偶发网络，已给该步补韧性（元数据也重试 +
+  整发 3 次 + 按 API `size` 逐字节等值校验），**待第四轮 dispatch 定论**。
+  ⚠️ 未证面如实登记：本机无令牌取不到 draft release 元数据（不为答案去取凭据），三个资产的
+  `id`/`size` 真实值没在本地核过 ⇒ 等值校验第一次生效就在 CI 上；若第四轮仍红 56，改走
+  `gh release download` 或 `releases/download/<tag>/<name>` 并留对照证据。
+- Windows 现役包 = **r17**（包内实测全绿含两条新包侧锁）；补九/补十/补十一 已按口令提交并 push
+  （`ba5bedd` + `382d3ac` + `d78e13a` + `3349063` + `b6a4a25` + 本次 workflow 笔）。
   回滚档 = r16，r15 待删口令。
-  => 腿边界埋点与支持档降噪**已在包内支持档实测生效**（`locate leg=` 12 行原文见 Current Task 补十 块）。
+  => 腿边界埋点与支持档降噪**已在包内支持档实测生效**（Windows 见 Current Task 补十 块；
+  **mac 侧同一条链也已在 mac 测试日志里实测**：12 行 `locate leg=` 顺序/区间正确）。
 - ~~两处新 UI 缺浏览器目检~~ = 已目检（续63 补三）并**按用户裁决删除显示**（续63 补四）；
   ①③ 只到后端 API/契约层，界面上不呈现。
 - **进度链平台期（续63 补五，三轮才修对）**：修复链显示宽度从「按腿的数量平分」改成
@@ -369,8 +351,14 @@
   `OSError` 在 Windows 渲染 `[WinError 10054]`，在非 Windows **忽略** `winerror` 入参、渲染
   `[Errno 10054]`（官方文档原话）⇒ `assertIn("WinError 10054")` 这类断言换平台必然落空，而**被测逻辑
   可以完全正确**。⇒ 跨平台文案断言一律走「按平台取字面量」的小 helper；要在 Windows 上验 mac 那半边，
-  就用**另一平台的对象形态**造样本当常驻锁（本机 2 元组 `ConnectionResetError(10054, msg)` 的
-  `winerror` 也是 None，正好等价于 mac 真机形态）。
+  就用**另一平台的对象形态**造样本当常驻锁。⚠️ 第二轮真机补正：mac 上**不是 `winerror=None`，
+  而是这个属性根本不存在**（`exc.winerror` 直接 `AttributeError`）——我第一版 ⑮ 写成「None」，
+  被自己那条新锁在 mac 上打死；取异常属性一律 `getattr(obj, name, None)`，与产品判据同写法。
+  ⑯ **CI 里「一次网络抖动就能打死整轮」的地方要按代价不对称来加固**（2026-10-08 出包第三轮）：
+  一步 ≈19 分钟、失败即让后面 5 个步骤全没跑，而当时的韧性配置是**偏的**——大文件下载带
+  `--retry 5`，但**先跑的那发小元数据请求一次重试都没有**，抖动恰好打在没有保护的那一发上（curl rc=56）。
+  ⇒ 加韧性看「失败代价」不是「传输数据量」；下载完成判据也别用「>0 字节」，要用**元数据报的 `size`
+  逐字节等值**（半体能过闸，错误要等下一道 sha 校验才暴露，整轮已经花掉了）。
 - **mac 包会多带 ≈88MB 死资产**（续36）：`PatchReranker._try_onnx` 只认 DmlExecutionProvider，
   macOS/MPS 侧本就走 torch；`extraResources` 是整目录复制，H3 正式化时需按平台裁剪。
 
@@ -419,4 +407,4 @@
 
 ## Last Updated
 
-2026-10-08 21:55
+2026-10-08 22:55
