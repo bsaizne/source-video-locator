@@ -1969,6 +1969,9 @@ STATE `Current Task` 顶部新增补八块并把补七的开放项②标为闭�
   - ISC 1.8 点 ÷ 67 段 × 7.1s/段 ⇒ **约 27s 一跳**（改前实测 40~58s）
   ⚠️ 字牌与 ISC 两个数是**模型推算**，不是改后实测——改完没有再跑 27 分钟验证趟（用户要求收线）。
   锁里带了一条模型断言（字牌跳格 ≤40s），真机复核留给下一次自然运行。
+  **[2026-10-08 续63 补八 已闭合]** 独占实测 + 包内真机轮询都做了：字牌腿均值 23.7~24.9s（**优于**预测 32s）、
+  最大停留 41.4~41.6s（**超** 40s 阈值）；ISC 最大 33.8s（包内）/37.3s（源码树）。
+  => 改善成立（改前 363s 冻结），但那条锁按**均值**建模、用户感知按**最大值**，口径要改（待拍板）。
 - run3 中途停掉（它测的是中间态权重，继续跑只验证旧配置）。
 - 门禁：后端 **606** · API **122**（映射断言按最终值逐点重写 + 一条跳格模型断言）。
 
@@ -2026,6 +2029,318 @@ STATE `Current Task` 顶部新增补八块并把补七的开放项②标为闭�
 - 门禁：`mvp/src` 零改动 ⇒ 未跑后端/API 全套（新增仅 `mvp/scripts` 探针 + 文档）。
   工作树 = 三个未跟踪新文件；**未提交 git、未出包**（r16 仍等口令）。
 
+## 2026-10-08（续63 补七）— r16 出包：三件修复进包 + 全链包内验收绿（含 R2 由红转绿）
+
+- **口令**：「推ci然后打包吧」⇒ 先推 `aba3a21..654dd32`（6 笔，含 ⑥b 判负批），再出 r16。
+  macOS workflow 是 dispatch-only，按既有搁置裁决**未**手动触发（不烧 ~180 macOS 分钟）。
+- **打包前门禁（命令输出留证 `work/r16_gates.log`）**：后端 **606 OK (skipped=2)** ·
+  API **122 OK** · vitest **144 全绿** · `tsconfig.app.json` 与 `tsconfig.desktop.json`
+  **分别**跑 typecheck 且 `returncode=0`。
+  ⚠️ 首轮我把 `npx vue-tsc ... | tail -4` 的 `$?` 当成了编译器退出码（实为 `tail` 的）⇒
+  重跑用 Python `subprocess.run().returncode` 硬取。**「双 typecheck 干净」这类自报必须有取对
+  退出码的命令支撑**（同 续63 补五 被打回的那类错，只是这次自己抓到并当场修）。
+- **包**：`mvp/ui/release/Video-Locator-win-x64-20261008r16.zip` = 981,659,900 B / **7,078 条目** /
+  `testzip()=None`；**从 zip 里读出** backend.exe = 77,469,132 B `sha16=7c9533750776a79a`
+  （r15 = 77,467,467 B / `d45656f585826f4a`）⇒ 尺寸+摘要逐代递增，且证明 zip 装的就是被验收的那份构建。
+- **构建**：`build-release.ps1` 四阶段 PS_EXIT=0（模型资产 sha256 fail-fast 全过 → vite →
+  electron 编译 → PyInstaller onedir + 剪枝 scipy/pandas/onnx → electron-builder dir 1053 MiB）。
+- **包内验收全绿**：
+  - `accept_packaged_bundle.py` **FAILED=0**：资产清单/双 sha256 · 冒烟 rc=0 **29.1s ≤75s** ·
+    DirectML 生效 · 精排与 ISC 未回退 CPU · 段数 1 · **隔离子进程在跑** · **子进程 INFO 进得到包内** ·
+    未误判硬崩。
+  - `accept_packaged_render.py` **FAILED=0**：R1 completed（63s）· **R2 渲染确实走隔离子进程 = PASS**
+    （这条对 r15 如实报红 = `submit_render` 漏传 `isolated` 的修复此前只在源码树）· R2b 未静默回落
+    线程内 · R3 未误判硬崩 · R4 成片 136.366s vs Σclip 136.344s（±0.8s）· R5a 64 段紧邻 0 交叠 ·
+    R6 `h264_amf`。
+  - 三防冒烟 **FAILED=0**（BACKEND_LISTEN 公告 / health 200 / 受保护端点无令牌 401 /
+    release 无令牌拒启 exit!=0）。
+  - `check_export_plan_invariants.py` **FAILED=0**（4 片 × 4 通道五条不变式；2mkv 贴接 2 对→0、
+    覆盖 Δ=0.00、三通道同 plan=是）。
+  - 启动冒烟（新 `work/r16_pkg/startup_smoke.py`）**FAILED=0**：30s 时 Electron 4 + backend 1 存活、
+    启动器未中途崩、按 PID 杀树后 `AFTER_KILL=0`。
+- **包体产物层探针（r16 新形态）= FAILED=0**：`work/r16_pkg/probe.py` 的靶子**不抄档案数字**，
+  改由 `work/r16_pkg/expect_from_source.py` 用同一份 results 在**源码树**跑 `export_project` 现算，
+  并先断言「源码树数据根 vs 包内数据根」的 2.mkv 场景表基线全等
+  （`feature_version` / `preprocess_sha` / `num_frames` / `scenes.npy` 行数与求和）——
+  因为两根不同名（`%LOCALAPPDATA%\SourceVideoLocator` vs `%APPDATA%\Video Locator AI\data`），
+  不核这一条就无法区分「包体回归」与「吸附基线不同」。读数：EDL 134.12s / 64 事件 / 贴接 0 对；
+  卷轴 **63 条 = 源码树 63**（r15 包 64）· 落盘素材 56 · 总宽度 791.75s · 并集 531.0s ·
+  全原速 · 紧邻重复 1 对/13.0s ≤ 计划层认定的真实复用 487.25s · 包内墙钟 97.4s ≤140s。
+  ④a 另留**行为级**证据：包内日志出现 `adjacent dedup (jianying)`。
+- **卷轴 64→63 的口径含义**：r15 包是「去重只在源码树」，r16 起包内也去 ⇒ 任何引用 r15 包内
+  64 条 / 815.75s 的旧读数从此失效，须改引 r16 的 63 / 791.75s（覆盖 531.0s 不变）。
+- **分发包现状**：r13 + r14 + r15 + r16 四份；按「最新+上一档」应删 r13 + r14（~1.96GB），等口令。
+- **未提交**：本批档案改动与 r16 探针脚本（`work/` 不入库）。候选后续 = 把
+  `expect_from_source.py` + `probe.py` 提到 `mvp/scripts/` 作常设包体出口验收（与
+  `accept_packaged_render.py` 同规格），待拍板。
+
+## 2026-10-08（续63 补八）— 进度链跳格独占实测（模型口径更正）+ 支持档文件侧两条老欠账闭合
+
+- **口令**：「先1」= 真机自然运行复核；用户裁决 **埋点下一批**（本轮零 runtime 改动）。
+- **三条产物**：`mvp/scripts/review_progress_chain.py`（源码树记 `on_progress`，读数经产品自己的
+  `map_progress_stage` + `ProgressDebouncer` 换算，输出与 `work/fixramp_run1_table.txt` 同列可逐行对照）、
+  `mvp/scripts/review_packaged_support_log.py`（事后核真实支持档：隔离配对 / 会话账 / 腿标记 /
+  ERROR 信噪比）、`work/name_probe/packaged_index_probe.py`（包内特殊文件名 + 隔离任务文件侧）。
+- **进度链 test2 独占实测**（locate 全程 1476.5s = 24.6min · 67 段 · DirectML）：
+  字牌腿 302.6→551.5s 共 **249s / 10 个跳格 => 均值 24.9s、最大停留 41.6s**；ISC 腿 41 格最大
+  **37.3s**；92→100 全程最大停留 41.6s；读数单调不回退；防抖把 113 格合成 109 格（全是亚 0.5s
+  突发）且**未放大可见停留**（raw 41.6 = debounced 41.6）。
+  对照改前实测（字牌 363s 一动不动 / ISC 40~58s）=> **改善成立，量级 8.7x**；
+  顺带独立复核了「现役 22~31min/片」口径（test2 实测 24.6min）。
+- **模型口径更正（本批最有价值的结论）**：`mvp/api/tests/test_tasks.py:220` 那条锁
+  `step_s = 0.1/(1.7*32/48/67)*(363/67) = 32s` 算的是**均匀假设下的均值**；实测均值 24.9s
+  **优于**预测，但用户感知的是**最大值 41.6s**（段间成本不均，最坏单格 = 1.67x 均值）=>
+  超阈值 1.6s 不代表"改善没生效"，而是**锁的口径选错了（拿均值当体验）**。
+  建议（待拍板，本轮未动代码）：锁改成按实测最大值口径 + 登记 41.6s；**不**加宽字牌腿显示宽度
+  （挤占 patch/ISC，且 1.6s 不构成体验问题）。
+- **测量卫生（本批踩过两次，已写进脚本 docstring）**：
+  ① 首跑我在重叠窗口里跑了包内探针（同一块 DML），字牌腿被抬到 52.8s => **整趟作废重跑**，
+     污染趟产物已删（防后人误引）；跳格类测量对 GPU 争用极敏感，跑时不得并发任何 DML/解码活。
+  ② 探针首版在任务 `completed` 后 1s 就 terminate，把父进程 `isolated child reaped` 行自己切掉
+     => **假红**；改成等收割行出现（<=25s 宽限）再收。教训：任务终态 != 收割完成。
+- **支持档「文件侧」两条老欠账首次实测闭合**：
+  ① 打包态**子进程 INFO 真进 `video_locator.log`**：完整链
+     `isolated child started(父) -> isolated child booted(子, 同 pid 同 task_id) -> 子进程 locate
+     内部 INFO（patch v2 nearfield / fast_global / locate finished）-> isolated child reaped
+     exitcode=0`。此前 `accept_packaged_bundle.py` 只在 **stdout** 上断言，文件侧一直未实测。
+  ② 特殊文件名：从真实支持档挖出 2026-08-27 两条 `index failed: Dune (2021).mkv /
+     Interstellar (2014).mkv` 的真因 = 当年 ffprobe 命令被**手工加单引号**
+     （`'Dune (2021).mkv'`，Windows 不把单引号当引号 => 收到带引号的字面文件名 => rc=1）。
+     现包内对 `Dune (2021) 沙丘 test.mp4` 实测：建索引 completed / 状态回读 VALID /
+     索引目录 `Dune (2021) 沙丘 test__dcadb7f3.idx` / backend=directml => **历史缺陷已闭**（FAILED=0）。
+- **顺带捞出的产品级欠账（未动，等排批）**：真实支持档 492 条 ERROR 里 **485 条是 asyncio
+  proactor `WinError 10054` 连接重置**（客户端强关，非故障）=> 支持档信噪比仅 1.4%，
+  「客服按日志找真因」会被噪声淹没。降噪（过滤该 callback 或降级为 DEBUG）与
+  「修复链腿边界埋点（让进度事件落支持档）」同批做最合适 —— 后者也是本轮复核暴露的观测面缺口：
+  **进度事件完全不落日志**（`mvp/api/tasks/` 无任何 `_log.info`）。
+- **复核器一处自纠**：`review_packaged_support_log.py` 首版把「0 started / 0 缺」报成 A1 PASS
+  —— 真实支持档早于任务隔离上线，必然没有隔离行，那是**空跑不是通过**（同 续63 补五 双 typecheck
+  那类自报门禁错）。改成 `started==0 => A1/A2 判 N/A 并明写"文件侧未实测，别当已验收"`。
+- 门禁：`mvp/src` 零改动；新增两个 `mvp/scripts` 复核脚本 + `work/` 探针。本批未提交、未出包。
+## 追加 —— 包内真机进度链复核闭合（同批，用户「复核」口令）
+
+- **做法**：`work/r16_pkg/packaged_cadence_probe.py` 轮询 `GET /api/tasks/{id}` 的 `progress`
+  （= UI 读的同一个字段，服务端已过 `map_progress_stage` + `ProgressDebouncer`），
+  在**真实包内数据根**（Roaming，索引 VALID）对 test2 跑完整 analyze，独占设备。
+  => 结论：**包内 cadence 不需要等日志埋点就能测**，埋点只决定售后事后能否查。
+- **实测（与源码树同口径 = 按 pct 变化折叠）**：墙钟 **1407.5s vs 源码树 1476.5s（0.95x）**；
+  92→100 跳格 **54 vs 55**；全程最大停留 **41.4s vs 41.6s**；字牌腿最大 41.4s / 均值 23.7s
+  （源码树 41.6 / 24.9）；ISC 腿最大 **33.8s vs 37.3s**；结果段数 67 与源码树一致；读数不回退。
+  判据 C1-C6 **FAILED=0**。=> 「包内真机 cadence 未实测」这条边界**闭合**，且包体无劣化。
+- **C5 支持档文件侧**：真实 25 分钟任务上隔离链四件齐全（父 `started` / 子 `booted` 同 task_id /
+  子进程 `locate finished` INFO / `reaped exitcode=0`），全部落在 `video_locator.log`。
+- **自纠（口径）**：探针首版按 `(pct, stage, message)` 变化折叠 —— 消息换了但读数没换会被算成
+  "动了一下"，**低估**可见冻结（首跑因此报 145 格、最大停留 41.4s 看似优于真实）。
+  已改成与源码树 `review_progress_chain.steps()` 一致的 **pct 变化**折叠，重出
+  `work/r16_pkg/cadence/test2_packaged_dwell_pctcollapse.txt`；脚本内留注释防再犯。
+- **跳格锁口径结论（不变，待拍板）**：均值实测 23.7~24.9s **优于**模型预测 32s，
+  但最大值 41.4~41.6s **超** `test_tasks.py:221` 的 40s 阈值 => 该锁按均值建模、
+  用户感知按最大值，建议改锁口径（登记实测最大值），**不**动显示宽度分配。
+
+
+
+## 2026-10-08（续63 补九）— 腿边界埋点 + 支持档 proactor 降噪 + 跳格锁改按最大值口径
+
+口令「2」= 补七/补八 实测捞出的「下一批候选三件」全做。动 `mvp/src` 两处 + 三层测试 + 两个
+常设复核脚本。**未提交、未出包**（现役 r16 不含这三件）。
+
+### ① 修复链腿边界埋点（`mvp/src/app/locator_service.py`）
+
+- 旧缺口：进度事件**完全不落日志**（`mvp/api/tasks/` 无一处 logger 调用），售后拿到支持档只能看见
+  `patch_refine:` 这类腿内自带行 ⇒ 「进度卡在哪条腿」无法按档复核（`review_packaged_support_log.py`
+  C 面当初就把这条写成"已知观测面缺口"）。
+- 现形态：一次 locate 落 **12 行** `locate leg=<名> elapsed=<秒> units=<a>-><b>/48 chain=<累计秒>`
+  （global_anchor · dense_recheck · text_anchor · seq_rerank · temporal_repair · conflict_rerank ·
+  temporal_ambiguity · consecutive_resolve · degradation_gate · shot_split · patch_refine · isc_refine）
+  + 链首 **1 行** `locate refine start units=0/48 legs=<12 个开关 on/off>`。
+- **口径决策（与立项原话有出入，理由登记）**：立项写的是「每腿进/出一行」，实做**每腿一行**——
+  腿 k 的「进入」= 腿 k-1 的「完成」，链首开关行交代「这条腿跑没跑」⇒ 复核能力等价、行数减半；
+  **腿内 tick 不落日志**（`_fix_to` 保持静默；一次真实 locate 的 tick 上百条，会把同批 ② 的降噪
+  直接抵消）。
+- 两条配套改动：① `_split_on/_patch_on/_isc_on` 三条旋钮判定**整体上移到修复链入口**，埋点 `legs=`
+  行与腿执行同一真源（原来在下面各写一遍，改一处就谎报）；② 埋点边界放在**腿与腿的切换处**而不是
+  显示刻度表的位置——旧 `_fix_to(42)` 排在序列腿**之后** ⇒ 序列腿耗时算进字牌腿，现提到之前
+  （tick 上限 = `10+int(32*0.9)=38` 够不到 42 ⇒ 事件序列逐字不变、显示逐点不变）。
+- 验收（后端 `mvp/tests/test_locator_service.py::LocateLegLoggingTest` 5 项）：行数恰 12 且顺序 =
+  执行顺序 · 刻度与累计耗时单调 · `elapsed` 求和 = 最后一行的 `chain`（±0.3s）· 开关行 12 项 ·
+  **tick 不污染**（`locate leg=` 行数 == 腿数）· **ramp 行为不变**（fix 事件电流终点仍 48、不回退）·
+  **文件侧**：`configure_logging(log_dir=临时目录)`（= 打包态同一套 handler 栈，补八 已实测子进程
+  INFO 进得到那份文件）跑完读回 `video_locator.log`，逐条核 12 行 + `module=app.locator_service` +
+  字牌腿那条 `units=9->42/48` 必须在。
+
+### ② 支持档 proactor 噪声降噪（`mvp/src/infrastructure/logging.py`）
+
+- 现状实测：现役真档 19,877 条记录 / **492 条 ERROR**，其中 **485 条（98.6%）**是同一形态
+  （`module=asyncio` + `_ProactorBasePipeTransport._call_connection_lost()` +
+  `ConnectionResetError [WinError 10054]`，5 行/条）= 客户端（预览播放器取消 Range 请求、UI 轮询
+  关连接）先挂断，**不是故障** ⇒ 信噪比 1.4%，客服按档找真因会被淹。
+- 处理：`BenignConnectionNoiseFilter` 挂 **asyncio logger**（logger 级 filter 才对传播记录生效，
+  挂 root 等于没挂）。判据三条**同时**成立才算噪声，宁可放过不可误杀：① 名字 `asyncio*`；
+  ② 回调是 `_call_connection_lost`；③ `ConnectionResetError/BrokenPipeError` 且 `winerror`
+  （缺省退 `errno`）∈ {10053,10054,10058}。**降级 DEBUG 而不是 drop** ⇒ 支持档与 stdout 不收录、
+  调试档（`SVL_LOG_DEBUG=1`）逐条保留。新增 `SVL_LOG_NOISE_FILTER=off` 开关（支持人员临时看全量，
+  也是双臂对照的对照臂）。顺带把 stream handler 门槛显式设 INFO（原 level=0 ⇒ 降级后的记录仍会
+  以 DEBUG 刷 stderr；改后与既有「调试行只进 debug.log」分层口径一致）。
+- **主证据 = 拿真实历史档做逐条判据回归**（`work/r17_noise/classify_real_log.py`）：按现役解析
+  规则切记录、把 traceback 里的 `ConnectionResetError: [WinError 10054]` 还原成真实 OSError 实例、
+  喂**产品代码**的 `is_benign_connection_noise()` ⇒ 噪声族 **485/485** 判可降；其它 **7 条真故障
+  0 误杀**（`app.locator_service` 2 + `api` 5）。
+- 单测 `mvp/tests/test_logging.py::ProactorNoiseFilterTest` 6 项：支持档不收录（stdout 同门槛）·
+  调试档保留且级别是 DEBUG · 回调名不同不降 · 异常类型/错误码不同不降（10061 拒连=真问题）·
+  我方模块抛同名异常照旧 ERROR（filter 只挂 asyncio）· filter 幂等安装。
+- **未闭合边界（如实登记，不当验收）**：真机复现臂在本机**造不出该形态**。
+  `work/r17_noise/probe.py`（uvicorn 三臂 = r16 包内 / 源码树 / 源码树+调试档，同一份客户端脚本）
+  跑了四轮：一发完即 RST → 二先 recv 64KB 再 RST 并在 `preview_dir` 放 40MB 文件走 FileResponse →
+  三补 `MEDIA_FFPROBE`（第二轮那 18 条「真故障」其实是探针自己缺 ffprobe 的 500，真故障样本被污染）→
+  四各臂档目录先清空重跑（前三轮读数里混着上一轮尾巴）。`work/r17_noise/probe_proactor.py`（裸
+  asyncio 三臂）又一轮，含按 stdlib 源码反出来的真实成因——`proactor_events.py:165` 的
+  `sock.shutdown()` **没有包 try**，其上注释明写「对端还挂着 overlapped read 时关连接会以
+  ERROR_NETNAME_DELETED 失败」= 10054 ⇒ 打法 = 小响应 + 挂着读 + 收 RST 后正常关。
+  **五轮全部 0 条**，连**降噪之前的 r16 臂**也 0 条 ⇒ 「修复臂干净」= **空跑**。
+  两脚本已改成「对照臂 0 条 ⇒ 下游一律 N/A 不判通过」，并加仪表自证行（`module=probe.arm`）
+  证明落盘链路是通的（自证行三臂都在 ⇒ 确实只是没造出形态，不是没落盘）。
+  同批实测通过的半边：真故障 ERROR（`POST /api/index` 指向不存在文件）在修复臂支持档里**照常可见**
+  （B3 PASS）⇒ 「降噪没把信号一起降掉」这一条有真机证据。
+
+### ③ 跳格锁改按最大值口径（`mvp/api/tests/test_tasks.py`）
+
+- 旧锁 = `round(0.1/(1.7*32/48/67)*(363/67)) = 32 ≤ 40`：算的是**均匀假设下的均值**，且输入 363s
+  是修复**前**的腿耗时。补八 两趟实测：均值 20.5~24.7s 一直优于该预测，而**最大单格** 41.4~41.6s
+  超那条 40s ⇒ 不是「改善没生效」（改前形态 = 字牌腿 363s 一动不动），是**锁的口径选错了**。
+- 新锁拆两条：**锁 A** 可见读数数由现役宽度表**现算**（`_visible_steps()` 在
+  `map_progress_stage` 上取值，宽度一改就红，不抄档案）+ 腿墙钟 ÷ 读数数 ≤30s；
+  **锁 B** 登记两趟实测**最大停留** ≤45s（45 = 承认现状 41.6 并要求别继续变差；
+  **不**加宽字牌腿显示宽度——会挤占 patch/ISC 的预算）。
+  另加 `test_width_collapse_would_trip_the_lock` **反向验证**：把宽度压回 run3 那种「按腿数量平分」
+  形态（0.2 点）⇒ 读数 12→3、均值 82s 超阈值 ⇒ 证明锁 A 真会抓到那类回归。
+- **更正 续63 补八 的腿归因（说错主动更正留痕）**：档案写「ISC 腿 41 格 最大 37.3s（源码树）/
+  33.8s（包内）」—— patch 与 ISC 两条腿的 UI 消息文本**一模一样**，旧 `review_progress_chain.py`
+  按消息子串归因 ⇒ 两条腿混成一条（那个「41 格」就是 23+18 的和）。按事件 `phase` + **墙钟区间
+  裁剪**重算两趟原始数据：
+
+  | 腿 | 腿墙钟 源码树/包内 | 最大停留 源码树/包内 | 代码可见读数数 |
+  |---|---|---|---|
+  | 字牌 OCR | 245.9 / 236.6 s | **41.6 / 41.4 s** | 12 |
+  | 切镜拆分 | 33.8 / 31.7 s | 33.8 / 31.7 s | 2 |
+  | patch 精排 | 470.9 / 423.1 s | **37.3** / 28.3 s | 24 |
+  | ISC 第二意见 | 419.7 / 408.9 s | **33.9** / 33.8 s | 19 |
+
+  ⇒ 37.3s 属 **patch 腿**，ISC 腿 = 33.9s；全程最坏单格仍是字牌腿（41.6/41.4）⇒ 补八 的
+  「改善 8.7x、按最大值超旧阈值 1.4~1.6s、不加宽宽度」三条结论**不受影响**。
+  （注：显示停留的折叠口径在两腿边界上会把尾巴算进上一条腿——93.9 那个读数既是拆分末端又是
+  patch 开头 ⇒ 统计一律按原始事件流的腿区间裁剪，`leg_dwells()` 写了这条原因。）
+
+### ④ 两个常设复核脚本同批改口径
+
+- `mvp/scripts/review_progress_chain.py`：判据换成 ①逐腿最大 ≤45 ②逐腿均值 ≤30（切镜拆分不判均值，
+  整腿只 2 个读数）③全程 ≤60 ④读数单调 ⑤与登记值对照（**只报数不判负**）
+  ⑥**埋点自证**（⑥a 档内腿行数 == 12；⑥b 逐腿 `elapsed` 与事件流墙钟对账，差 ≤max(8s,12%)；
+  **0 行判 N/A 不判通过**）。归因函数用已录 `work/progress_chain_review/test2.events.json`
+  **离线回放**校验过（那趟早于埋点 ⇒ ⑥a 正确地报 N/A，而逐腿统计与上表逐格一致）。
+- `mvp/scripts/review_packaged_support_log.py`：新增 **C2 腿边界埋点面**（行数/腿顺序/刻度与累计
+  单调/「腿耗时合计 ≤ 会话 `locate finished` elapsed」；无腿行 ⇒ 判 **N/A** 并明写「档早于埋点或
+  跑的是 <=r16 包，别当已实测」）；D 面写明降噪已上线（老档里的 10054 = 历史，非回归）。
+  对现役真实档重跑 FAILED=0（C2 如实报 N/A）：`work/support_log_review/report_r17_c2.json`。
+
+### 附带
+
+- `locate()` 里 ISC 那条「默认关」注释过期：`config.py:350 isc_refine_enabled = True`（随「ISC L2
+  画面索引宽扫」在提交 7c6e485 一起翻的默认）⇒ 就地更正注释，**未动行为**。
+- 门禁 = 后端 **617** OK(skipped=2) · API **124** OK · vitest **144** · app/desktop 两个 config
+  分别 typecheck **RC=0**（`work/r17_gates/gates_final.log` + `gates.json`；退出码由
+  `subprocess.returncode` 硬取）。门禁 runner 自身修了两处本机坑：Windows 上 `npx` 必须
+  `shutil.which` 解析（否则 FileNotFoundError）；vitest 输出里的 U+2713 会打断 cp936 控制台的
+  `print`（RC=0 已拿到却挂在打印尾巴）⇒ runner 里 `sys.stdout.reconfigure(utf-8, replace)`。
+- 教训入 `Known Issues` 速查：**⑫ 按 UI 文本标签分组统计会串腿**（要用结构化 `phase` + 墙钟裁剪）、
+  **⑬ 降噪/复现类探针必须自带仪表自证行 + 对照臂 0 条 ⇒ 下游判 N/A**（这条今天挡掉了三轮假绿）。
+
+### 追加 —— 复现臂七轮全 0，改「借 asyncio 自己的记录路径」闭合（同批，用户「怎么解决，你想想」→「可以」）
+
+- **七轮客户端强关都没造出该形态**（`work/r17_noise/`）：
+  `probe.py`（uvicorn 三臂 = **r16 未修复包内** / 源码树 / 源码树+调试档）四轮 ——
+  ①发完即 RST；②先 recv 64KB 再 RST 并在 `preview_dir` 放 40MB 文件走 FileResponse；
+  ③补 `MEDIA_FFPROBE`（第二轮那 18 条"真故障"其实是探针自己缺 ffprobe 的 500，真故障样本被污染）；
+  ④各臂目录先清空重跑（前三轮读数里混着上一轮尾巴，我差点把陈旧样本当新证据）。
+  `probe_proactor.py`（裸 asyncio 三臂）两轮 —— 慢写法（40×64KB + drain）与按 stdlib 源码反出来的
+  「挂着读再正常关」写法（`proactor_events.py:165` 那句**没包 try** 的 `sock.shutdown()` 才是
+  历史 traceback 的行号；慢写法失败是因为 drain 先抛 ⇒ `fatal_error` 置位 `_called_connection_lost`
+  ⇒ 后面 close 直接短路，永远走不到那句 shutdown）。
+  `probe_keepalive.py`（真服务栈 + keep-alive 超时当扳机：客户端只收响应头就 RST、晾服务端 6.5s
+  让它自己回收这条挂着读的废连接）一轮。⇒ **七轮全 0 条**，连 r16 未修复对照臂也 0 条。
+  三个脚本都改成「对照臂 0 条 ⇒ 下游一律 N/A 不判通过」并加仪表自证行（`module=probe.*`，
+  实测三臂都在 ⇒ 确实只是没造出来，不是落盘链路没通）。
+- **闭合办法 = 不再赌 OS 时序，改借框架自己的记录路径**（`work/r17_noise/probe_inject.py`，
+  `FAILED=0 / VERDICT=CLOSED`）：在跑着**真实产品服务栈**的进程里调
+  `loop.call_exception_handler({message, handle, exception})`，由 **asyncio 默认异常处理器**落到
+  logger `"asyncio"` —— 真 `create_app()`、真 `uvicorn.Server(Config(..., log_level="info",
+  access_log=False))`（参数同 `api/launcher.py:build_server`）、真 ProactorEventLoop、
+  lifespan 里真产品的 `configure_logging()`、真 `ConnectionResetError(10054,…)` 带真 traceback；
+  剩下唯一变量就是「我们的 filter 在不在」。**代打的只有一处并写明**：抛它的回调不是
+  `_call_connection_lost` 本尊，message/handle 按历史档逐字复制 ⇒ 「OS 会不会真报这个错」
+  不由本脚本证明。
+- **三臂七判据全 PASS**：J1 不过滤臂 10/10 条该形态进支持档（含 WinError 10054）= 不过滤就会淹档 ·
+  J2 过滤臂同一注入 0 条 · J3 过滤+调试档：支持档仍 0 条，`debug.log` 以 **DEBUG** 留满 10 条
+  （降噪≠丢信息）· J4 不误杀：同批注入的 `ValueError` callback 形态 + 产品自己的真故障
+  （POST /api/index 指向不存在文件）在三臂**都**照旧进档 · J0 装配锁（off 未装 / on 已装）·
+  J5 仪表自证 · J6 确认注入跑在 ProactorEventLoop 上。
+- **②的证据链定型**：判据对不对 = 历史真档 485 条逐条回归（485/485 + 真故障 7 条 0 误杀）；
+  链路生不生效 = 真进程注入三臂双臂对照；不误杀 = 单测 6 项 + J4。**残留一项**如实登记：
+  本机没有「OS 真报错」的直接观察。r17 出包时建议把这套三臂升成包侧常设断言
+  （在 `backend.exe` 里注入 ⇒ 支持档 0 条 / 调试档留满），另加一条
+  「真实 analyze 后支持档必须 12 行 `locate leg=`」= 埋点进包的锁。
+- **两个 stdlib 坑**（首两版读数全错分类的原因，已写进脚本注释与 `Known Issues` ⑭）：
+  ① `create_app` 用**自定义 lifespan** ⇒ 往 `app.router.on_startup` 挂东西根本不执行
+  （表现为 `INJECT_NOT_DONE`，服务其实活着）；② 3.13 的 `default_exception_handler` 要的是
+  **异常对象**，传 `(type, val, tb)` 三元组会让处理器自己抛
+  `AttributeError: 'tuple' object has no attribute '__traceback__'`，档里整片变成
+  "Exception in default exception handler"。
+- 本追加不改 `mvp/src`（只动 `work/` 探针与档案）⇒ 不重跑门禁；三件主体修复的门禁数仍按上方
+  「附带」段（后端 617 · API 124 · vitest 144 · 双 typecheck RC=0）。仍未提交、未出包。
+
+## 2026-10-08（续63 补十）— r17 出包：补九 三件进包 + 包侧两条新锁（腿埋点已实测落支持档）
+
+口令「先出包吧」。包体与验收全部实测，未抄上一代数字。
+
+- **构建**：`mvp/ui/scripts/build-release.ps1`（vite + `vue-tsc` → compile:electron →
+  PyInstaller 后端 → electron-builder dir）一条链 `PS_EXIT=0`；出包前查过 tasklist 无形态残留。
+  zip = `Compress-Archive -Path win-unpacked\* -CompressionLevel Optimal`（与 r15/r16 同形态，
+  根=散装内容、7,078 条目）。
+- **包** = `mvp/ui/release/Video-Locator-win-x64-20261008r17.zip`：
+  **981,665,352B / 7,078 条目 / `testzip()=None`**；**从 zip 内读出**的
+  `resources/backend/backend.exe` = 77,472,765B `sha256[:16]=7e3fe311bdf62b36`
+  ⇒ 与磁盘构建产物逐字节一致（`matches_disk_build=True`）；r16 = 77,469,132 / `7c9533750776a79a`
+  ⇒ 尺寸 **+3,633B**，正对应本批埋点 + 降噪的代码量；r15 = 77,467,467 / `d45656f585826f4a` 未动。
+  核验工具新写 `work/r17_pkg/zip_identity.py`（一次列全部代次、从 zip 里读、顺带核 root 形态）。
+- **代次性质（两段如实记）**：出包当时 补九 三件**尚未提交**（git 时机由用户掌握），所以先按
+  「工作树构建」登记；出包后随即提交为 `ba5bedd`，且**构建之后没有再改 `mvp/src`**（只改了
+  `.agent` 档案与 `accept_packaged_bundle.py` 里一条判据自身的 bug）⇒ 包内 backend.exe 与该
+  commit 的产品源码逐字对应；那条判据修正不进包（脚本不在包内）。
+  · `accept_packaged_bundle.py` **FAILED=0** — 资产清单/图/外部权重 sha 全对；合成素材冒烟
+    30.2s ≤ 75s、`backend selected=directml`、`patch reranker device=dml`、`isc refine device=dml`
+    （未静默回退 CPU）、`segments=1`、隔离链 `started`+`booted` 齐、无 `DIED without envelope`；
+  · `accept_packaged_render.py` **FAILED=0** — R1 completed wall=63s · R2/R2b 渲染走隔离子进程
+    且未回落线程内 · R4 136.366s vs Σ136.344s · R5a 64 段紧邻 0 交叠 · R6 `h264_amf`；
+  · 三防冒烟 **FAILED=0**（含 release 通道无令牌拒启、越权请求 401）；
+  · `check_export_plan_invariants.py` **FAILED=0**（4 片 × 4 通道五条不变式）；
+  · 启动冒烟 `work/r17_pkg/startup_smoke.py` **FAILED=0** — 30s 时 Electron 4 进程 + backend 1
+    仍存活、用完即清 `AFTER_KILL=0`；
+  · 包体产物探针 `work/r17_pkg/probe.py` **FAILED=0** — 靶子由 `work/r17_pkg/expect_from_source.py`
+    **在源码树现算**（卷轴 63 条 / 56 个素材文件 / 791.75s / 531.0s、EDL 134.12s、贴接 0 对），
+    包内实测同值、包内墙钟 99.7s ≤ 140s、全原速。
+- **两条新包侧锁（进 `accept_packaged_bundle.py`，r17 起常设）**：
+  ① **腿边界埋点进包并落支持档** = 读 `work/pkg_attr/logs/video_locator.log` 里
+  **最后一次 locate 的窗口**（该档是追加式，全文计数会假绿，所以必须切窗口）断言
+  `locate leg=` 的名字与**顺序**逐条等于 `EXPECT_LEGS`（12 条）· `units=` 右端只增不减 ·
+  链首 `locate refine start units=0/48 legs=…` 在位。包内实测原文（合成素材 a1.mp4，1 段）：
+  `text_anchor elapsed=0.4s units=9->42/48` · `shot_split 2.0s` · `patch_refine 10.1s` ·
+  `isc_refine 7.5s` · `chain=20.0s` ⇒ 「进度卡在哪条腿」第一次在**打包态支持档文件**里可读。
+  ② `EXPECT_LEGS` 与单测 `LocateLegLoggingTest.LEGS` 同源，注释写明必须同改（否则一边假绿）。
+- **首跑一条假红 = 判据自己的 bug**：`legs == EXPECT_LEGS` 是 list 比 tuple ⇒ 恒 False，
+  而失败明细里 12 个名字逐字正确 ⇒ `list(EXPECT_LEGS)` 修掉后重跑 FAILED=0。
+  按「验收脚本首跑预期红」的规矩先分清是包的问题还是判据的问题：**这次是判据**，
+  没动包、也没放宽阈值。
+- 本批（补十）未重跑门禁：只改 `mvp/scripts/accept_packaged_bundle.py`（两条新包侧锁 + 修自己
+  那条 list/tuple 比较 bug）、`work/` 与档案；`mvp/src` 与测试未动，
 ## 2026-10-08
 
 ### Added
@@ -2047,3 +2362,7 @@ STATE `Current Task` 顶部新增补八块并把补七的开放项②标为闭�
 ### Notes
 
 - Created `checkpoint-2026-10-08-0109.md` checkpoint (1 modified/untracked file(s)).
+
+### Notes
+
+- Created `checkpoint-2026-10-08-1704.md` checkpoint (7 modified/untracked file(s)).
