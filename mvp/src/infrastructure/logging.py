@@ -13,6 +13,10 @@
   scheme+host、``?token=``/``?session=`` 之类查询参数一律打码。理由 = 日志是售后
   唯一要发给外人的产物（``/api/logs/download`` 打 zip），而客户素材路径属隐私。
   本地排查可用 env ``SVL_LOG_REDACTION=off`` 关闭。
+- **支持档降噪（2026-10-08 续63 补九）**：asyncio proactor 的「客户端强关连接」噪声
+  （``_call_connection_lost`` + WinError 10053/10054/10058）降级为 DEBUG —— 真实支持档
+  492 条 ERROR 里 485 条是它（信噪比 1.4%），客服会被淹。见
+  :class:`BenignConnectionNoiseFilter`；调试档（``SVL_LOG_DEBUG=1``）仍逐条保留。
 """
 from __future__ import annotations
 
@@ -107,6 +111,102 @@ class RedactingFilter(logging.Filter):
             pass
         return True
 
+# ---------------------------------------------------------------- 支持档降噪
+# 2026-10-08 续63 补九 ②。真实支持档实测 492 条 ERROR 里 **485 条**是同一种形态
+# （`review_packaged_support_log.py` D 面统计，占 98.6% ⇒ 信噪比 1.4%）：
+#
+#   ERROR module=asyncio Exception in callback _ProactorBasePipeTransport._call_connection_lost()
+#   handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>
+#   Traceback ... ConnectionResetError: [WinError 10054] 远程主机强迫关闭了一个现有的连接。
+#
+# 成因 = Windows proactor 事件循环在**客户端先挂断**时，transport 关闭回调里 send 抛
+# ConnectionReset。谁在挂断：Electron 预览播放器取消 Range 请求、UI 轮询 `/api/tasks/*`
+# 超时/关页、下载中断。这些都是**正常网络行为**，不是后端故障，却以 ERROR + 五行 traceback
+# 落进支持档；客服拿到档第一眼看到几百条「远程主机强迫关闭」就会误判为链路坏了。
+#
+# 处理：判定为噪声的记录**降级为 DEBUG**（不是 drop）⇒ 支持档（INFO+）不再收，
+# 调试档（env SVL_LOG_DEBUG=1）仍逐条保留，真出问题时支持人员能要求用户开着复现。
+# 判据三条**同时**成立才动手，宁可放过不可误杀：
+#   ① logger 名以 ``asyncio`` 开头——我方模块（media/app/api）的同类异常照旧 ERROR，
+#      连接重置若发生在我方代码里就是真问题；
+#   ② 回调是 proactor 的 pipe transport 关闭路径（``_call_connection_lost``）；
+#   ③ 异常类型 ∈ {ConnectionResetError, BrokenPipeError} 且 ``winerror``（缺省时退到
+#      ``errno``）属于「连接被对端关掉」那族（10053 中止 / 10054 强制关闭 / 10058 不再需要）。
+_BENIGN_CONNECTION_CALLBACK = "_call_connection_lost"
+_BENIGN_CONNECTION_EXC = (ConnectionResetError, BrokenPipeError)
+_BENIGN_CONNECTION_WINERRORS = (10053, 10054, 10058)
+
+
+def _exc_from(record: logging.LogRecord):
+    """从 record 取异常实例（兼容 exc_info 的三元组 / 实例两种形态）。取不到返回 None。"""
+    ei = getattr(record, "exc_info", None)
+    if ei is None:
+        return None
+    if isinstance(ei, BaseException):
+        return ei
+    if isinstance(ei, tuple) and len(ei) == 3:
+        return ei[1]
+    return None
+
+
+def is_benign_connection_noise(record: logging.LogRecord) -> bool:
+    """True = asyncio proactor「客户端强关连接」噪声（见上）。"""
+    name = getattr(record, "name", "") or ""
+    if not (name == "asyncio" or name.startswith("asyncio.")):
+        return False
+    exc = _exc_from(record)
+    if not isinstance(exc, _BENIGN_CONNECTION_EXC):
+        return False
+    # 真机上 Windows 会给 winerror；手工构造/某些路径只有 errno，两者任一命中即算。
+    code = getattr(exc, "winerror", None)
+    if code is None:
+        code = getattr(exc, "errno", None)
+    if code not in _BENIGN_CONNECTION_WINERRORS:
+        return False
+    return _BENIGN_CONNECTION_CALLBACK in record.getMessage()
+
+
+class BenignConnectionNoiseFilter(logging.Filter):
+    """把 :func:`is_benign_connection_noise` 认定的记录降级为 DEBUG（支持档不收录）。
+
+    只挂在 ``asyncio`` logger 上（logger 级 filter 不对传播来的记录生效，挂在 root
+    等于没挂）；返回 True 不丢记录，只是级别变了——调试档开着时仍会进 ``debug.log``。
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        try:
+            if record.levelno >= logging.WARNING and is_benign_connection_noise(record):
+                record.levelno = logging.DEBUG
+                record.levelname = "DEBUG"
+                record._svl_benign_connection_noise = True
+        except Exception:  # noqa: BLE001 - 降噪判定失败绝不能影响日志本身
+            pass
+        return True
+
+
+def noise_filter_enabled() -> bool:
+    """降噪开关（env ``SVL_LOG_NOISE_FILTER=off`` 关闭）。默认开。
+
+    留这个口子有两个理由：① 支持人员远程指导时可以临时看全量连接错误；
+    ② 真机双臂对照（`work/r17_noise/probe_proactor.py`）需要在**同一台机、同一份
+    真实 proactor 代码路径**上跑「开/关」两臂，否则「降噪有效」只能靠手工构造的
+    record 自证。
+    """
+    return str(os.environ.get("SVL_LOG_NOISE_FILTER", "")).strip().lower() not in (
+        "off", "0", "false", "no")
+
+
+def _ensure_asyncio_noise_filter() -> None:
+    """幂等地给 ``asyncio`` logger 挂降噪 filter（由 configure_logging 调用）。
+
+    开关关闭时**主动摘掉**已挂的 filter：``configure_logging`` 是幂等的，同一进程里
+    后调用一次也必须生效（两臂对照靠这点，否则第二个臂还带着第一个臂的 filter）。
+    """
+    lg = logging.getLogger("asyncio")
+    lg.filters = [f for f in lg.filters if not isinstance(f, BenignConnectionNoiseFilter)]
+    if noise_filter_enabled():
+        lg.addFilter(BenignConnectionNoiseFilter())
+
 # ---------------------------------------------------------------- session id
 _session: ContextVar[str] = ContextVar("svl_session", default="")
 
@@ -176,6 +276,9 @@ def _ensure_stream_handler(stream, root: logging.Logger) -> None:
     h = logging.StreamHandler(stream or sys.stderr)
     h.setFormatter(_make_formatter())
     h.addFilter(RedactingFilter())
+    # 门槛与支持档一致（INFO）：调试行只进 debug.log，stdout/stderr 也与支持档同构
+    # ——否则腿边界埋点/降噪降级的记录会以 DEBUG 混进包内 stdout，accept 断言读的是它。
+    h.setLevel(logging.INFO)
     setattr(h, "_svl_stream", True)
     root.addHandler(h)
 
@@ -249,6 +352,10 @@ def configure_logging(level: int = logging.INFO, *, stream=None,
     root.setLevel(logging.DEBUG if debug_on else level)
     _ensure_stream_handler(stream, root)
     _ensure_file_handler(log_dir, root)
+    # 支持档降噪（2026-10-08 续63 补九 ②）：asyncio proactor 的「客户端强关连接」
+    # 在真实档里占 ERROR 的 98.6%，降到 DEBUG 只留调试档。隔离子进程也调本函数
+    # （续63 补二 的「子进程自配日志」），所以父/子两侧都生效。
+    _ensure_asyncio_noise_filter()
 
 
 def get_logger(name: str) -> logging.Logger:

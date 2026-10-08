@@ -254,5 +254,121 @@ class DebugTierTest(unittest.TestCase, _RootIsolateMixin):
             self.assertFalse((Path(td) / "debug.log").exists())
 
 
+class ProactorNoiseFilterTest(unittest.TestCase, _RootIsolateMixin):
+    """支持档降噪（2026-10-08 续63 补九 ②）。
+
+    真实支持档 492 条 ERROR 里 485 条（98.6%）= asyncio proactor
+    `_call_connection_lost()` 里的 `ConnectionResetError [WinError 10054]`：客户端
+    （Electron 预览播放器取消 Range 请求、UI 轮询关连接）先挂断，**不是故障**，
+    却以 ERROR + 五行 traceback 淹没客服看到的档。⇒ 判定为噪声的记录降级 DEBUG：
+    支持档（INFO+）与 stdout 都不再收录，调试档（SVL_LOG_DEBUG=1）逐条保留。
+
+    这里同时锁「**不能误杀**」：asyncio 的其它异常、我方模块的连接异常都照旧 ERROR。
+    """
+
+    NOISE_MSG = ("Exception in callback _ProactorBasePipeTransport._call_connection_lost()\n"
+                 "handle: <Handle _ProactorBasePipeTransport._call_connection_lost()>")
+
+    def _emit(self, td: str, *, env: str | None, name: str = "asyncio",
+              exc: Exception | None = None, msg: str = NOISE_MSG) -> tuple[str, str, str]:
+        """按 asyncio 的真实形态发一条记录，回（支持档, 调试档, stderr 捕获）。
+
+        stream 走 StringIO：既避免刷测试控制台，也顺带核「降噪对包内 stdout 同样生效」
+        （打包验收脚本读的就是 stdout）。
+        """
+        import io
+        import os
+        snap = self._snapshot()
+        old = os.environ.get("SVL_LOG_DEBUG")
+        buf = io.StringIO()
+        try:
+            if env is None:
+                os.environ.pop("SVL_LOG_DEBUG", None)
+            else:
+                os.environ["SVL_LOG_DEBUG"] = env
+            configure_logging(log_dir=td, stream=buf)
+            lg = get_logger(name)
+            if exc is not None:
+                try:
+                    raise exc
+                except type(exc):
+                    lg.error(msg, exc_info=True)
+            else:
+                lg.error(msg)
+            lg.info("support-log-alive")
+            self._flush_files()
+            main = (Path(td) / "video_locator.log").read_text(encoding="utf-8")
+            dbg_p = Path(td) / "debug.log"
+            dbg = dbg_p.read_text(encoding="utf-8") if dbg_p.exists() else ""
+            return main, dbg, buf.getvalue()
+        finally:
+            if old is None:
+                os.environ.pop("SVL_LOG_DEBUG", None)
+            else:
+                os.environ["SVL_LOG_DEBUG"] = old
+            self._restore(snap)
+
+    @staticmethod
+    def _reset(code: int = 10054) -> Exception:
+        """复刻 WinError 10054：args=(errno, msg, None, winerror, None)。"""
+        return ConnectionResetError(code, "远程主机强迫关闭了一个现有的连接。", None, code, None)
+
+    def test_benign_noise_absent_from_support_log(self):
+        with tempfile.TemporaryDirectory() as td:
+            main, _dbg, err = self._emit(td, env=None, exc=self._reset())
+            self.assertIn("support-log-alive", main)          # 档是活的，不是没落盘
+            self.assertNotIn("_call_connection_lost", main)
+            self.assertNotIn("WinError 10054", main)
+            self.assertNotIn("ERROR", main)                   # 一条 ERROR 都不该留下
+            self.assertNotIn("_call_connection_lost", err)    # stdout/stderr 同门槛
+
+    def test_benign_noise_kept_in_debug_tier(self):
+        with tempfile.TemporaryDirectory() as td:
+            main, dbg, _ = self._emit(td, env="1", exc=self._reset())
+            self.assertNotIn("_call_connection_lost", main)
+            self.assertIn("_call_connection_lost", dbg)
+            self.assertIn("DEBUG", dbg)                       # 降级而不是消失
+
+    def test_other_asyncio_error_still_error(self):
+        """② 回调不是连接关闭路径 ⇒ 不降噪（真故障必须看得见）。"""
+        with tempfile.TemporaryDirectory() as td:
+            main, _dbg, _ = self._emit(
+                td, env=None, msg="Exception in callback _AsyncTransport.close()",
+                exc=self._reset())
+            self.assertIn("ERROR", main)
+            self.assertIn("_AsyncTransport.close", main)
+
+    def test_other_exception_type_still_error(self):
+        """③ 异常类型/错误码不在「客户端关连接」那族 ⇒ 不降噪。"""
+        with tempfile.TemporaryDirectory() as td:
+            main, _dbg, _ = self._emit(td, env=None, exc=ValueError("boom"))
+            self.assertIn("ERROR", main)
+            self.assertIn("ValueError", main)
+        with tempfile.TemporaryDirectory() as td:
+            main2, _d2, _ = self._emit(td, env=None, exc=self._reset(10061))  # 拒绝连接=真问题
+            self.assertIn("ERROR", main2)
+
+    def test_our_module_connection_reset_still_error(self):
+        """① 只作用于 asyncio logger：我方模块抛同类异常 = 真问题，照旧 ERROR。"""
+        with tempfile.TemporaryDirectory() as td:
+            main, _dbg, _ = self._emit(td, env=None, name="media.ffmpeg",
+                                       exc=self._reset())
+            self.assertIn("ERROR", main)
+            self.assertIn("WinError 10054", main)
+
+    def test_filter_installed_idempotently(self):
+        snap = self._snapshot()
+        with tempfile.TemporaryDirectory() as td:
+            try:
+                configure_logging(log_dir=td)
+                configure_logging(log_dir=td)
+                from infrastructure.logging import BenignConnectionNoiseFilter
+                n = [f for f in logging.getLogger("asyncio").filters
+                     if isinstance(f, BenignConnectionNoiseFilter)]
+                self.assertEqual(len(n), 1, "降噪 filter 必须幂等安装（挂多次=重复判定）")
+            finally:
+                self._restore(snap)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

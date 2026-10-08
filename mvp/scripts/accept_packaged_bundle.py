@@ -27,6 +27,14 @@ ISC_DIR = RES / "models" / "isc_ft_v107"
 # 合成素材冒烟：venv 直跑约 20s；CPU torch 回退实测 78.5s。阈值取中间，判「有没有回退」。
 # 2026-10-03 续44 ISC 翻默认：冒烟额外跑 ISC 重扫（EffNetV2-M@512），阈值放宽到 75s。
 SMOKE_WALL_S = 75.0
+# 腿边界埋点的 12 条腿，**按执行顺序**（2026-10-08 续63 补九 ①）。
+# 与 `mvp/tests/test_locator_service.py::LocateLegLoggingTest.LEGS` 同源，两处必须同改
+# （改了不改另一处 = 要么包侧锁假绿，要么单测抓不到顺序回归）。
+EXPECT_LEGS = ("global_anchor", "dense_recheck", "text_anchor", "seq_rerank",
+               "temporal_repair", "conflict_rerank", "temporal_ambiguity",
+               "consecutive_resolve", "degradation_gate",
+               "shot_split", "patch_refine", "isc_refine")
+
 
 fails: list[str] = []
 
@@ -128,6 +136,35 @@ def main() -> int:
         check("隔离子进程未被误判为硬崩",
               "isolated child DIED without envelope" not in text,
               "出现即子进程崩了没留信封")
+
+        # ---- 包侧观测面锁（2026-10-08 续63 补九 ①，r17 起）------------------ #
+        # 进度事件此前**完全不落日志** ⇒ 售后拿到支持档看不出「进度卡在哪条腿」。
+        # 现每次 locate 落 12 行 `locate leg=<名> elapsed=… units=a->b/48 chain=…` + 链首一行
+        # `locate refine start legs=<12 个开关>`。这三条断言 = 该修复**真的进了包**并且
+        # **在包内落盘到支持档文件**（不是只在 stdout；stdout 与文件走同一 logger 但
+        # 只有文件是售后能拿到的东西，续63 补二/补八 就是被这个区分坑过两次）。
+        # 读**最后一次 locate 的窗口**：该档是追加式，历次冒烟会累积 ⇒ 全文计数会假绿。
+        support = BENCH / "work" / "pkg_attr" / "logs" / "video_locator.log"
+        if support.exists():
+            import re as _re
+            st = support.read_text(encoding="utf-8", errors="replace")
+            cut = st.rfind("locate started")
+            win = st[cut:] if cut != -1 else ""
+            legs = [_re.search(r"locate leg=(\w+)", l) for l in win.splitlines()]
+            legs = [m.group(1) for m in legs if m]
+            check("腿边界埋点进包并落支持档（一次 locate 12 行）",
+                  legs == list(EXPECT_LEGS),
+                  "实得 %d 行 %s（r16 及以前=0 行，属预期红）" % (len(legs), legs))
+            units = [int(m.group(1)) for m in
+                     (_re.search(r"units=\d+->(\d+)/48", l) for l in win.splitlines()
+                      if "locate leg=" in l) if m]
+            check("腿刻度只增不减（48 单位口径自洽）", units == sorted(units), "实得 %s" % units)
+            check("链首开关行在位（legs=…，售后可判某腿跑没跑）",
+                  "locate refine start" in win,
+                  "" if "locate refine start" in win else "缺此行=只落了腿行没落开关行")
+        else:
+            check("支持档存在（腿边界埋点判据依赖它）", False, str(support))
+
     else:
         check("冒烟产物可读", False, str(summary_path))
 

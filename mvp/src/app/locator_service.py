@@ -1035,6 +1035,17 @@ class SourceLocatorService:
                                         on_progress=on_progress,
                                         cancel_token=cancel_token,
                                         edited=edited)
+        # 快/精双模式（2026-10-02）：``refine`` 逐任务覆盖两个后处理旋钮
+        # （None=用 config 默认，两者默认开=高精度）；False=快速档，跳过
+        # 切镜拆分与画面深度复核（实测省 ~60% 墙钟），段循环/修复链照跑。
+        # 三条旋钮判定**整体上移到修复链入口**（2026-10-08 续63 补九）：埋点的
+        # legs=… 开关行必须与这里同一真源，不能两处各写一遍。
+        _split_on = (bool(getattr(self.config.pipeline, "shot_split_enabled", False))
+                     if refine is None else bool(refine))
+        _patch_on = (bool(getattr(self.config.pipeline, "patch_refine_enabled", False))
+                     if refine is None else bool(refine))
+        _isc_on = (bool(getattr(self.config.pipeline, "isc_refine_enabled", False))
+                   and (refine is None or bool(refine)))
         # UX（2026-10-02 续40）：段循环结束 = 进入全局修复/拆分/精排链（实测可达数分钟），
         # 统一发 REFINE 阶段事件；首条落在链入口（此前此处到导出之间零消息 ⇒ UI 卡感）。
         # 子阶段切片（2026-10-06 修「92% 卡死」）：修复链原先整段只有这一条 current=0 事件
@@ -1063,6 +1074,50 @@ class SourceLocatorService:
                 _fix_to(lo + int((hi - lo) * 0.9 * done / n), label)
             return _tick
 
+        # ---- 腿边界埋点（2026-10-08 续63 补九 ①）------------------------------ #
+        # 进度事件此前**完全不落日志**（`mvp/api/tasks/` 无一处 logger 调用；UI 只在内存里
+        # 读 progress）⇒ 售后拿到支持档时看不见「进度停在哪条腿」，只能靠腿内自带的
+        # patch_refine/isc_refine 行间接推断（见 `mvp/scripts/review_packaged_support_log.py`
+        # 的 C 面，那里把这条写成「已知观测面缺口」）。
+        # 每条腿**完成**时落一行 INFO：本腿耗时 + 48 单位刻度推进 + 自修复链入口的累计秒。
+        # 为什么每腿一行而不是进/出各一行：腿 k 的「进入」就是腿 k-1 的「完成」，链首再补
+        # 一条 legs=… 开关行交代「这条腿跑没跑」⇒ 同样可复核，行数减半（一次 locate 约
+        # 12 行）。**腿内 tick 不落日志**：`_fix_to` 保持静默（tick 一次 locate 可达上百条，
+        # 会与同批的支持档降噪直接相冲）。
+        _fix_chain_t0 = time.monotonic()
+        _fix_leg_prev_t = _fix_chain_t0
+        _fix_leg_prev_units = 0
+
+        def _fix_leg_done(leg: str, units: int | None, label: str = "") -> None:
+            """落一行腿边界 INFO；``units`` 非 None 时同时把 ramp 推到该刻度（None = 该腿
+            不单独占显示宽度，只记耗时）。埋点**只读不写**任何结果，异常路径由调用侧
+            既有的 try/except 决定：腿失败时这行照样落，elapsed≈0，紧随其后的是
+            `_log.exception` 那行。"""
+            nonlocal _fix_leg_prev_t, _fix_leg_prev_units
+            now = time.monotonic()
+            if units is not None:
+                _fix_to(units, label)
+            shown = _fix_leg_prev_units if units is None else units
+            self._log.info("locate leg=%s elapsed=%.1fs units=%d->%d/%d chain=%.1fs",
+                           leg, now - _fix_leg_prev_t, _fix_leg_prev_units, shown,
+                           _FIX_UNITS, now - _fix_chain_t0)
+            _fix_leg_prev_t = now
+            _fix_leg_prev_units = shown
+
+        self._log.info(
+            "locate refine start units=0/%d legs=%s", _FIX_UNITS,
+            ",".join("%s:%s" % (k, "on" if v else "off") for k, v in (
+                ("fast_global", bool(getattr(self.config.pipeline, "fast_global_enabled", False))),
+                ("vote_prior", bool(getattr(self.config.pipeline, "vote_prior_enabled", False))),
+                ("dense_recheck", bool(getattr(self.config.pipeline, "dense_recheck_enabled", False))),
+                ("text_anchor", bool(self.config.pipeline.text_anchor_enabled)),
+                ("seq_dp", bool(getattr(self.config.pipeline, "seq_dp_enabled", False))),
+                ("temporal_repair", bool(self.config.pipeline.temporal_repair_enabled)),
+                ("conflict_rerank", bool(self.config.pipeline.conflict_rerank_enabled)),
+                ("temporal_ambiguity", bool(self.config.pipeline.temporal_ambiguity_enabled)),
+                ("resolve_consecutive", bool(getattr(self.config.pipeline, "resolve_consecutive_enabled", False))),
+                ("shot_split", _split_on), ("patch_refine", _patch_on), ("isc_refine", _isc_on),
+            )))
         _fix_to(0, "画面深度复核：整体一致性校验")
         _fix_to(1, "画面深度复核：全局锚点复核")
         if getattr(self.config.pipeline, "fast_global_enabled", False):
@@ -1088,7 +1143,7 @@ class SourceLocatorService:
                 raise
             except Exception:
                 self._log.exception("offset vote prior failed (non-fatal)")
-        _fix_to(6, "画面深度复核：全局锚点复核")
+        _fix_leg_done("global_anchor", 6, "画面深度复核：全局锚点复核")
         if getattr(self.config.pipeline, "dense_recheck_enabled", False):
             # P0 密集起点复核（续10i/k, DECISIONS 2026-09-26 豁免裁决）: 在全部定位/重排之前
             # 修正主 span 起点, 让下游(text_anchor/seq_dp/temporal_repair)看到修正后的位置。
@@ -1102,7 +1157,7 @@ class SourceLocatorService:
                 raise
             except Exception:
                 self._log.exception("dense start recheck failed (non-fatal)")
-        _fix_to(9, "画面深度复核：起点密集复核")
+        _fix_leg_done("dense_recheck", 9, "画面深度复核：起点密集复核")
         _fix_to(10, "画面深度复核：字牌复核")
         if self.config.pipeline.text_anchor_enabled:
             try:
@@ -1114,6 +1169,10 @@ class SourceLocatorService:
                 raise
             except Exception:
                 self._log.exception("text anchor rerank failed (non-fatal)")
+        # 埋点边界放在**腿与腿的切换处**（不是显示刻度表的位置）：字牌腿与序列腿在旧档案
+        # 里被合并成一条 42 边界 ⇒ 序列腿的耗时会算进字牌腿。tick 上限 = 10+int(32*0.9)=38
+        # 永远够不到 42，故把 42 的 ramp 推送提前到序列腿之前，显示逐点不变。
+        _fix_leg_done("text_anchor", 42, "画面深度复核：字牌复核")
         if self.config.pipeline.seq_dp_enabled and self._last_seq_items:
             try:
                 self._apply_sequence_rerank(results, self._last_seq_items,
@@ -1123,8 +1182,7 @@ class SourceLocatorService:
                 raise
             except Exception:
                 self._log.exception("sequence rerank failed (non-fatal)")
-        _fix_to(42, "画面深度复核：字牌复核")
-        _fix_to(44, "画面深度复核：序列复核")
+        _fix_leg_done("seq_rerank", 44, "画面深度复核：序列复核")
         _fix_to(45, "画面深度复核：时序复核")
         if self.config.pipeline.temporal_repair_enabled:
             try:
@@ -1135,6 +1193,7 @@ class SourceLocatorService:
                 raise
             except Exception:
                 self._log.exception("temporal repair failed (non-fatal)")
+        _fix_leg_done("temporal_repair", None)
         if self.config.pipeline.conflict_rerank_enabled:
             try:
                 self._apply_conflict_rerank(results, bundle, edited,
@@ -1144,6 +1203,7 @@ class SourceLocatorService:
                 raise
             except Exception:
                 self._log.exception("conflict rerank failed (non-fatal)")
+        _fix_leg_done("conflict_rerank", None)
         if self.config.pipeline.temporal_ambiguity_enabled:
             try:
                 self._apply_temporal_ambiguity(results,
@@ -1152,6 +1212,7 @@ class SourceLocatorService:
                 raise
             except Exception:
                 self._log.exception("temporal ambiguity failed (non-fatal)")
+        _fix_leg_done("temporal_ambiguity", None)
         _fix_to(47, "画面深度复核：冲突与歧义复核")
         # E1 连续重复起点修正（竞品 resolve_consecutive_scene_offsets 语义重建, 默认关）:
         # 放在全部定位/重排之后、退化门前 = 看到的是最终主 span; 平移只动后段起点。
@@ -1178,7 +1239,7 @@ class SourceLocatorService:
                 raise
             except Exception:
                 self._log.exception("consecutive offset resolve failed (non-fatal)")
-        _fix_to(48, "画面深度复核：连续重复与一致性校验")
+        _fix_leg_done("consecutive_resolve", 48, "画面深度复核：连续重复与一致性校验")
         # 退化拒绝门 + 场景覆盖门槛（竞品 results.validation 语义, 2026-09-28 续19; 默认关）。
         # 放在全部定位/重排之后 = 看到的是最终主 span 归属, 重复率判定才有意义。
         gate = apply_degradation_gate(
@@ -1191,16 +1252,12 @@ class SourceLocatorService:
             self._log.info("degradation gate rejected=%d subs_dropped=%d subs_kept=%d",
                            len(gate.rejected), gate.subs_dropped, gate.subs_kept)
         self._last_gate_stats = gate
+        _fix_leg_done("degradation_gate", None)
         # 段级拆分（2026-09-30 续32 形态4 runtime 化, engine/localization/shot_split.py;
         # 2026-10-01 续35 默认开）。放在全部定位/门/重排之后 = 看到最终主 span；宽 span 保全 ⇒
         # 严格口径结构性零回退；导出/渲染契约不变（仍每条结果导主 span）。
-        # 快/精双模式（2026-10-02）：``refine`` 逐任务覆盖两个后处理旋钮
-        # （None=用 config 默认，两者默认开=高精度）；False=快速档，跳过
-        # 切镜拆分与画面深度复核（实测省 ~60% 墙钟），段循环/修复链照跑。
-        _split_on = (bool(getattr(self.config.pipeline, "shot_split_enabled", False))
-                     if refine is None else bool(refine))
-        _patch_on = (bool(getattr(self.config.pipeline, "patch_refine_enabled", False))
-                     if refine is None else bool(refine))
+        # 旋钮判定 `_split_on`/`_patch_on`/`_isc_on` 已上移到修复链入口（与埋点 legs=… 开关行
+        # 同一真源），这里只消费。
         if _split_on:
             # UX-P1（2026-10-01 续35 E2E）：后处理阶段此前零进度上报 ⇒ UI 停在段循环的
             # 最后一帧百分比像卡死。切镜拆分较快，报一条阶段消息即可。
@@ -1217,6 +1274,7 @@ class SourceLocatorService:
             self._notify(on_progress, ProgressStage.REFINE,
                          current=1, total=1, phase="split",
                          message="画面深度复核：拆分多镜头段")
+        _fix_leg_done("shot_split", None)
         # patch 局部精排（2026-09-30 续32 形态6 runtime 化, engine/localization/patch_refine.py;
         # 2026-10-01 续35 默认开）。歧义段 top-K 候选各自局部窗 patch+global 融合精排再择优；
         # 老主降子 ⇒ 严格结构性零回退。
@@ -1260,12 +1318,13 @@ class SourceLocatorService:
                     progress=_refine_progress)
             else:
                 self._log.warning("patch refine enabled but no patch backend; skipped")
+        _fix_leg_done("patch_refine", None)
         # ISC 第二意见局部重排（2026-10-02 续44 立项, engine/localization/isc_refine.py;
-        # 默认关）。歧义段候选 span±1.5s 窗 ISC(cos) 重扫，领先现主 ≥margin 才切（老主降子
+        # **现役默认开**——2026-10 初随「ISC L2 画面索引宽扫」一起翻的默认，见提交 7c6e485；
+        # 本行旧注释写「默认关」已过期，2026-10-08 续63 补九 就地更正）。
+        # 歧义段候选 span±1.5s 窗 ISC(cos) 重扫，领先现主 ≥margin 才切（老主降子
         # ⇒ 严格零回退）。与两旋钮语义解耦：快速档（refine=False）必跳过；config 关时即使
-        # refine=True 也不开（ISC 尚未拍板翻默认，不随高精度档隐式生效）。
-        _isc_on = (bool(getattr(self.config.pipeline, "isc_refine_enabled", False))
-                   and (refine is None or bool(refine)))
+        # refine=True 也不开（ISC 不随高精度档隐式生效，开关只认自己的旋钮 + refine 档位）。
         if _isc_on:
             if self._isc_scorer is None:
                 self._isc_scorer = IscScorer(
@@ -1304,6 +1363,7 @@ class SourceLocatorService:
                     log=self._log, progress=_isc_progress)
             else:
                 self._log.warning("isc refine enabled but no ISC onnx asset; skipped")
+        _fix_leg_done("isc_refine", None)
         batch = ResultBatch(schema_version=1, original_video=str(orig_path),
                             edited_video=str(Path(edited).resolve()), results=results)
         self._current_batch = batch

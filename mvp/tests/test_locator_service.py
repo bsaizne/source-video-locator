@@ -406,6 +406,154 @@ class FixChainTickTest(unittest.TestCase):
                                cfg=srv.config.pipeline, cancel_token=None)
 
 
+class LocateLegLoggingTest(unittest.TestCase):
+    """腿边界埋点（2026-10-08 续63 补九 ①）：一次 locate 必须留下**每腿一行**的
+    ``locate leg=… elapsed=…s units=a->b/48 chain=…s`` 记录，外加链首一行开关汇总。
+
+    为什么要有这条：进度事件此前**完全不落日志**（UI 只在内存里读 progress）⇒ 售后
+    只拿到支持档时看不出「进度停在哪条腿」，`mvp/scripts/review_packaged_support_log.py`
+    的 C 面把这个观测面缺口登记过（只能靠 patch_refine/isc_refine 这类腿内自带行间接推断）。
+    埋点是**观测面**改动，所以这里同时锁「不改行为」：REFINE 的 fix ramp 仍单调推进并到 48。
+    还锁「行数不爆炸」：腿内 tick 不落日志（tick 一次真实 locate 可达上百条，会把刚做完的
+    支持档降噪直接抵消）。
+    """
+
+    LEGS = ("global_anchor", "dense_recheck", "text_anchor", "seq_rerank",
+            "temporal_repair", "conflict_rerank", "temporal_ambiguity",
+            "consecutive_resolve", "degradation_gate",
+            "shot_split", "patch_refine", "isc_refine")
+
+    def _run(self):
+        bundle, orig, _ = _continuous_bundle()
+        q = _l2(orig[20:30] + 1e-3 * np.random.RandomState(1).randn(10, 384).astype(np.float32))
+
+        class _Back:
+            def embed_frames(self, frames, batch_size=8):
+                return q
+
+            def device_name(self):
+                return "cpu"
+
+        class _Ffmpeg:
+            def iter_frames(self, path, fps, *, start=None, end=None,
+                            scale=None, meta=None):
+                for i in range(q.shape[0]):
+                    yield (i / fps, np.zeros((8, 8, 3), dtype=np.uint8))
+
+            def grab_frame(self, path, t):
+                return np.zeros((8, 8, 3), dtype=np.uint8)
+
+        srv = SourceLocatorService(ffmpeg=_Ffmpeg(), backend=_Back())
+        events: list = []
+        with self.assertLogs("app.locator_service", level="INFO") as cm:
+            srv.locate("edited.mp4", "dummy.mkv", index_bundle=bundle,
+                       on_progress=events.append)
+        return cm, events
+
+    def test_one_line_per_leg_with_elapsed_and_units(self):
+        import re
+        cm, _events = self._run()
+        msgs = [r.getMessage() for r in cm.records]
+        pat = re.compile(r"^locate leg=(\w+) elapsed=([\d.]+)s units=(\d+)->(\d+)/(\d+) "
+                         r"chain=([\d.]+)s$")
+        got = [pat.match(m) for m in msgs if m.startswith("locate leg=")]
+        self.assertTrue(got, "腿边界埋点一行都没落")
+        self.assertEqual([m.group(1) for m in got], list(self.LEGS),
+                         "腿顺序/数量必须与 locate 的执行顺序一致")
+        # 刻度只增不减、累计耗时只增不减（= 埋点自身口径自洽，售后可直接按行读）
+        self.assertEqual([int(m.group(4)) for m in got],
+                         sorted(int(m.group(4)) for m in got))
+        chains = [float(m.group(6)) for m in got]
+        self.assertEqual(chains, sorted(chains))
+        # elapsed 必须非负，且各腿相加 ~= 累计（容 0.2s 取整缝）
+        self.assertTrue(all(float(m.group(2)) >= 0 for m in got))
+        self.assertAlmostEqual(sum(float(m.group(2)) for m in got), chains[-1], delta=0.3)
+        self.assertEqual(got[-1].group(5), "48")
+
+    def test_leg_toggles_logged_once_at_chain_start(self):
+        cm, _events = self._run()
+        starts = [r.getMessage() for r in cm.records
+                  if r.getMessage().startswith("locate refine start")]
+        self.assertEqual(len(starts), 1, "开关汇总行只能有一条")
+        self.assertIn("units=0/48", starts[0])
+        legs = starts[0].split("legs=", 1)[1].split(",")
+        self.assertEqual(len(legs), 12, "12 条腿的开关状态都要交代（含默认关的）")
+        self.assertTrue(all(("on" in kv or "off" in kv) for kv in legs), legs)
+
+    def test_ticks_do_not_pollute_the_log(self):
+        """腿内 tick 不落日志：一次 locate 的 `locate leg=` 行数恰等于腿数（12）。"""
+        cm, _events = self._run()
+        n = sum(1 for r in cm.records if r.getMessage().startswith("locate leg="))
+        self.assertEqual(n, len(self.LEGS))
+
+    def test_ramp_behaviour_unchanged_by_the_new_logging(self):
+        """埋点**只加日志**：fix ramp 仍按刻度单调推进，终点仍到 48。"""
+        _cm, events = self._run()
+        fix = [(e.current, e.message) for e in events
+               if getattr(e, "phase", "") == "fix"]
+        self.assertTrue(fix, "修复链一条进度事件都没有")
+        currents = [c for c, _ in fix]
+        self.assertEqual(currents, sorted(currents), "ramp 回退了")
+        self.assertEqual(currents[-1], 48)
+
+    def test_leg_lines_land_in_the_support_log(self):
+        """文件侧：腿行必须真的落进**支持档文件**（售后拿到的就是那份文件）。
+
+        `assertLogs` 只在 logger 上挂 handler，证明不了 formatter/文件 handler 这一层；
+        这里走 `configure_logging(log_dir=临时目录)`（= 打包态同一套 handler 栈，续63 补二
+        已实测隔离子进程的 INFO 进得到那份文件），跑完读回文件逐条核。
+        """
+        import logging
+        import tempfile
+        from infrastructure.logging import configure_logging
+        with tempfile.TemporaryDirectory() as td:
+            snap = (logging.getLogger().level, list(logging.getLogger().handlers))
+            try:
+                configure_logging(log_dir=td)
+                bundle, orig, _ = _continuous_bundle()
+                q = _l2(orig[20:30] + 1e-3 * np.random.RandomState(1).randn(10, 384)
+                        .astype(np.float32))
+
+                class _Back:
+                    def embed_frames(self, frames, batch_size=8):
+                        return q
+
+                    def device_name(self):
+                        return "cpu"
+
+                class _Ffmpeg:
+                    def iter_frames(self, path, fps, *, start=None, end=None,
+                                    scale=None, meta=None):
+                        for i in range(q.shape[0]):
+                            yield (i / fps, np.zeros((8, 8, 3), dtype=np.uint8))
+
+                    def grab_frame(self, path, t):
+                        return np.zeros((8, 8, 3), dtype=np.uint8)
+
+                srv = SourceLocatorService(ffmpeg=_Ffmpeg(), backend=_Back())
+                srv.locate("edited.mp4", "dummy.mkv", index_bundle=bundle)
+                for h in logging.getLogger().handlers:
+                    h.flush()
+                text = (Path(td) / "video_locator.log").read_text(encoding="utf-8")
+            finally:
+                lvl, handlers = snap
+                logging.getLogger().setLevel(lvl)
+                for h in list(logging.getLogger().handlers):
+                    logging.getLogger().removeHandler(h)
+                    h.close()
+                for h in handlers:
+                    logging.getLogger().addHandler(h)
+            leg_lines = [l for l in text.splitlines() if "locate leg=" in l]
+            self.assertEqual(len(leg_lines), 12,
+                             "支持档里腿行应恰 12 条（一次 locate）：%s" % leg_lines)
+            self.assertTrue(all("module=app.locator_service" in l for l in leg_lines),
+                            leg_lines[:2])
+            self.assertTrue(any("locate refine start" in l for l in text.splitlines()))
+            # 字牌腿那条必须把刻度从密集复核的 9 推到 42（= 售后可按刻度还原显示宽度占比）
+            self.assertTrue(any("locate leg=text_anchor" in l and "units=9->42/48" in l
+                                for l in leg_lines), leg_lines)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
 
