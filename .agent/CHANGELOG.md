@@ -20,6 +20,18 @@
 - **教训 ⑮** 已写进 `STATE.md` 工程教训速查；同批更正 `Current Problem` 里「工作树仍未提交」的过期表述
   （补九/补十 已按口令提交 push）。
 - ⚠️ 自伤留痕：push 时误打 `HEAD:main`（本仓默认分支 = **master**）⇒ 已补推 master 并删除远端 `main`。
+- **第二轮（同批追加，依据用户递来的 mac 日志 `D:\mvp-macos-test-log.zip`）**：run `37787565939`
+  （head `3349063`）= `Ran 618 tests / FAILED (errors=1, skipped=48)` ⇒ `macos-package` 仍 skip。
+  ① 第一轮那处修复**真机证明有效**（`test_our_module_connection_reset_still_error` 在 mac 转 ok，
+  `_code_token()` 取 `Errno` 的推断成立，旧 `failures=1` 消失）；② 红点搬到了**我新加的那条跨平台常驻锁**：
+  `AttributeError: 'ConnectionResetError' object has no attribute 'winerror'`（`test_logging.py:364`）
+  —— mac 上不是 `winerror=None` 而是**属性根本不存在**（文档后半句 "the attribute does not exist"
+  第一次真机碰到）；产品判据一直写的是 `getattr(exc, "winerror", None)`（`logging.py:161`）⇒ 没受影响，
+  **只有测试写死了「属性一定在」**。⇒ 断言改 `getattr(...)`（与判据同写法）+ `_reset`/`_code_token`/
+  `logging.py` 注释按实测更正。③ 同日顺手拿到 **mac 侧腿埋点真机证据**（此前只有 Windows 包内）：
+  mac 支持档 12 行 `locate leg=` 顺序与区间全对（`global_anchor 0->6/48` …
+  `consecutive_resolve 44->48/48`，`patch_refine elapsed=91.1s` 走 MPS），降噪 7 条在 mac 全绿。
+  ④ 教训补写进 `STATE.md` ⑮：**「另一平台的属性缺省」有两种形态（None / 属性不存在），只有真机能区分**。
 
 ## 2026-10-06（续57 夜间批二）— 计划项 1「ISC margin 门标定」= 判负关闭（两级探针 + 机制否证，已回滚）
 

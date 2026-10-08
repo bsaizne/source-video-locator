@@ -157,7 +157,9 @@ def is_benign_connection_noise(record: logging.LogRecord) -> bool:
     exc = _exc_from(record)
     if not isinstance(exc, _BENIGN_CONNECTION_EXC):
         return False
-    # 真机上 Windows 会给 winerror；手工构造/某些路径只有 errno，两者任一命中即算。
+    # Windows 真机会给 winerror；**mac/Linux 上 OSError 没有 winerror 这个属性**（CPython 忽略该
+    # 入参，2026-10-08 mac CI 实测 AttributeError）⇒ 必须 getattr 取，取不到再退 errno。
+    # 两条腿缺一不可：Windows 靠 winerror、跨平台/手工构造靠 errno。
     code = getattr(exc, "winerror", None)
     if code is None:
         code = getattr(exc, "errno", None)

@@ -314,9 +314,10 @@ class ProactorNoiseFilterTest(unittest.TestCase, _RootIsolateMixin):
 
         Windows 上真实对象是 5 元组 `(errno, strerror, None, winerror, None)`，`str()` 渲染成
         `[WinError 10054]`；**非 Windows 平台 CPython 直接忽略 `winerror` 入参**（官方文档：
-        "On other platforms, the winerror argument is ignored"），`exc.winerror` 恒为 None、
-        `str()` 渲染成 `[Errno 10054]` ⇒ 这里按平台给形态，判定的「winerror 缺省退 errno」
-        分支才是 mac/Linux 实际走的那条（2026-10-08 mac CI 唯一红点就出在这条渲染差异上）。
+        "On other platforms, the winerror argument is ignored"，且该属性**根本不存在** ——
+        2026-10-08 mac CI 实测 `AttributeError`），`str()` 渲染成 `[Errno 10054]`（同轮实测）
+        ⇒ 这里按平台给形态，判定的「winerror 取不到就退 errno」分支才是 mac/Linux 实际走的那条
+        （2026-10-08 mac CI 唯一红点就出在这条渲染差异上）。
         """
         import os as _os
         msg = "远程主机强迫关闭了一个现有的连接。"
@@ -330,7 +331,8 @@ class ProactorNoiseFilterTest(unittest.TestCase, _RootIsolateMixin):
         其余平台打 `[Errno 10054]` ⇒ 断言取哪个字面量必须跟平台走。
 
         Windows 侧两种形态本机实测（2026-10-08）：5 元组 → `[WinError 10054] msg`，
-        2 元组 → `[Errno 10054] msg`；mac 侧由上述文档 + 现役判定分支推出。
+        2 元组 → `[Errno 10054] msg`；mac 侧由第二轮 mac CI 实测坐实（本 helper 取 `Errno`
+        后 `test_our_module_connection_reset_still_error` 在 mac 上转绿）。
         （2026-10-08 mac CI 红点：`assertIn("WinError 10054")` 在 mac 上恒不成立 ——
         降噪判定其实是对的（走 errno 回退分支），是断言把 Windows 文案当成了跨平台事实。）
         """
@@ -354,14 +356,16 @@ class ProactorNoiseFilterTest(unittest.TestCase, _RootIsolateMixin):
             self.assertIn("DEBUG", dbg)                       # 降级而不是消失
 
     def test_errno_only_shape_still_downgraded(self):
-        """**跨平台常驻锁**：非 Windows 的 OSError 没有 winerror（恒为 None），
+        """**跨平台常驻锁**：非 Windows 的 OSError **根本没有 `winerror` 属性**（mac CI 实测
+        `AttributeError: 'ConnectionResetError' object has no attribute 'winerror'`），
         proactor 之外的 loop（mac/Linux 的 selector/kqueue）若报同类连接重置也只带 errno
-        ⇒ 判定必须退到 errno 分支。这条在 Windows 上照样能构造（2 元组 = winerror None），
+        ⇒ 判定必须退到 errno 分支。这条在 Windows 上照样能构造（2 元组 = 拿不到 winerror），
         把「mac 才会走的那半边」变成每平台都跑的测试，而不是等 mac CI 替我验。
         （2026-10-08 mac CI 红点的根因就是这半边从没被任何测试覆盖到。）
         """
         exc = ConnectionResetError(10054, "Connection reset by peer")
-        self.assertIsNone(exc.winerror, "构造形态必须是「没有 winerror」的跨平台样")
+        self.assertIsNone(getattr(exc, "winerror", None),
+                          "构造形态必须是「取不到 winerror」的跨平台样（判据同写法）")
         self.assertEqual(exc.errno, 10054)
         with tempfile.TemporaryDirectory() as td:
             main, _dbg, err = self._emit(td, env=None, exc=exc)

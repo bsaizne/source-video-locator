@@ -62,7 +62,23 @@
 > 判据 = 文档 + 现役判定分支 + 「failures=1 且 errors=0」这个只与「断言落空」相容的计数。
 > 教训并入 [[verification-must-be-multimodal]] 同族：**跨平台断言里「日志字面量」是平台产物，
 > 不是逻辑事实**；测另一平台的分支要在本机用「该平台的对象形态」造出来当常驻锁。
-> **下一步（需用户口令/手动）**：再 dispatch 一次 `h3-macos-mps.yml`（push 不触发）⇒
+> **▶ 2026-10-08（续63 补十一·第二轮）— 用户递来包内日志（`D:\mvp-macos-test-log.zip`），红点搬家到**我新加的那条常驻锁****
+> 用户提供 mac 测试日志（zip 内只有 `mvp_test_macos.log`）⇒ run `37787565939`（head `3349063`，
+> 用户 dispatch）：`Ran 618 tests in 995.344s / FAILED (**errors=1**, skipped=48)`。
+> ① **第一轮的修复已被真机证明有效**：`test_our_module_connection_reset_still_error` 在 mac 上
+> **ok** ⇒ `_code_token()` 取 `Errno 10054` 这条推断成立（原先的 `failures=1` 消失）。
+> ② 新的红 = 我那条“mac 那半边不用等 CI”的常驻锁自己：
+> `AttributeError: 'ConnectionResetError' object has no attribute 'winerror'`（`test_logging.py:364`）
+> —— 官方文档那句 “the winerror argument is ignored, and the attribute **does not exist**” 里的
+> 后半句我才真机碰到：mac 上不是 `winerror=None`，是**属性不存在** ⇒ `exc.winerror` 直接抛。
+> 产品判据本来就用的是 `getattr(exc, "winerror", None)`（`logging.py:161`）⇒ **只有测试写死了属性存在**。
+> ⇒ 修：断言改 `getattr(exc, "winerror", None)`（与判据同写法），并把 `_reset`/`_code_token` 的
+> docstring 从“恒为 None”更正为“属性根本不存在”；`logging.py` 那条注释同步说清两条腿（Windows 靠
+> winerror、跨平台靠 errno）。全套 617 里其余项 mac 全绿（含腿埋点 5 条 + 降噪 7 条 + MPS 真跑）。
+> ③ **顺带拿到 mac 侧腿埋点真机证据**（此前只有 Windows 包内）：mac 支持档出现 12 行 `locate leg=`
+> 且区间/顺序正确（`global_anchor 0->6/48` … `consecutive_resolve 44->48/48`，
+> `patch_refine elapsed=91.1s` 在 MPS 上），`locate refine start legs=` 亦在 ⇒ 埋点跨平台成立。
+> **下一步（需用户口令/手动）**：第三轮 dispatch `h3-macos-mps.yml`（push 不触发）⇒
 > `mvp-tests-macos` 绿 → `macos-package` → 包侧门槛 `accept_packaged_bundle_mac.py`（该脚本**无**
 > 腿埋点/降噪断言，本次改动不会给它添新红点）→ `gh release upload mac-alpha --clobber`
 > ⇒ 下载链 `https://github.com/bsaizne/source-video-locator/releases/download/mac-alpha/Video-Locator-mac-arm64.zip`。
