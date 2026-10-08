@@ -310,15 +310,39 @@ class ProactorNoiseFilterTest(unittest.TestCase, _RootIsolateMixin):
 
     @staticmethod
     def _reset(code: int = 10054) -> Exception:
-        """复刻 WinError 10054：args=(errno, msg, None, winerror, None)。"""
-        return ConnectionResetError(code, "远程主机强迫关闭了一个现有的连接。", None, code, None)
+        """复刻「客户端强关连接」异常。
+
+        Windows 上真实对象是 5 元组 `(errno, strerror, None, winerror, None)`，`str()` 渲染成
+        `[WinError 10054]`；**非 Windows 平台 CPython 直接忽略 `winerror` 入参**（官方文档：
+        "On other platforms, the winerror argument is ignored"），`exc.winerror` 恒为 None、
+        `str()` 渲染成 `[Errno 10054]` ⇒ 这里按平台给形态，判定的「winerror 缺省退 errno」
+        分支才是 mac/Linux 实际走的那条（2026-10-08 mac CI 唯一红点就出在这条渲染差异上）。
+        """
+        import os as _os
+        msg = "远程主机强迫关闭了一个现有的连接。"
+        if _os.name == "nt":
+            return ConnectionResetError(code, msg, None, code, None)
+        return ConnectionResetError(code, msg)
+
+    @staticmethod
+    def _code_token(code: int = 10054) -> str:
+        """日志里错误码的**字面渲染分平台**：CPython 在 Windows 打 `[WinError 10054]`，
+        其余平台打 `[Errno 10054]` ⇒ 断言取哪个字面量必须跟平台走。
+
+        Windows 侧两种形态本机实测（2026-10-08）：5 元组 → `[WinError 10054] msg`，
+        2 元组 → `[Errno 10054] msg`；mac 侧由上述文档 + 现役判定分支推出。
+        （2026-10-08 mac CI 红点：`assertIn("WinError 10054")` 在 mac 上恒不成立 ——
+        降噪判定其实是对的（走 errno 回退分支），是断言把 Windows 文案当成了跨平台事实。）
+        """
+        import os as _os
+        return ("WinError %d" % code) if _os.name == "nt" else ("Errno %d" % code)
 
     def test_benign_noise_absent_from_support_log(self):
         with tempfile.TemporaryDirectory() as td:
             main, _dbg, err = self._emit(td, env=None, exc=self._reset())
             self.assertIn("support-log-alive", main)          # 档是活的，不是没落盘
             self.assertNotIn("_call_connection_lost", main)
-            self.assertNotIn("WinError 10054", main)
+            self.assertNotIn(self._code_token(), main)
             self.assertNotIn("ERROR", main)                   # 一条 ERROR 都不该留下
             self.assertNotIn("_call_connection_lost", err)    # stdout/stderr 同门槛
 
@@ -328,6 +352,23 @@ class ProactorNoiseFilterTest(unittest.TestCase, _RootIsolateMixin):
             self.assertNotIn("_call_connection_lost", main)
             self.assertIn("_call_connection_lost", dbg)
             self.assertIn("DEBUG", dbg)                       # 降级而不是消失
+
+    def test_errno_only_shape_still_downgraded(self):
+        """**跨平台常驻锁**：非 Windows 的 OSError 没有 winerror（恒为 None），
+        proactor 之外的 loop（mac/Linux 的 selector/kqueue）若报同类连接重置也只带 errno
+        ⇒ 判定必须退到 errno 分支。这条在 Windows 上照样能构造（2 元组 = winerror None），
+        把「mac 才会走的那半边」变成每平台都跑的测试，而不是等 mac CI 替我验。
+        （2026-10-08 mac CI 红点的根因就是这半边从没被任何测试覆盖到。）
+        """
+        exc = ConnectionResetError(10054, "Connection reset by peer")
+        self.assertIsNone(exc.winerror, "构造形态必须是「没有 winerror」的跨平台样")
+        self.assertEqual(exc.errno, 10054)
+        with tempfile.TemporaryDirectory() as td:
+            main, _dbg, err = self._emit(td, env=None, exc=exc)
+            self.assertIn("support-log-alive", main)
+            self.assertNotIn("_call_connection_lost", main)
+            self.assertNotIn("ERROR", main)
+            self.assertNotIn("_call_connection_lost", err)
 
     def test_other_asyncio_error_still_error(self):
         """② 回调不是连接关闭路径 ⇒ 不降噪（真故障必须看得见）。"""
@@ -354,7 +395,8 @@ class ProactorNoiseFilterTest(unittest.TestCase, _RootIsolateMixin):
             main, _dbg, _ = self._emit(td, env=None, name="media.ffmpeg",
                                        exc=self._reset())
             self.assertIn("ERROR", main)
-            self.assertIn("WinError 10054", main)
+            self.assertIn(self._code_token(), main)
+            self.assertIn("_call_connection_lost", main)
 
     def test_filter_installed_idempotently(self):
         snap = self._snapshot()
