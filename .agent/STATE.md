@@ -100,6 +100,7 @@
 > **下一步（需用户口令/手动）**：再 dispatch 一轮 ⇒ 结果见下面「第四轮」
 >
 > **第四轮 — 加固版仍红在 56 ⇒ 定性改判「这条入口当下不通」，并把「拿不到元数据」与「拿不到资产」解耦**
+> ⚠️（**本节关于网络根因的判断已被第五轮作废**——真因是资产源被删；过程与观测面保留，别当结论引用）
 > run `37795700737`（head `cf4b61f`，**已含上一轮的 --retry 5 + 整发 3 次**）= `macos-package`
 > 第 11 步仍然 `exit code 56`，`mvp-tests-macos` 继续绿。
 > **关键观测（不用令牌就能拿到的通道 = check annotations）**：
@@ -128,9 +129,33 @@
 > **直链对 draft release 到底 200 还是 404**（这是③能不能真兜住的关键，本机无令牌测不了）
 > —— 全都只能由下一轮 CI 定；若直链也 404，下一步就得改资产存放位置（需用户裁决：把 `model-assets`
 > 从 draft 改成 published 会让 NC 许可的权重公开，不能我自己动）。
-> **下一步（需用户口令/手动）**：下一轮 dispatch `h3-macos-mps.yml` ⇒
-> `mvp-tests-macos` 绿 → `macos-package` → 包侧门槛 `accept_packaged_bundle_mac.py`（该脚本**无**
-> 腿埋点/降噪断言，本次改动不会给它添新红点）→ `gh release upload mac-alpha --clobber`
+> **第五轮（真根因，用户口述）— `model-assets` 那个 release 被他删了；资产改挂 `mac-alpha`，前四轮的网络定性作废**
+> 用户一句话结案：「哦，那个 release 的 tag 被我删了」，并裁决「放去 mac-alpha 呗，本来就是放进这里的，
+> 你非要开一个 tag」⇒ **第四轮那三条候选根因（IPv6 路由 / HTTP/2 复位 / draft 的 tags 端点行为）
+> 连同「`api.github.com` 这条入口当下不通」的改判全部作废**：源不存在，任何通道都拿不到。
+> 教训入档：**缺一个前提（资产还在不在）时，我会把「查不到的网络症状」归因成协议问题**——
+> 以后遇到「同源历史上绿、今天全灭」先问/先验**被访问对象是否还存在**，再谈通道。
+> ⇒ 落地两处：① 资产挂 **滚动发布 release `mac-alpha`**（published prerelease ⇒ `releases/download`
+>   直链公开可取、**不需要令牌**；本机实测 `releases/tags/mac-alpha` 无令牌 http=200）；
+> ② step 11 大幅简化：通道 A=直链 `curl`、通道 B=`gh release download`，完整性一律由**仓库内
+>   `asset.json` 的 sha256 逐文件当场判**（不再需要 release JSON 那一发，也不再靠元数据 size）；
+>   缺项时 `::error::` 点名三份资产的文件名与字节数（下次再有人删 release，日志自己会说话）。
+> 前几轮里真正值得留的两处保住：**fail-fast 换位**（整步在 `Download DINOv2 weights` 之前 ⇒ 红一轮
+> ≈2-3 分钟而非 ≈19 分钟）与 **annotations 自证**（无令牌也能读 rc/http_code/stderr 头）。
+> 本地彩排 `work/r17_mac_log/step11_harness4.sh` + `stubs4/{curl,gh,python3,sleep}`（跑的仍是
+> workflow 原样抽出的脚本）四情形全 PASS：P1 直链 200→rc0(A)；P2 直链 404 且 gh 失败→**rc91 且文案含
+> 「release mac-alpha 上必须挂着 …」**；P3 首发 500 二发 200→rc0（重试有效）；P4 直链恒 404、
+> gh 兜住→rc0(B)。彩排当场抓到一个真 bug：`echo` 里用反引号包 `$SRC_TAG` 被 bash 当命令替换
+> ⇒ 报错文案把 tag 名吞成空串，已去掉反引号。
+> 本机实测三份资产在位、sha256 全过（`verify_model_asset_shas.py` FAILED=0：patch .data 88,342,528B /
+> isc .onnx 1,613,211B / isc .data 209,190,912B）⇒ **上传内容就绪**。
+> ⚠️ **唯一未闭合项（要用户动手）**：`mac-alpha` 现在只有两个 zip（实测 asset 列表），三份权重尚未挂上
+> ⇒ 下一轮 CI 仍会红，但红得明白（rc91 + 点名）。我本机无任何 GitHub 凭据（也不为一个上传去弹登录）
+> ⇒ 要么他在网页端把三个文件拖到 `mac-alpha` 的 assets，要么给一次可写令牌由我传。
+> 另一条要他知道的事实：`mac-alpha` 是公开 prerelease ⇒ 权重从此公开可下载，而 ISC 是 NC 许可
+> （用户已明确选择放这里，我不自己改回 draft 或另开 tag）。
+> **下一步**：资产上传到 `mac-alpha` ⇒ dispatch `h3-macos-mps.yml` ⇒
+> 测试门（真机已绿）→ step 11 → 构建 → 包侧门槛 `accept_packaged_bundle_mac.py` → publish
 > ⇒ 下载链 `https://github.com/bsaizne/source-video-locator/releases/download/mac-alpha/Video-Locator-mac-arm64.zip`。
 
 > **▶ 2026-10-08（续63 补十）— r17 出包：补九 三件进包 + 包侧两条新锁（腿埋点已实测进档）【下个对话从这里读起】**

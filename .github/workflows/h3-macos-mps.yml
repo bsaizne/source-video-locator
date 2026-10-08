@@ -130,111 +130,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install torch numpy opencv-python fastapi uvicorn pyinstaller rapidocr-onnxruntime static-ffmpeg pyJianYingDraft
 
-      - name: Fetch model assets for mac bundle (patch + ISC ONNX)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -uo pipefail
-          M=mvp/ui/resources/models
-          API="https://api.github.com/repos/$GITHUB_REPOSITORY"
-          TAGURL="https://github.com/$GITHUB_REPOSITORY/releases/download/model-assets"
-          # `-4` 与 `--http1.1` 都是**待验证假设**（不是已证结论）：连红三轮的都是同一发
-          # `api.github.com` 元数据请求，IPv6 路由与 HTTP/2 复位是两类最常见、且「换客户端实现也
-          # 救不回来」的成因；下面 ch1~ch4 各通道独立，失败时把 -6/-4 对照也打进注解。
-          CUR="curl -sfL -4 --http1.1 --retry 3 --retry-delay 5 --retry-all-errors --retry-connrefused"
-          # 为什么长这样（只写有证据的部分）：这一步 2026-10-08 连红三轮，全部是 `api.github.com`
-          # 那一发 `curl rc=56`（recv failure）：
-          #   run 37791429326（head b6a4a25，元数据无重试）→ 56
-          #   run 37795700737（head cf4b61f，元数据已带 --retry 5 + 整发 3 次 + size 等值校验）→ 还是 56，
-          #     且该 job 的 check annotations 里**我上一轮加的 ::warning:: 一条都没出现**
-          #     ⇒ 死在元数据那一发（`json="$(curl …)"` 在 set -e 下直接判死整步），没走到下载循环
-          #     ⇒ 同一发请求 6 次尝试全同码 ⇒ 不是抖动；而同一步 2026-10-06（run 37471104792）是绿的。
-          # 本机取 job 日志要令牌（403），能观测的只有 annotations ⇒ 这一版把**每条通道的失败原因
-          # （rc / http_code / stderr 头）都打进注解**，并把「元数据拿不到」与「资产拿不到」**解耦**：
-          #   元数据四条独立入口 —— api/tags、api/list（draft release 用列表端点更稳）、
-          #     各自再配 curl(`-4 --http1.1`) 与 `gh api`（Go 客户端，独立实现）；
-          #   资产三条通道 —— A=api octet-stream by id、B=gh api by id、C=github.com 直链。
-          # **元数据全灭不再等于整步死**：改走「直链 + 仓库里 asset.json 的 sha256 当场比对」，
-          # 那条路一个字都不碰 api.github.com ⇒ 今天这种「api 不通」也能出包。
-          # 出口码分档可判位：90=元数据四通道全灭**且**直链兜底也没补齐 / 91=有元数据但资产三通道×3 轮
-          # 仍不齐 / 最后的 verify_model_asset_shas 原样兜底。
-          note() { echo "::notice::$*"; }
-          warn() { echo "::warning::$*"; }
-          head_err() { head -c 180 "$1" 2>/dev/null | tr '\n\r' '  '; }
-          # sha256 比对用的清单**在仓库里**（每个模型目录的 asset.json）⇒ 直链通道不需要任何元数据接口
-          sha_ok() {  # $1=目录 $2=文件名
-            python3 -c "import hashlib,json,sys;d=sys.argv;w=json.load(open(d[1]+'/asset.json',encoding='utf-8'))['sha256'].get(d[2]);f=open(d[1]+'/'+d[2],'rb');g=hashlib.file_digest(f,'sha256').hexdigest();f.close();sys.exit(0 if w and w==g else 1)" "$1" "$2"
-          }
-          dl_direct() {  # $1=目录 $2=文件名 → github.com 直链 + 当场 sha256 比对，成功 rc0
-            local dest="$1" name="$2" code try
-            for try in 1 2 3; do
-              code="$(curl -sSL -4 --http1.1 --retry 3 --retry-delay 5 --retry-all-errors \
-                          --max-time 1200 -o "$dest/$name" -w "%{http_code}" \
-                          -H "Authorization: Bearer $GH_TOKEN" "$TAGURL/$name" 2>/tmp/dc.err)"
-              if [ "$code" = 200 ] && sha_ok "$dest" "$name"; then
-                note "fetched $name via 直链+sha256 (try=$try)"; return 0
-              fi
-              warn "$name 直链 try=$try http=$code sha=不符/缺 err=$(head_err /tmp/dc.err)"
-              rm -f "$dest/$name"; sleep 5
-            done
-            return 1
-          }
-          note "diag curl=$(curl --version | head -1 | cut -d' ' -f1-2) gh=$(gh --version | head -1 | cut -d' ' -f1-3)"
-
-          # ---------------- 元数据：四条通道，顺序尝试，全败才 90
-          json=""
-          meta_via=""
-          if json="$($CUR --max-time 60 -H "Authorization: Bearer $GH_TOKEN" \
-                        -H "Accept: application/vnd.github+json" \
-                        "$API/releases/tags/model-assets" 2>/tmp/m1.err)"; then
-            meta_via="ch1 api/tags + curl(http1.1)"
-          else
-            rc=$?; warn "meta ch1 rc=$rc err=$(head_err /tmp/m1.err)"
-          fi
-          if [ -z "$meta_via" ]; then
-            # ch2：列表端点（draft release 用 tags 端点本就可能 404/异常，列表更稳）
-            if json="$($CUR --max-time 60 -H "Authorization: Bearer $GH_TOKEN" \
-                          -H "Accept: application/vnd.github+json" \
-                          "$API/releases?per_page=100" 2>/tmp/m2.err \
-                        | python3 -c "import sys,json;d=json.load(sys.stdin);print(json.dumps(next(r for r in d if r['tag_name']=='model-assets')))")"; then
-              meta_via="ch2 api/list + curl(http1.1)"
-            else
-              rc=$?; warn "meta ch2 rc=$rc err=$(head_err /tmp/m2.err)"
-            fi
-          fi
-          if [ -z "$meta_via" ]; then
-            if json="$(gh api -H "Accept: application/vnd.github+json" \
-                          "repos/$GITHUB_REPOSITORY/releases/tags/model-assets" 2>/tmp/m3.err)"; then
-              meta_via="ch3 api/tags + gh"
-            else
-              rc=$?; warn "meta ch3 rc=$rc err=$(head_err /tmp/m3.err)"
-            fi
-          fi
-          if [ -z "$meta_via" ]; then
-            if json="$(gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" 2>/tmp/m4.err \
-                          | python3 -c "import sys,json;d=json.load(sys.stdin);print(json.dumps(next(r for r in d if r['tag_name']=='model-assets')))")"; then
-              meta_via="ch4 api/list + gh"
-            else
-              rc=$?; warn "meta ch4 rc=$rc err=$(head_err /tmp/m4.err)"
-            fi
-          fi
-          if [ -z "$meta_via" ]; then
-            # 元数据全灭 **不等于** 这步该死：资产本体可以走 github.com 直链，完整性由仓库里的
-            # asset.json sha256 当场判 ⇒ 这条通道与 api.github.com 无任何关系。
-            p6="$(curl -sS -o /dev/null -6 --http1.1 --max-time 20 -w 'code=%{http_code} ip=%{remote_ip} t=%{time_total}' https://api.github.com/ 2>&1 | head -c 140 | tr '\n\r' '  ')"
-            p4="$(curl -sS -o /dev/null -4 --http1.1 --max-time 20 -w 'code=%{http_code} ip=%{remote_ip} t=%{time_total}' https://api.github.com/ 2>&1 | head -c 140 | tr '\n\r' '  ')"
-            warn "api.github.com 路由对照 -6[$p6] -4[$p4]（token 长度=${#GH_TOKEN} repo=$GITHUB_REPOSITORY）"
-            warn "元数据四通道全失败 ⇒ 改走「github.com 直链 + 仓库内 asset.json sha256」"
-            mkdir -p "$M/dinov2_cls_patch" "$M/isc_ft_v107"
-            dead=0
-            dl_direct "$M/dinov2_cls_patch" dinov2_cls_patch.onnx.data || dead=1
-            dl_direct "$M/isc_ft_v107" isc_ft_v107.onnx || dead=1
-            dl_direct "$M/isc_ft_v107" isc_ft_v107.onnx.data || dead=1
-            if [ "$dead" != 0 ]; then
-              echo "::error::model-assets 元数据四通道 + 直链兜底都没补齐（详见上面的 rc/http_code 注解）"
-              exit 90
-            fi
-            python3 mvp/scripts/verify_model_asset_shas.py "$M/dinov2_cls_patch" "$M/isc_ft_v107"
             note "资产由直链兜底通道补齐，sha 校验已过（元数据接口整轮没用到）"
             exit 0
           fi
@@ -283,6 +178,60 @@ jobs:
           fetch isc_ft_v107.onnx "$M/isc_ft_v107"
           fetch isc_ft_v107.onnx.data "$M/isc_ft_v107"
           python3 mvp/scripts/verify_model_asset_shas.py "$M/dinov2_cls_patch" "$M/isc_ft_v107"
+      - name: Fetch model assets for mac bundle (patch + ISC ONNX)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -uo pipefail
+          M=mvp/ui/resources/models
+          # 资产现在挂在**滚动发布 release `mac-alpha`** 上（用户 2026-10-08 拍板：本来就该放这里，
+          # 不再单开 `model-assets` tag）。这条是 published prerelease ⇒ `releases/download` 直链
+          # **公开可取、连令牌都不需要**（本机实测 `releases/tags/mac-alpha` 无令牌 http=200；
+          # 而旧的 draft tag 删除后，同一条请求在 CI 里连续四轮 curl rc=56 全灭）。
+          # 完整性判据不变：**sha256 对仓库里的 asset.json**（与 verify_model_asset_shas.py 同源），
+          # 不看字节数、不信 curl 退出码 —— 半件/传错包都过不了这道。
+          # 失败一律写进 annotations（本机取 job 日志要令牌 403，annotations 是唯一可观测面）。
+          SRC_TAG=mac-alpha
+          BASE="https://github.com/$GITHUB_REPOSITORY/releases/download/$SRC_TAG"
+          note() { echo "::notice::$*"; }
+          warn() { echo "::warning::$*"; }
+          head_err() { head -c 180 "$1" 2>/dev/null | tr '\n\r' '  '; }
+          sha_ok() {  # $1=目录 $2=文件名
+            python3 -c "import hashlib,json,sys;d=sys.argv;w=json.load(open(d[1]+'/asset.json',encoding='utf-8'))['sha256'].get(d[2]);f=open(d[1]+'/'+d[2],'rb');g=hashlib.file_digest(f,'sha256').hexdigest();f.close();sys.exit(0 if w and w==g else 1)" "$1" "$2"
+          }
+          get() {  # $1=目录 $2=文件名 → 通道 A=直链，通道 B=gh release download
+            dest="$1"; name="$2"
+            mkdir -p "$dest"
+            for try in 1 2 3; do
+              code="$(curl -sSL -4 --http1.1 --retry 3 --retry-delay 5 --retry-all-errors \
+                          --retry-connrefused -o "$dest/$name" -w "%{http_code}" \
+                          --max-time 1800 "$BASE/$name" 2>/tmp/g1.err)"
+              if [ "$code" = 200 ] && sha_ok "$dest" "$name"; then
+                note "asset $name via A 直链+sha256 OK ($(wc -c < "$dest/$name" | tr -d ' ') B, try=$try)"
+                return 0
+              fi
+              warn "$name A try=$try http=$code size=$(wc -c < "$dest/$name" 2>/dev/null | tr -d ' ') err=$(head_err /tmp/g1.err)"
+              rm -f "$dest/$name"
+              grc=0
+              gh release download "$SRC_TAG" --pattern "$name" --dir "$dest" > /dev/null 2>/tmp/g2.err || grc=$?
+              if [ "$grc" = 0 ] && sha_ok "$dest" "$name"; then
+                note "asset $name via B gh release download+sha256 OK (try=$try)"; return 0
+              fi
+              warn "$name B try=$try rc=$grc err=$(head_err /tmp/g2.err)"
+              rm -f "$dest/$name"; sleep 5
+            done
+            return 1
+          }
+          note "diag curl=$(curl --version | head -1 | cut -d' ' -f1-2) gh=$(gh --version | head -1 | cut -d' ' -f1-3) src=$SRC_TAG"
+          miss=0
+          get "$M/dinov2_cls_patch" dinov2_cls_patch.onnx.data || miss=$((miss+1))
+          get "$M/isc_ft_v107" isc_ft_v107.onnx || miss=$((miss+1))
+          get "$M/isc_ft_v107" isc_ft_v107.onnx.data || miss=$((miss+1))
+          if [ "$miss" != 0 ]; then
+            echo "::error::缺 $miss 份模型资产：release $SRC_TAG 上必须挂着 dinov2_cls_patch.onnx.data(88,342,528B) / isc_ft_v107.onnx(1,613,211B) / isc_ft_v107.onnx.data(209,190,912B)，sha256 见 mvp/ui/resources/models/*/asset.json。缺任一份 ⇒ 包内 patch 精排静默回退 CPU torch、ISC 第二意见整条跳过 ⇒ 不放行。"
+            exit 91
+          fi
+          python3 mvp/scripts/verify_model_asset_shas.py "$M/dinov2_cls_patch" "$M/isc_ft_v107"
       - name: Download DINOv2 weights
         run: |
           mkdir -p .cache/dinov2_weights
@@ -326,10 +275,11 @@ jobs:
             || { echo "::error::bundled libmediainfo.0.dylib missing - 剪映草稿导出会失败"; exit 1; }
           echo "OK: bundled libmediainfo present for pymediainfo"
 
-      # 精排/ISC 资产不入库（ISC 外部权重 209MB 超 GitHub 单文件 100MB 硬限；patch 的 .data
-      # 88MB 虽在限内但同批处理）⇒ 从内部 tag `model-assets` 下载，并逐个按 asset.json 的
-      # sha256 校验（下载完整性不能只看 curl 退出码）。缺任一份 ⇒ 后面「Accept packaged mac
-      # bundle」的资产判据会红，publish 不放行。
+      # 精排/ISC 的外部权重不入库（ISC 的 .data 209MB 超 GitHub 单文件 100MB 硬限；patch 的 .data
+      # 88MB 虽在限内但同批处理）⇒ 挂在**滚动发布 release `mac-alpha`** 上（2026-10-08 用户拍板：
+      # 本来就该放这里，不再单开 `model-assets` draft tag；旧 tag 被删后 CI 四轮拿不到东西），
+      # 逐个按仓库内 `asset.json` 的 sha256 校验（下载完整性不能只看 curl 退出码）。
+      # 缺任一份 ⇒ 本步 rc=91，后面「Accept packaged mac bundle」根本不会跑到，publish 不放行。
       # 后果背景：这两份资产缺失时，包内 patch 精排会**静默**回退 CPU torch（Windows 实测
       # 整条慢 2.6~3.9×，当年瞒了两周）、ISC 第二意见整体跳过 ⇒ 结果与 Windows 包不同档。
 

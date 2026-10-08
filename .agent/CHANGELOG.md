@@ -1,5 +1,31 @@
 # CHANGELOG
 
+## 2026-10-08（续63 补十一·第五轮）— 真根因：`model-assets` release 被删；资产改挂 `mac-alpha`，step 11 简化
+
+- **结案方式**：用户口述「那个 release 的 tag 被我删了」并裁决「放去 mac-alpha 呗，本来就是放进这里的，
+  你非要开一个 tag」⇒ 上面「第三轮 / 第四轮」里所有**网络层定性作废**（IPv6 路由、HTTP/2 复位、
+  draft 的 tags 端点行为、`api.github.com` 当下不通），那两轮的过程与观测面保留，别当结论引用。
+- **我的错**：在缺「资产还在不在」这个前提时，把「同源历史绿、今天全灭」的症状归因到协议层，
+  并把推测写成了结论（第四轮 STATE 原话「改判：api.github.com 这条 HTTP/2 通道当下对该 runner 不通」）。
+  ⇒ 规矩：**先验被访问对象是否还存在，再谈通道**。
+- **落地**：① 资产挂 `mac-alpha`（published prerelease ⇒ `releases/download` 直链公开可取、不需要令牌；
+  本机实测 `releases/tags/mac-alpha` 无令牌 http=200）；② step 11 从「4 条元数据通道 + 3 条资产通道」
+  简化成 **A=直链 / B=`gh release download`，完整性由仓库内 `asset.json` 的 sha256 逐文件当场判**
+  （release JSON 那一发彻底不需要了，元数据 size 校验也撤了）；缺项 `::error::` 点名三份文件与字节数。
+- **保住的两处真收益**：fail-fast（整步移到 `Download DINOv2 weights` 之前 ⇒ 红一轮 ≈2-3 分钟而非 ≈19 分钟）、
+  annotations 自证（无令牌可读 rc/http_code/stderr 头）。
+- **彩排**：`step11_harness4.sh` + `stubs4/{curl,gh,python3,sleep}` 跑 workflow 原样抽出的脚本，
+  P1 直链 200→rc0(A) / P2 404+gh 失败→rc91 且文案点名 mac-alpha / P3 首发 500 二发 200→rc0 /
+  P4 直链恒 404、gh 兜住→rc0(B)，全 PASS；并当场抓到一个真 bug——`echo` 里用反引号包 `$SRC_TAG`
+  被 bash 当命令替换，报错文案把 tag 名吞成空串（已去掉反引号）。
+- **内容就绪证明**：本机 `verify_model_asset_shas.py` 四份全 PASS（patch .onnx 78,194B /
+  patch .data 88,342,528B / isc .onnx 1,613,211B / isc .data 209,190,912B）⇒ FAILED=0。
+- ⚠️ **未闭合（要用户动手）**：`mac-alpha` 目前 asset 列表只有两个 zip，三份权重尚未挂上 ⇒
+  下一轮 CI 仍会红，但红得明白。我本机无 GitHub 凭据（不为一个上传去弹登录）：他在网页端拖三个文件
+  上 `mac-alpha`，或给一次可写令牌由我传。
+- **一条要说清的事实**：`mac-alpha` 是公开 prerelease ⇒ 权重随之一同公开可下载，而 ISC 权重是 NC 许可；
+  这是用户明确的选择，我不再自行改回 draft 或另开 tag（`reference-model-asset-hosting` 记忆同步更正）。
+
 ## 2026-10-08（续63 补十一）— mac CI 唯一红点：Windows 字面量断言（测试层，已修并 push）
 
 - **现象**：用户手动 dispatch 的 run `37782689308`（head `382d3ac`）= `mvp-tests-macos` failure
