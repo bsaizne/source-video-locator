@@ -347,14 +347,14 @@ def main() -> int:
             # **UI 真实路径锁**（2026-10-09 真机回归）：分析任务在隔离子进程里跑完后，前端只会
             # 直接 POST /api/export（它从不先调 /api/results/load）⇒ 后端必须还拿得到"最近一次
             # 结果批"。以前这条之所以一直绿，是因为**验收探针自己先 load 了批** = 走了 UI 不走的路。
-            ex_code, ex_body = http(base, token, "POST", "/api/export",
-                                    {"output_dir": str(OUT)}, timeout=180.0)
-            export_http = ex_code
-            export_path = ex_body.get("path") if isinstance(ex_body, dict) else None
-            print("[export] http=%s path=%s detail=%s"
-                  % (ex_code, export_path,
-                     ex_body.get("detail") if isinstance(ex_body, dict) else ex_body),
-                  flush=True)
+            # 注意本文件的 http() 只回 body、4xx/5xx 抛 HTTPError ⇒ 码要自己接住。
+            try:
+                ex_body = http(base, token, "POST", "/api/export",
+                               {"output_dir": str(OUT)}, timeout=180.0)
+                export_http, export_path = 200, (ex_body or {}).get("path")
+            except urllib.error.HTTPError as e:
+                export_http, export_path, ex_body = e.code, None, None
+            print("[export] http=%s path=%s" % (export_http, export_path), flush=True)
             summary = {
                 "arm": "packaged_headless" if mode == "packaged" else "venv_http_headless",
                 "case": case,
