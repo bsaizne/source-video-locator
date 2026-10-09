@@ -114,6 +114,14 @@ def main() -> int:
         check("冒烟耗时在阈值内", summary.get("wall_s", 1e9) <= SMOKE_WALL_S,
               "%.1fs <= %.1fs" % (summary.get("wall_s", 1e9), SMOKE_WALL_S))
         check("定位出结果", summary.get("segments", 0) > 0, "segments=%s" % summary.get("segments"))
+        # **UI 真实路径**：分析在隔离子进程里跑完 ⇒ 前端只 POST /api/export（从不先 /api/results/load）。
+        # 2026-10-09 用户真机 22 分钟分析后导出失败，就是这条没人锁过（探针自己先 load = 假绿）。
+        ex_http = summary.get("export_http")
+        if ex_http is None:
+            print("[info] 探针产物无 export_http 字段（早于本次改动）⇒ 该面未实测，别当已验收")
+        else:
+            check("分析后直接导出（UI 路径，不先 load）", ex_http == 200,
+                  "http=%s path=%s" % (ex_http, summary.get("export_path")))
         # 打包态任务级进程隔离（六项立项 ④，2026-10-07 续62 补六；r14 及以前没有此项 ⇒ 红）：
         # PyInstaller 下 spawn 子进程必须起得来（入口 freeze_support 已接），
         # 证据 = 包内后端 stdout 的隔离启动行。起不来会静默回落线程内执行，

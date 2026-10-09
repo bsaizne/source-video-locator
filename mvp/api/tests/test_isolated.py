@@ -214,5 +214,67 @@ class SpawnSupervisionTest(unittest.TestCase):
         self.assertEqual(task.status, TaskStatus.CANCELLED)
 
 
+class ParentBatchAdoptTest(unittest.TestCase):
+    """结果批回登记到**父进程** service（2026-10-09 真机 `no results batch` 回归锁）。
+
+    现场：用户 22 分钟分析跑完（任务在隔离子进程里），点导出/渲染双双失败
+    ——`/api/export` 的兜底是 `ctx.current_batch or service.last_result_batch()`，
+    而 `locate` 写的是子进程那份 service，父进程这份永远是 None。
+    """
+
+    @staticmethod
+    def _batch_payload():
+        from domain.models import ResultBatch
+        batch = ResultBatch(original_video=r"Z:\om.mkv", edited_video=r"Z:\e.mp4",
+                            results=[])
+        return batch.to_dict()
+
+    def test_locate_envelope_adopts_batch_into_parent_service(self):
+        from mvp.api.tasks.isolated import _adopt_parent_batch
+
+        class Svc:
+            adopted = None
+
+            def adopt_result_batch(self, batch):
+                self.adopted = batch
+
+        svc, logs = Svc(), []
+        _adopt_parent_batch(svc, _analyze_task(), self._batch_payload(),
+                            lambda *a, **k: logs.append(a))
+        self.assertIsNotNone(svc.adopted, "locate 信封必须把批回登记，否则导出永远 no_results")
+        self.assertEqual(svc.adopted.edited_video, r"Z:\e.mp4")
+        self.assertEqual([], logs, "正常路径不该写日志")
+
+    def test_render_envelope_is_not_adopted(self):
+        from mvp.api.tasks.isolated import _adopt_parent_batch
+
+        class Svc:
+            adopted = None
+
+            def adopt_result_batch(self, batch):
+                self.adopted = batch
+
+        svc = Svc()
+        task = Task(kind=TaskKind.RENDER, edited_path=r"Z:\e.mp4",
+                    original_path=r"Z:\om.mkv")
+        _adopt_parent_batch(svc, task, {"kind": "render", "path": "Z:/out.mp4"},
+                            lambda *a, **k: None)
+        self.assertIsNone(svc.adopted, "render 的批是提交时锁定的，不该被回登记覆盖")
+
+    def test_adopt_failure_only_logs_and_never_raises(self):
+        from mvp.api.tasks.isolated import _adopt_parent_batch
+
+        logs = []
+        _adopt_parent_batch(object(), _analyze_task(), self._batch_payload(),
+                            lambda *a, **k: logs.append(a))   # 假 service 没这方法
+        self.assertTrue(logs, "登记失败要留下可读的一行")
+
+    def test_harvest_path_still_calls_adopt(self):
+        """契约锁：终态信封落地处必须调用回登记（别再让它悄悄消失）。"""
+        src = (Path(__file__).resolve().parents[1] / "tasks" / "isolated.py"
+               ).read_text(encoding="utf-8")
+        self.assertIn("_adopt_parent_batch(service, task", src)
+
+
 if __name__ == "__main__":
     unittest.main()

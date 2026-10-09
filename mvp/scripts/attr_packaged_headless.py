@@ -344,6 +344,17 @@ def main() -> int:
                     time.strftime("%Y-%m-%d %H:%M", time.localtime(exe_stat.st_mtime)))
             except OSError:
                 exe_id = "%s (不可读)" % exe_path
+            # **UI 真实路径锁**（2026-10-09 真机回归）：分析任务在隔离子进程里跑完后，前端只会
+            # 直接 POST /api/export（它从不先调 /api/results/load）⇒ 后端必须还拿得到"最近一次
+            # 结果批"。以前这条之所以一直绿，是因为**验收探针自己先 load 了批** = 走了 UI 不走的路。
+            ex_code, ex_body = http(base, token, "POST", "/api/export",
+                                    {"output_dir": str(OUT)}, timeout=180.0)
+            export_http = ex_code
+            export_path = ex_body.get("path") if isinstance(ex_body, dict) else None
+            print("[export] http=%s path=%s detail=%s"
+                  % (ex_code, export_path,
+                     ex_body.get("detail") if isinstance(ex_body, dict) else ex_body),
+                  flush=True)
             summary = {
                 "arm": "packaged_headless" if mode == "packaged" else "venv_http_headless",
                 "case": case,
@@ -361,6 +372,8 @@ def main() -> int:
                 "index_state_before_run": index_warm,
                 "device": device,
                 "segments": len(result.get("results", [])),
+                "export_http": export_http,          # UI 路径：不先 load 直接导出
+                "export_path": export_path,
                 "task_status": status.get("status"),
                 "task_error": status.get("error"),
                 "phases": phases,

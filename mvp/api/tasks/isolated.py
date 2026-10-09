@@ -151,6 +151,28 @@ def _traceback(exc) -> str:
         return ""
 
 
+def _adopt_parent_batch(service, task, payload, log) -> None:
+    """把子进程 locate 出来的结果批**回登记到父进程**的 service。
+
+    `/api/export`、`/api/results/*`、render 的兜底都是
+    ``ctx.current_batch or ctx.service.last_result_batch()``；任务在子进程里跑时，
+    ``locate`` 写的是子进程那份 service，父进程这份永远是 None ⇒ 用户跑完一次长分析
+    点导出就拿到 ``no results batch``（2026-10-09 真机：22 分钟分析完成后导出/渲染双双失败）。
+    render 任务的批是提交时锁定的（``task.render_batch``），不需要回登记。
+    回登记失败只影响后续导出，不该改任务终态 ⇒ 只记日志。
+    """
+    from .models import TaskKind
+    if task.kind is TaskKind.RENDER or not isinstance(payload, dict):
+        return
+    if payload.get("kind") == "render":
+        return
+    try:
+        from domain.models import ResultBatch
+        service.adopt_result_batch(ResultBatch.from_dict(payload))
+    except Exception as exc:  # noqa: BLE001
+        log("task %s adopt result batch failed: %s", task.task_id, exc)
+
+
 def run_worker_isolated(task, service, *, log: LogFn | None = None) -> bool:
     """在独立子进程里跑任务并监督。
 
@@ -185,6 +207,7 @@ def run_worker_isolated(task, service, *, log: LogFn | None = None) -> bool:
             return False
         if kind == "result":
             task.mark_completed(msg["result"])
+            _adopt_parent_batch(service, task, msg.get("result"), log)
             return True
         if kind == "error":
             tb = msg.get("traceback") or ""

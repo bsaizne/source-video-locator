@@ -1542,6 +1542,15 @@ class SourceLocatorService:
         """
         return self._current_batch
 
+    def adopt_result_batch(self, batch: ResultBatch) -> None:
+        """把**别处产出**的结果批登记成「最近一次结果批」（父进程用）。
+
+        任务进隔离子进程后，``locate`` 写的是子进程那份 service 的 ``_current_batch``，
+        父进程这份永远是 None ⇒ 上一条 ``last_result_batch`` 的文档承诺失效，
+        分析跑完点导出/渲染就得到 ``no results batch``（2026-10-09 用户真机复现）。
+        """
+        self._current_batch = batch
+
     def export_results(self, batch: ResultBatch, *, out_dir: str | Path | None = None,
                        filename: str | None = None,
                        on_progress: ProgressCb | None = None,
