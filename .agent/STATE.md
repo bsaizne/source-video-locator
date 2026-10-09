@@ -206,6 +206,22 @@
 >   门禁：后端全套 **Ran 622 tests OK (skipped=2)**、API **124 OK**。
 >   ⚠️ 覆盖边界：没在他那台机器上复现过（要 `SVL_LOG_DEBUG=1` 重跑一次才有 traceback 定死），
 >   判据是「异常签名字面量 + 全仓只有这两处 `float * 可为 None`」的相容性 ⇒ 属**强推断非实证**。
+>
+> **第九轮 — r18 出包（Windows），把渲染那条修复打进包里**
+> 口令「那重新打包啊，那个日志是 windows 上的问题」。构建 = `build-release.ps1` 一条链，
+> **从干净工作树 head `9eaee64` 构建**（不像 r17 是未提交工作树构建 ⇒ 这次「包 == commit」可追溯）。
+> 验收两道全绿：`accept_packaged_bundle.py` **FAILED=0**（资产 sha 全过、合成冒烟
+> `DirectML 生效 wall=30.1s`、隔离链 `reaped exitcode=0`、腿埋点 12 行刻度
+> `[6,9,42,44,44,44,44,48,48,48,48,48]`）+ `accept_packaged_render.py` **FAILED=0**
+> （R1 渲染 completed wall=63s、64 段无交叠、时长 136.366 vs 136.344、隔离在位、`h264_amf` 硬编）。
+> zip = `Compress-Archive win-unpacked\*` Optimal ⇒ `Video-Locator-win-x64-20261009r18.zip`
+> 981,665,372B / **7,078 条目** / `testzip()=None`；**zip 内 backend.exe 与磁盘逐字节相等**
+> （77,473,147B，sha256[:16]=`2eb651d38003d433`）；对 r17 的 backend.exe 尺寸差 +382B
+> （77,472,765 → 77,473,147）⇒ 与「r17 之后 `mvp/src` 只有渲染那一处改动」相容。
+> ⚠️ 如实登记：包内渲染冒烟**走不到**那条 None 分支（整条渲染 63s、合并段 <5s，而心跳要 5s 无读数
+> 才发 None；他崩的是 2 小时长片）⇒ 该修复在包内**无实证**，锁在单测（`MergeStageFracTest` 四条
+> 含结构锁）+ 「构建自干净 commit」这条链上。
+> release/ 现状四档并存（r15/r16/r17/r18），删旧包仍等口令（纪律：只留最新+上一档）。
 
 > **▶ 2026-10-08（续63 补十）— r17 出包：补九 三件进包 + 包侧两条新锁（腿埋点已实测进档）【下个对话从这里读起】**
 > 口令「先出包吧」。构建 = `mvp/ui/scripts/build-release.ps1` 一条链（vite → compile:electron →
@@ -348,9 +364,11 @@
   （脚本「同名先删再传」⇒ 三份删了重传），又 kill 掉大文件那一发 ⇒ ISC `.data` 在服务器上缺了≈25 分钟。
   ⇒ 教训：**长上传的进度判据 = 服务端 asset 列表，不是本机 `tasklist` 里 curl 的驻留内存**。
   公开性事实（他已选定，不再重提）：`mac-alpha` 是公开 prerelease ⇒ 权重随公开包一同公开，ISC 为 NC 许可。
-- Windows 现役包 = **r17**（包内实测全绿含两条新包侧锁）；补九/补十/补十一 已按口令提交并 push
+- Windows 现役包 = **r18**（`Video-Locator-win-x64-20261009r18.zip`，从干净 commit `9eaee64` 构建，
+  两道包内验收 FAILED=0，含渲染 None 修复）；上一档 r17 = 回滚档。
+  补九/补十/补十一 已按口令提交并 push
   （`ba5bedd` + `382d3ac` + `d78e13a` + `3349063` + `b6a4a25` + 本次 workflow 笔）。
-  回滚档 = r16，r15 待删口令。
+  回滚档 = r17；r15/r16 待删口令（release/ 现四档并存）。
   => 腿边界埋点与支持档降噪**已在包内支持档实测生效**（Windows 见 Current Task 补十 块；
   **mac 侧同一条链也已在 mac 测试日志里实测**：12 行 `locate leg=` 顺序/区间正确）。
 - ~~两处新 UI 缺浏览器目检~~ = 已目检（续63 补三）并**按用户裁决删除显示**（续63 补四）；

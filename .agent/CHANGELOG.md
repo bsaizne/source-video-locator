@@ -1,5 +1,21 @@
 # CHANGELOG
 
+## 2026-10-09（续63 补十一·第九轮）— r18 出包（Windows）：把渲染 None 修复打进包
+
+- 口令「那重新打包啊，那个日志是 windows 上的问题」。`build-release.ps1` 一条链，
+  **从干净工作树 head `9eaee64` 构建**（r17 当时是未提交工作树构建；这次「包 == commit」可追溯）。
+- 验收两道全绿：`accept_packaged_bundle.py` FAILED=0（资产 sha 全过 / 合成冒烟 DirectML wall=30.1s /
+  隔离链 `reaped exitcode=0` / 腿埋点 12 行刻度 `[6,9,42,44,44,44,44,48,48,48,48,48]`）；
+  `accept_packaged_render.py` FAILED=0（R1 completed wall=63s / 64 段无交叠 / 时长 136.366 vs 136.344 /
+  隔离在位 / `h264_amf` 硬编）。
+- zip：`Compress-Archive win-unpacked\*` Optimal ⇒ `Video-Locator-win-x64-20261009r18.zip`
+  981,665,372B / 7,078 条目 / `testzip()=None`；**zip 内 backend.exe 与磁盘逐字节相等**
+  （77,473,147B，sha256[:16]=`2eb651d38003d433`）；对 r17 尺寸 +382B（77,472,765 → 77,473,147），
+  与「r17 之后 `mvp/src` 只有渲染那一处改动」相容。
+- ⚠️ 如实登记：包内渲染冒烟**走不到** None 分支（整条 63s、合并段 <5s；心跳要 5s 无读数才发 None，
+  他崩的是 2 小时长片）⇒ 该修复在包内无实证，锁在单测 + 「构建自干净 commit」这条链上。
+- release/ 现四档并存（r15/r16/r17/r18）；删旧包仍等口令。
+
 ## 2026-10-09（续63 补十一·第八轮）— 包内日志捞出一条真缺陷：合并进度回调漏 None ⇒ 渲染 LOC-9999
 
 - **来源**：用户递 `video_locator_logs.zip`（Windows 支持档，09-10→10-09 16:19，8.9MB）。
