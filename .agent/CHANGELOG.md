@@ -1,5 +1,33 @@
 # CHANGELOG
 
+## 2026-10-09（续63 补十一·第十轮）— 真机日志揪出隔离回归：导出/渲染 no results batch；r19 出包
+
+- **现场**（用户截图 + `video_locator_logs.zip`，Windows 支持档）：22:25 提交分析 → 22:47:22
+  `locate finished segments=84 elapsed=1310.7s` → 22:48:02 `POST /api/tasks/render` 与
+  22:48:07 `POST /api/export` **双双 400 `no results batch; call /api/results first`**
+  （导出面板两条红条）。日志里**从没有** `POST /api/results/load` ⇒ UI 走的是"后端自己记得最近一次批"。
+- **根因 = 任务级进程隔离（r16 起）留下的状态回归**：`/api/export` 与 render 的兜底是
+  `ctx.current_batch or service.last_result_batch()`；locate 现在跑在**子进程**里，写的是子进程那份
+  service 的 `_current_batch` ⇒ 父进程这份永远 None。`last_result_batch` 的 docstring 还承诺
+  "异步 analyze 也会设置"——隔离上线后这句在父进程失效。
+- **为什么验收一直绿**：包内探针（`work/r15_jianying_pkg/probe.py` 那一路）**自己先调了
+  `/api/results/load`** 再导出 = 走了 UI 不走的路径 ⇒ 假绿。教训入档：**夹具必须复刻真实 UI 的
+  调用序列，不能替 UI 补一步**。
+- **修法**：`isolated.py` 终态信封落地处调 `_adopt_parent_batch()`（`ResultBatch.from_dict` 还原 +
+  `service.adopt_result_batch()` 登记回父进程；render 批是提交时锁定的不回登记；失败只记日志不改终态）。
+- **两层锁**：① `ParentBatchAdoptTest` 四条（locate 回登记 / render 不覆盖 / 失败只记日志 /
+  落地处必须调用）⇒ API **128 OK**、后端全套 **622 OK**；② **包侧 UI 真实路径锁**：
+  `attr_packaged_headless` 分析完成后**不先 load** 直接 `POST /api/export`，记 `export_http/export_path`，
+  `accept_packaged_bundle` 断言 200（字段缺失判"未实测"不判通过）。
+  r19 包内实测 **export_http=200**、产物 `a1__35e1ddf8.results.json` 落地 ⇒ 修复在包内成立。
+- **r19 出包**：从干净 commit `3ef2b9e` 构建；两道验收 FAILED=0（bundle 含新锁 + render R1 60s/64 段）；
+  zip = `Video-Locator-win-x64-20261009r19.zip` 981,667,323B / 7,078 条目 / `testzip()=None`；
+  zip 内 backend.exe 与磁盘逐字节相等（77,474,263B，sha16=`86d2007c00cfc673`；r18 为 77,473,147B ⇒
+  +1,116B，与"r18 之后 src 只有隔离回登记一处改动"相容）。
+- 采坑留痕：`attr_packaged_headless.http()` 只回 body、4xx 抛 `HTTPError`，我第一版按 `(code, body)`
+  解包 ⇒ 把 dict 的两个键当值（`http=path`），验收当场红给我看 ⇒ 已改成 try/except 接码。
+- release/ 现三档（r17/r18/r19）；按"最新+上一档"该删 r17，**等口令**。
+
 ## 2026-10-09（续63 补十一·第九轮）— r18 出包（Windows）：把渲染 None 修复打进包
 
 - 口令「那重新打包啊，那个日志是 windows 上的问题」。`build-release.ps1` 一条链，

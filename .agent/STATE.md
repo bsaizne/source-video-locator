@@ -222,6 +222,25 @@
 > 才发 None；他崩的是 2 小时长片）⇒ 该修复在包内**无实证**，锁在单测（`MergeStageFracTest` 四条
 > 含结构锁）+ 「构建自干净 commit」这条链上。
 > release/ 按口令（2026-10-09）删到两档：**r18 现役 + r17 回滚**（r15/r16 已删，释放 ≈1.96GB）。
+>
+> **第十轮 — 真机日志揪出隔离回归：分析跑完导出/渲染 `no results batch`；r19 出包**
+> 用户截图（导出面板两条红条）+ 支持档：22:47:22 `locate finished segments=84 elapsed=1310.7s` ⇒
+> 22:48:02/07 `POST /api/tasks/render` 与 `POST /api/export` 双双 400 `no results batch`；
+> 日志里**从没有** `/api/results/load` ⇒ UI 依赖"后端自己记得最近一次批"。
+> 根因 = **任务级进程隔离（r16 起）的状态回归**：locate 跑在子进程，写的是子进程那份 service 的
+> `_current_batch` ⇒ 父进程 `last_result_batch()` 永远 None（其 docstring 还承诺"异步 analyze 也会设置"，
+> 隔离后在父进程失效）。**验收为何一直绿**：包内探针自己先 load 了批 = 走了 UI 不走的路 ⇒ 假绿；
+> 教训：**夹具必须复刻真实 UI 的调用序列**。
+> 修法 `isolated.py::_adopt_parent_batch()`：终态信封落地处把批 `ResultBatch.from_dict` 还原并
+> `service.adopt_result_batch()` 登记回父进程（render 批提交时锁定不回登记；失败只记日志）。
+> 锁：`ParentBatchAdoptTest` 四条（API 128 OK / 后端 622 OK）+ **包侧 UI 真实路径锁**
+> （分析后不先 load 直接导出，断言 200；字段缺失判"未实测"）⇒ r19 包内实测 `export_http=200`、
+> `a1__35e1ddf8.results.json` 落地。r19 = 干净 commit `3ef2b9e` 构建，两道验收 FAILED=0，
+> zip 981,667,323B / 7,078 条目 / testzip None / zip 内 backend.exe 与磁盘逐字节相等
+> （77,474,263B，sha16 `86d2007c00cfc673`，对 r18 +1,116B）。
+> 采坑：`attr_packaged_headless.http()` 只回 body、4xx 抛 HTTPError，我第一版按 `(code, body)` 解包
+> 把 dict 的键当值（`http=path`）⇒ 验收当场红给我看，已改 try/except 接码。
+> release/ 现三档（r17/r18/r19），按纪律该删 r17，**等口令**。
 
 > **▶ 2026-10-08（续63 补十）— r17 出包：补九 三件进包 + 包侧两条新锁（腿埋点已实测进档）【下个对话从这里读起】**
 > 口令「先出包吧」。构建 = `mvp/ui/scripts/build-release.ps1` 一条链（vite → compile:electron →
@@ -364,8 +383,9 @@
   （脚本「同名先删再传」⇒ 三份删了重传），又 kill 掉大文件那一发 ⇒ ISC `.data` 在服务器上缺了≈25 分钟。
   ⇒ 教训：**长上传的进度判据 = 服务端 asset 列表，不是本机 `tasklist` 里 curl 的驻留内存**。
   公开性事实（他已选定，不再重提）：`mac-alpha` 是公开 prerelease ⇒ 权重随公开包一同公开，ISC 为 NC 许可。
-- Windows 现役包 = **r18**（`Video-Locator-win-x64-20261009r18.zip`，从干净 commit `9eaee64` 构建，
-  两道包内验收 FAILED=0，含渲染 None 修复）；上一档 r17 = 回滚档。
+- Windows 现役包 = **r19**（`Video-Locator-win-x64-20261009r19.zip`，干净 commit `3ef2b9e` 构建；
+  含隔离回登记修复；两道包内验收 FAILED=0，其中新锁实测 `export_http=200`）。
+  回滚档 = r18；r17 按"最新+上一档"待删口令（现三档并存）。
   补九/补十/补十一 已按口令提交并 push
   （`ba5bedd` + `382d3ac` + `d78e13a` + `3349063` + `b6a4a25` + 本次 workflow 笔）。
   回滚档 = r17；r15/r16 已按口令删除（2026-10-09，release/ 现两档：r17 + r18）。
