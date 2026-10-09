@@ -187,6 +187,25 @@
 > 防复发：`patch_step11.py` 加 `assert text.count(VERIFY_TAIL) == 1` + 写前结构自检。
 > 彩排 P1-P4 修完重跑全 PASS。**代价：用户白等一轮 macOS 分钟（该轮 tests 已绿、包没出）。**
 > **下一步**：再 dispatch 一次（head = 本次修复）⇒ 该走到取资产那步。
+>
+> **第八轮 — 用户递来的包内日志里捞出一条真缺陷：合并阶段进度回调漏 None ⇒ 渲染整条 LOC-9999**
+> 附件 `video_locator_logs.zip`（Windows 支持档，跨 09-10→10-09 16:19，8.9MB）。两件事：
+> ① **包内三件已在他机器上生效**：`backend selected=directml` ×10、`patch reranker device=dml` ×4 /
+>   `isc refine device=dml` ×4、腿埋点 23 行 `locate leg=` + 2 行 `locate refine start`；
+>   `_call_connection_lost` 最后一次是 10-08 18:xx（r17 之前那批），之后到 10-09 16:19 零出现
+>   ⇒ 与降噪生效一致，但**不算铁证**（也可能只是没发生客户端强关）。
+> ② **真缺陷**：10-08 19:00 与 19:12 两次 `task … render failed [LOC-9999]
+>   TypeError: unsupported operand type(s) for *: 'float' and 'NoneType'`（素材《巅峰猎杀…》）。
+>   支持档只留一行摘要（traceback 在调试档）⇒ 靠**异常签名反推代码位置**：
+>   `timeline_render.py` 合并两处回调写的是 `emit(min(0.995, 0.96 + 0.035 * f), …)`，而
+>   `_run_monitored` 按约定在**算不出读数**时发 `f=None`（同文件 `_seg_cb:632` 有这个判定，
+>   合并这两处没抄）⇒ 文案还没发出去就抛，整条渲染任务被判死、用户只看到通用码 LOC-9999。
+>   ⇒ 修：抽 `merge_stage_frac(frac, base=0.96, span=0.035, cap=0.995)`，None 时**读数不动、只发文案**
+>   （与 `_seg_cb` 同约定）；新增 `MergeStageFracTest` 四条（None 不抛 / 区间映射 / 封顶 /
+>   **结构锁**：`on_frac=lambda f:` 且带 `emit(` 的行必须走该函数）。
+>   门禁：后端全套 **Ran 622 tests OK (skipped=2)**、API **124 OK**。
+>   ⚠️ 覆盖边界：没在他那台机器上复现过（要 `SVL_LOG_DEBUG=1` 重跑一次才有 traceback 定死），
+>   判据是「异常签名字面量 + 全仓只有这两处 `float * 可为 None`」的相容性 ⇒ 属**强推断非实证**。
 
 > **▶ 2026-10-08（续63 补十）— r17 出包：补九 三件进包 + 包侧两条新锁（腿埋点已实测进档）【下个对话从这里读起】**
 > 口令「先出包吧」。构建 = `mvp/ui/scripts/build-release.ps1` 一条链（vite → compile:electron →

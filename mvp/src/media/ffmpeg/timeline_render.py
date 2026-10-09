@@ -198,6 +198,17 @@ def silent_source_args(*, sample_rate: int) -> list[str]:
             f"anullsrc=channel_layout=stereo:sample_rate={sample_rate}"]
 
 
+def merge_stage_frac(frac: float | None, *, base: float = 0.96,
+                     span: float = 0.035, cap: float = 0.995) -> float | None:
+    """合并阶段的读数换算。``frac is None`` = ffmpeg 侧算不出读数 ⇒ 读数不动、只发文案。
+
+    与 ``_seg_cb`` 同一约定；2026-10-09 用户真项目两次 ``render failed [LOC-9999]
+    TypeError: unsupported operand type(s) for *: 'float' and 'NoneType'`` 就是
+    合并那两处回调直接把 None 乘进 ``0.035 * f`` 造成的。
+    """
+    return None if frac is None else min(cap, base + span * frac)
+
+
 def segment_command(*, ffmpeg: str, source: Path, out_path: Path, start_s: float,
                     frames: int, fps: Fraction, width: int, height: int, pix_fmt: str,
                     encoder: str, crf: int, preset: str, has_audio: bool,
@@ -724,7 +735,7 @@ class TimelineMovieRenderer:
                     concat_copy_command(ffmpeg=self.ffmpeg, list_path=plan.concat_list,
                                         out_path=plan.output),
                     total_seconds=plan.total_seconds, plan=plan,
-                    on_frac=lambda f: emit(min(0.995, 0.96 + 0.035 * f),
+                    on_frac=lambda f: emit(merge_stage_frac(f),
                                            "合并视频（流复制）"),
                     cancel=cancel, label="合并视频（流复制）")
                 if rc == 0 and plan.output.exists():
@@ -739,7 +750,7 @@ class TimelineMovieRenderer:
                                         sample_rate=self.sample_rate,
                                         width=plan.width, height=plan.height),
                 total_seconds=plan.total_seconds, plan=plan,
-                on_frac=lambda f: emit(min(0.995, 0.96 + 0.035 * f), "合并视频（重编码）"),
+                on_frac=lambda f: emit(merge_stage_frac(f), "合并视频（重编码）"),
                 cancel=cancel, label="合并视频（重编码）")
             if rc != 0 or not plan.output.exists():
                 raise MediaError(f"合并失败；工程文件已生成但成片未完成："

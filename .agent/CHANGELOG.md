@@ -1,5 +1,25 @@
 # CHANGELOG
 
+## 2026-10-09（续63 补十一·第八轮）— 包内日志捞出一条真缺陷：合并进度回调漏 None ⇒ 渲染 LOC-9999
+
+- **来源**：用户递 `video_locator_logs.zip`（Windows 支持档，09-10→10-09 16:19，8.9MB）。
+- **先确认三件已生效**：`backend selected=directml` ×10、`patch reranker device=dml` ×4、
+  `isc refine device=dml` ×4、腿埋点 23 行 `locate leg=` + 2 行 `locate refine start`；
+  `_call_connection_lost` 最后一次 10-08 18:xx（r17 之前那批）之后零出现 ⇒ 与降噪生效一致，
+  但**不作铁证**（可能只是没发生客户端强关）。
+- **真缺陷**：10-08 19:00 / 19:12 两次 `render failed [LOC-9999] TypeError: unsupported operand
+  type(s) for *: 'float' and 'NoneType'`（素材《巅峰猎杀.1080p.HD中英双字…》）。支持档只有一行摘要
+  ⇒ 用异常签名反推：`timeline_render.py` 合并两处回调 `emit(min(0.995, 0.96 + 0.035 * f), …)`，
+  而 `_run_monitored` 按约定在**算不出读数**时发 `f=None`（同文件 `_seg_cb` 有这个判定、合并没抄）
+  ⇒ 文案未发出即抛，整条渲染判死，用户只看到通用码。
+- **修法**：抽 `merge_stage_frac(frac, base=0.96, span=0.035, cap=0.995)`，None ⇒ 读数不动只发文案；
+  两处回调改走它。新增 `MergeStageFracTest` 四条：None 不抛 / 区间映射（0→0.96、0.5→0.9775、1→0.995）/
+  封顶 / **结构锁**（任何 `on_frac=lambda f:` 且含 `emit(` 的行必须调用该函数，防算术写回 lambda）。
+- **门禁**：后端全套 `Ran 622 tests OK (skipped=2)`、API `Ran 124 tests OK`。
+- ⚠️ 覆盖边界：没在他机器上复现（要 `SVL_LOG_DEBUG=1` 重跑才有 traceback）⇒ 本次结论是
+  **「异常签名 + 全仓唯一相容点」的强推断，不是实证**；LOC-9999 这种一码多因的兜底码也再次说明
+  渲染失败值得有专属码（未做，登记为候选）。
+
 ## 2026-10-09（续63 补十一·第七轮）— 我自己把 workflow 改坏了：残段被 YAML 吸收进上一步，CI 报 exit 127
 
 - **现象**：run `37813707426`（head `6fbf717`，用户 01:04 触发）红在 `Install backend build deps`，

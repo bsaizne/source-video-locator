@@ -37,6 +37,7 @@ from media.ffmpeg.timeline_render import (
     fps_text,
     frames_to_seconds,
     h264_chain,
+    merge_stage_frac,
     parse_frame_count,
     parse_video_encoders,
     render_output_name,
@@ -325,6 +326,37 @@ def _tiny_plan(**over) -> RenderPlan:
                 concat_list=Path("D:/out/movie_x.concat.txt"))
     base.update(over)
     return RenderPlan(**base)
+
+
+class MergeStageFracTest(unittest.TestCase):
+    """合并阶段读数换算（2026-10-09 用户真项目 LOC-9999 回归锁）。
+
+    现场：《巅峰猎杀.1080p.HD中英双字…》两次 ``render failed [LOC-9999]
+    TypeError: unsupported operand type(s) for *: 'float' and 'NoneType'``。
+    根因 = 合并那两处进度回调写的是 ``0.035 * f``，而 ``_run_monitored`` 在
+    **算不出读数**时按约定发 ``f=None``（``_seg_cb`` 有这层判定，合并没抄）
+    ⇒ 文案还没发出去就先抛，整条渲染任务被判死。
+    """
+
+    def test_none_keeps_reading_unset_instead_of_raising(self):
+        self.assertIsNone(merge_stage_frac(None))
+
+    def test_maps_unit_interval_onto_stage_window(self):
+        self.assertAlmostEqual(merge_stage_frac(0.0), 0.96)
+        self.assertAlmostEqual(merge_stage_frac(0.5), 0.9775)
+        self.assertAlmostEqual(merge_stage_frac(1.0), 0.995)
+
+    def test_caps_at_stage_ceiling(self):
+        self.assertAlmostEqual(merge_stage_frac(2.0), 0.995)
+
+    def test_merge_callbacks_do_not_multiply_raw_frac(self):
+        """结构锁：算术必须留在 ``merge_stage_frac`` 里，别再写回 lambda。"""
+        src = (Path(__file__).resolve().parents[1] / "src" / "media" / "ffmpeg"
+               / "timeline_render.py").read_text(encoding="utf-8")
+        self.assertEqual(src.count("merge_stage_frac(f)"), 2, "两处合并回调都该走该函数")
+        bad = [ln.strip() for ln in src.splitlines()
+               if "on_frac=lambda f:" in ln and "emit(" in ln and "merge_stage_frac" not in ln]
+        self.assertEqual([], bad, "有合并阶段回调把原始 frac 直接喂给 emit")
 
 
 class WatchdogTest(unittest.TestCase):
