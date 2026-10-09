@@ -1,5 +1,25 @@
 # CHANGELOG
 
+## 2026-10-09（续63 补十一·第七轮）— 我自己把 workflow 改坏了：残段被 YAML 吸收进上一步，CI 报 exit 127
+
+- **现象**：run `37813707426`（head `6fbf717`，用户 01:04 触发）红在 `Install backend build deps`，
+  日志尾部 `/Users/runner/work/_temp/<uuid>.sh: line 4: note: command not found` + `exit code 127`
+  ⇒ pip 安装本身全成功，是**那一步的脚本里凭空多了 49 行不属于它的 shell**。
+- **根因（我的补丁脚本 bug，不是 CI 环境问题）**：`patch_step11.py` 用「第一处
+  `verify_model_asset_shas.py` 行」当截断锚点，而旧正文里那行**出现两次**（元数据全灭的兜底分支里一次、
+  末尾一次）⇒ 只截到第一处，剩下的旧尾巴留在原地；它缩进比 `run: |` 更深 ⇒ **被 YAML 当字面块吸收进
+  上一步的 run** ⇒ 语法完全合法（`yaml.safe_load` 过、`bash -n` 过、抽出的 step 11 也正常），
+  所以我那三道本地校验**全都没抓到**。
+- **修法**：`work/r17_mac_log/fix_workflow_stray.py`（断言式：残段必须以 `note "资产由直链兜底…"` 开头、
+  含 `fetch()`；修完 `Install backend build deps` 恰好 2 行、`Fetch model assets` 50 行、
+  macos-package 15 步、tests job 8 步、且任何步骤里都不许有游离 `note/warn/sha_ok/fetch/get` 行）。
+  对 `524c9bb` 的净差异 = **只删 48 行、加 1 空行** ⇒ 确认没顺手删掉别的步骤内容。
+- **防复发**：`patch_step11.py` 加两条硬断言 —— ① `assert text.count(VERIFY_TAIL) == 1`（锚点必须唯一）；
+  ② 写完前跑同一套结构自检（每步 run 行数 + 游离脚本行归属）。**教训：改 YAML 字面块之后，
+  `yaml.safe_load` 成功不等于内容正确，必须逐步骤打印首/末行与行数。**
+- 彩排四情形（P1-P4）修完重跑仍全 PASS；step 11 的 `bash -n` 与 `extract_step11.py` 均过。
+- **下一轮**：head 会是本次修复提交；`mvp-tests-macos` 与 `mps-poc` 上一轮已绿，本轮该走到 step 6 取资产。
+
 ## 2026-10-09（续63 补十一·第六轮）— 三份权重重新挂上 `mac-alpha`，CI 的资产源恢复
 
 - **动作**：用户令「上传三个文件到 mac-alpha release」。本机 credential helper 这次**非交互返回**

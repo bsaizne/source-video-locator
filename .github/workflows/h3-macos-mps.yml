@@ -130,54 +130,6 @@ jobs:
           python -m pip install --upgrade pip
           pip install torch numpy opencv-python fastapi uvicorn pyinstaller rapidocr-onnxruntime static-ffmpeg pyJianYingDraft
 
-            note "资产由直链兜底通道补齐，sha 校验已过（元数据接口整轮没用到）"
-            exit 0
-          fi
-          note "meta OK via $meta_via ($(printf '%s' "$json" | wc -c | tr -d ' ') B)"
-
-          fetch() {
-            name="$1"; dest="$2"
-            meta="$(printf '%s' "$json" | python3 -c "import sys,json;a=json.load(sys.stdin)['assets'];x=next(v for v in a if v['name']=='$name');print(x['id'],x['size'])")"
-            aid="${meta%% *}"; asize="${meta##* }"
-            mkdir -p "$dest"
-            # 三条通道 × 3 轮：A=API octet-stream（历史用过）B=gh api octet-stream
-            # C=github.com 直链（不依赖任何元数据；draft 资产能否直取未证 ⇒ 把 http_code 打进注解）
-            # 完成判据一律是**与元数据 size 逐字节等值**（旧口径 >0 ⇒ 半件能过闸，错误要等
-            # verify_model_asset_shas 才暴露，那 19 分钟已经花掉了）。
-            chk() { [ "$(wc -c < "$1" 2>/dev/null | tr -d ' ')" = "$asize" ]; }
-            for try in 1 2 3; do
-              rc=0
-              $CUR --speed-time 120 --speed-limit 20000 --max-time 1200 \
-                   -H "Authorization: Bearer $GH_TOKEN" \
-                   -H "Accept: application/octet-stream" \
-                   -o "$dest/$name" "$API/releases/assets/$aid" 2>/tmp/a1.err || rc=$?
-              if [ "$rc" = 0 ] && chk "$dest/$name"; then
-                note "fetched $name via A ($asize B, aid=$aid, try=$try)"; return 0
-              fi
-              warn "$name A rc=$rc size=$(wc -c < "$dest/$name" 2>/dev/null | tr -d ' ')/$asize err=$(head_err /tmp/a1.err)"
-              grc=0
-              gh api -H "Accept: application/octet-stream" \
-                     "repos/$GITHUB_REPOSITORY/releases/assets/$aid" > "$dest/$name" 2>/tmp/a2.err || grc=$?
-              if [ "$grc" = 0 ] && chk "$dest/$name"; then
-                note "fetched $name via B ($asize B, try=$try)"; return 0
-              fi
-              warn "$name B rc=$grc size=$(wc -c < "$dest/$name" 2>/dev/null | tr -d ' ')/$asize err=$(head_err /tmp/a2.err)"
-              code="$(curl -sSL -4 --http1.1 --retry 3 --retry-delay 5 --retry-all-errors \
-                          -o "$dest/$name" -w "%{http_code}" --max-time 1200 \
-                          -H "Authorization: Bearer $GH_TOKEN" "$TAGURL/$name" 2>/tmp/a3.err)"
-              if [ "$code" = 200 ] && sha_ok "$dest" "$name"; then
-                note "fetched $name via C 直链+sha256 (try=$try)"; return 0
-              fi
-              warn "$name C http=$code sha=不符/缺 size=$(wc -c < "$dest/$name" 2>/dev/null | tr -d ' ')/$asize err=$(head_err /tmp/a3.err)"
-              rm -f "$dest/$name"; sleep 10
-            done
-            echo "::error::$name 三通道×3 轮都没拿到 $asize B（aid=$aid）"
-            exit 91
-          }
-          fetch dinov2_cls_patch.onnx.data "$M/dinov2_cls_patch"
-          fetch isc_ft_v107.onnx "$M/isc_ft_v107"
-          fetch isc_ft_v107.onnx.data "$M/isc_ft_v107"
-          python3 mvp/scripts/verify_model_asset_shas.py "$M/dinov2_cls_patch" "$M/isc_ft_v107"
       - name: Fetch model assets for mac bundle (patch + ISC ONNX)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

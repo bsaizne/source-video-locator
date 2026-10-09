@@ -173,6 +173,20 @@
 > 我自己以后不再读进程命令行、也不再打印任何含令牌的串。
 > **下一步**：直接 dispatch `h3-macos-mps.yml` ⇒ step 11 应当绿（直链或 gh 两条通道 + sha256），
 > 后面构建 → mac 包体门槛 → publish 覆盖 `mac-alpha` 的 zip。
+>
+> **第七轮 — 我上一轮的补丁脚本把 workflow 改坏了：残段被 YAML 吸收进上一步，CI 报 exit 127**
+> run `37813707426`（head `6fbf717`，用户 01:04 触发）红在 `Install backend build deps`：
+> `line 4: note: command not found` / `exit code 127`。pip 安装本身全成 ⇒ 那一步的脚本里凭空多了
+> **49 行不属于它的 shell**。根因是我 `patch_step11.py` 用「第一处 `verify_model_asset_shas.py` 行」
+> 当截断锚点，而旧正文里那行**出现两次**（兜底分支一次 + 末尾一次）⇒ 截错位置，旧尾巴留在原地，
+> 缩进比 `run: |` 更深 ⇒ **被 YAML 当字面块吸收进上一步**。
+> ⚠️ **为什么我三道本地校验都没抓到**：`yaml.safe_load` 通过、`bash -n` 通过、抽出的 step 11 也正常
+> ⇒ **改 YAML 字面块后，"能解析"不等于"内容对"**；必须**逐步骤打印 run 行数与首末行**才看得见污染。
+> 修法 `work/r17_mac_log/fix_workflow_stray.py`（断言式，含"任何步骤里不许有游离 note/warn/sha_ok/fetch/get 行"
+> 与"install 步恰好 2 行"）；对 `524c9bb` 净差异 = 只删 48 行 + 1 空行 ⇒ 没顺手删掉别的步骤内容。
+> 防复发：`patch_step11.py` 加 `assert text.count(VERIFY_TAIL) == 1` + 写前结构自检。
+> 彩排 P1-P4 修完重跑全 PASS。**代价：用户白等一轮 macOS 分钟（该轮 tests 已绿、包没出）。**
+> **下一步**：再 dispatch 一次（head = 本次修复）⇒ 该走到取资产那步。
 
 > **▶ 2026-10-08（续63 补十）— r17 出包：补九 三件进包 + 包侧两条新锁（腿埋点已实测进档）【下个对话从这里读起】**
 > 口令「先出包吧」。构建 = `mvp/ui/scripts/build-release.ps1` 一条链（vite → compile:electron →
