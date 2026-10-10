@@ -34,10 +34,19 @@ const lowPolicy = ref<'exclude' | 'backup'>('exclude')
 const snapScenes = ref<'on' | 'off'>('on')   // BaseSelect 只吃 string，调用处再转 bool
 const EXPORT_DIR_KEY = 'vl.exportDir'
 const JY_EXPORT_DIR_KEY = 'vl.exportDirJianying'
-const exportDir = computed(() => localStorage.getItem(EXPORT_DIR_KEY) ?? '')
-const jyExportDir = computed(() => localStorage.getItem(JY_EXPORT_DIR_KEY) ?? '')
-const activeExportDir = computed(() =>
-  exportFormat.value === 'jianying' ? jyExportDir.value : exportDir.value)
+const exportDir = ref(localStorage.getItem(EXPORT_DIR_KEY) ?? '')
+const jyExportDir = ref(localStorage.getItem(JY_EXPORT_DIR_KEY) ?? '')
+// 本对话框内点「浏览」临时选的目录（按当前格式记，切格式即失效，不覆盖设置里的默认）。
+const dirPick = ref<{ fmt: string; dir: string } | null>(null)
+const activeExportDir = computed(() => {
+  const fmt = exportFormat.value
+  if (dirPick.value && dirPick.value.fmt === fmt) return dirPick.value.dir
+  return (fmt === 'jianying' ? jyExportDir.value : exportDir.value) || ''
+})
+async function chooseExportDirHere(): Promise<void> {
+  const p = await window.desktop?.openDirectory?.() ?? null
+  if (p) dirPick.value = { fmt: exportFormat.value, dir: p }
+}
 
 const hasResults = computed(() => (results.batch?.results.length ?? 0) > 0)
 const selected = computed(() => results.selected)
@@ -352,7 +361,12 @@ const renderSummary = computed(() => {
         </label>
         <label class="rd__field">
           <span>输出目录</span>
-          <BaseInput :model-value="activeExportDir || ''" placeholder="留空 = 默认导出目录（在设置里按格式修改）" readonly />
+          <div class="hstack" style="gap: 8px; align-items: stretch">
+            <div style="flex: 1; min-width: 0">
+              <BaseInput :model-value="activeExportDir || ''" placeholder="留空 = 默认导出目录（点右侧「浏览」选择）" readonly />
+            </div>
+            <BaseButton @click="chooseExportDirHere">浏览…</BaseButton>
+          </div>
         </label>
         <label class="rd__field">
           <span>片段宽度</span>
@@ -393,7 +407,7 @@ const renderSummary = computed(() => {
         </p>
         <p v-if="exportWarnings.length" class="rd__notice rd__notice--warn">
           导出已完成，但有以下提醒：
-          <ul style="margin: 4px 0 0; padding-left: 18px">
+          <ul style="margin: 4px 0 0; padding-left: 18px; max-height: 220px; overflow-y: auto">
             <li v-for="(w, i) in exportWarnings" :key="i">{{ w }}</li>
           </ul>
         </p>
@@ -463,5 +477,5 @@ const renderSummary = computed(() => {
 .rd__notice--err { background: var(--conf-low-bg); color: var(--conf-low); }
 
 .ex__mask { position: fixed; inset: 0; z-index: 100; background: rgba(0, 0, 0, 0.55); display: flex; align-items: center; justify-content: center; }
-.ex__card { width: 460px; padding: 22px; border-radius: var(--radius-m); background: var(--panel); border: 1px solid var(--border-strong); display: flex; flex-direction: column; }
+.ex__card { width: 460px; max-height: 88vh; overflow-y: auto; padding: 22px; border-radius: var(--radius-m); background: var(--panel); border: 1px solid var(--border-strong); display: flex; flex-direction: column; }
 </style>
