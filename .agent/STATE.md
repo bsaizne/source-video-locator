@@ -315,6 +315,17 @@
 > write_jianying_draft 且我的重构未弄坏正常导出。**只改 `mvp/scripts` 两脚本、不进 backend.exe ⇒ r20 zip 不变、无需重出。**
 > ⚠️ 边界：syn 只出 1 条常规 clip ⇒ 此锁覆盖「剪映写段路径通」，**不专门覆盖 <0.1s 回压分支**（那条靠单测；
 > 包内要覆盖需造 <0.1s 素材、易 flaky，未做）。这两脚本改动同样**未提交**（等口令）。
+>
+> **第十三轮 — 导出对话框两处 UI 修复（用户截图：LOC-2002 提醒列表把窗口撑爆 + 输出目录选不了）**
+> 全在 `mvp/ui/src/pages/ResultsPage.vue`：① `.ex__card` 加 `max-height:88vh; overflow-y:auto`（整卡可滚，
+> 兜任何长内容）+ 提醒 `<ul>` 单独 `max-height:220px; overflow-y:auto`（一长串 LOC-2002 复用告警在框内滚，
+> 不再撑死窗口）；② 输出目录此前是 `readonly` 且只能「去设置里改」⇒ 在字段旁加「浏览…」按钮，复用
+> 现成 IPC `window.desktop.openDirectory()`（SettingsPage 同款），写进**按格式的对话框内临时覆盖**
+> `dirPick`（切格式失效、**不覆盖设置里的默认**），`activeExportDir` 优先取它 ⇒ `doExport`/render 的 `outDir` 生效。
+> 门禁：app typecheck RC=0 · desktop typecheck RC=0 · vitest **144 passed**。
+> ⚠️ **未提交、且未出包**：这是前端改动，**要重新构建（r21）才在应用里看得到**；本轮没在跑起来的 Electron 里
+> 目检（要加载一份结果批才能开导出框），判据 = 双 typecheck + vitest + 复用已验证的 openDirectory IPC。
+> ⚠️ 与前面「重叠/hub 是 H1 真复用还是 H2 误定位」那条**未结**——那是定位层分析，等用户看成片确认，别混。
 
 > **▶ 2026-10-08（续63 补十）— r17 出包：补九 三件进包 + 包侧两条新锁（腿埋点已实测进档）【下个对话从这里读起】**
 > 口令「先出包吧」。构建 = `mvp/ui/scripts/build-release.ps1` 一条链（vite → compile:electron →
@@ -655,4 +666,4 @@
 
 ## Last Updated
 
-2026-10-10 21:36
+2026-10-10 23:32

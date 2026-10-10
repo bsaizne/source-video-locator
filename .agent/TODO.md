@@ -67,6 +67,9 @@
 > 补七 r16 出包；补八 进度链独占实测 + 支持档文件侧闭合。
 ## P1 — Next
 
+- [ ] **导出对话框 UI 修复（2026-10-10 第十三轮）— 代码已改、双 typecheck+vitest 绿，未提交未出包**：
+      `ResultsPage.vue` 告警列表撑爆窗口（加滚动）+ 输出目录选不了（加「浏览…」复用 openDirectory IPC）。
+      ⚠️ 前端改动要重建 r21 才在应用里可见。待口令：提交 + 是否随下次出包进 r21。
 - [x] **mac 出包链 = ✅ 真机结清（2026-10-10 续63 补十一 第十一轮，读 live CI）**：run
       `37955484860`（head `31974f2`）三 job 全绿；`macos-package` step 11 走通道 A 直链+sha256
       三份 try=1 即中 ⇒ step 15 门槛绿 ⇒ step 16 publish 绿 ⇒ release `mac-alpha` 新增

@@ -1,5 +1,20 @@
 # CHANGELOG
 
+## 2026-10-10（续63 补十一·第十三轮）— 导出对话框 UI 修复：告警列表撑爆窗口 + 输出目录选不了
+
+- **现场**（用户截图）：导出工程对话框里一长串 LOC-2002「多段指向同一原片区间」复用告警把窗口纵向撑爆、
+  内容看不到；且「输出目录」是 `readonly`、只能去设置里改，这里选不了。
+- **修**（全在 `mvp/ui/src/pages/ResultsPage.vue`）：
+  - 滚动：`.ex__card` 加 `max-height:88vh; overflow-y:auto`（整卡可滚）+ 告警 `<ul>` 单独
+    `max-height:220px; overflow-y:auto`（长告警在框内滚，不再撑死窗口）。
+  - 选路径：字段旁加「浏览…」按钮，复用现成 IPC `window.desktop.openDirectory()`（SettingsPage 同款），
+    结果写进**按格式的对话框内临时覆盖** `dirPick`（切格式失效、不覆盖设置默认），`activeExportDir` 优先取它
+    ⇒ `doExport`/render 的 `outDir` 生效。
+- **门禁**：app typecheck RC=0 · desktop typecheck RC=0 · vitest 144 passed。
+- ⚠️ 未提交、未出包；**前端改动要重建（r21）才在应用里可见**；本轮未在跑起来的 Electron 里目检（要加载结果批
+  才能开导出框），判据 = 双 typecheck + vitest + 复用已验证的 openDirectory IPC。
+- 与「tset2 导出里 hub 重叠是 H1 真复用还是 H2 误定位」那条定位层分析**分开**——后者仍未结，等用户看成片确认。
+
 ## 2026-10-10（续63 补十一·第十二轮）— 真机支持档揪出剪映导出崩：极短素材撑越 material.duration
 
 - **现场**（用户截图 + `video_locator_logs(1).zip`，Windows 支持档）：导出面板红条「无法连接后端服务…
