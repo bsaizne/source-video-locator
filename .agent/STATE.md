@@ -42,7 +42,7 @@
 
 ## Current Task
 
-> **▶ 2026-10-10（续63 补十一）— mac 出包链【第十一轮真机结清并发布 mac-arm64.zip】+ 第十二轮 剪映导出崩修复【现读这条】**
+> **▶ 2026-10-11（续63 补十一）— mac 出包结清 / 剪映导出崩修复 / r20 / UI 导出框 / 取材扩宽护栏 B(K=2.5) 落地【现读这条】**
 > 用户手动 dispatch 的 run `37782689308`（head `382d3ac`）：`mvp-tests-macos` = failure
 > （`Ran 617 tests … FAILED (failures=1, skipped=48)`）⇒ 依赖它的 `macos-package` 被 **skipped**
 > ⇒ `mac-alpha` 没出包。job 日志无令牌取到 403，改从「failures=1 且 errors=0」这个数字反推：
@@ -325,7 +325,24 @@
 > 门禁：app typecheck RC=0 · desktop typecheck RC=0 · vitest **144 passed**。
 > ⚠️ **未提交、且未出包**：这是前端改动，**要重新构建（r21）才在应用里看得到**；本轮没在跑起来的 Electron 里
 > 目检（要加载一份结果批才能开导出框），判据 = 双 typecheck + vitest + 复用已验证的 openDirectory IPC。
-> ⚠️ 与前面「重叠/hub 是 H1 真复用还是 H2 误定位」那条**未结**——那是定位层分析，等用户看成片确认，别混。
+> ⚠️ 与前面「重叠/hub 是 H1 真复用还是 H2 误定位」那条**已结（第十四轮）**——多模态读图定性 = 见下。
+>
+> **第十四轮 — 成片"重合"定性 + B 落地（取材扩宽相对护栏 K=2.5）**
+> 用户「你自己拿多模态看吧」→ 读图定性（一手证据）：剪辑片 `tset2-ed.mp4`(69s) 是快剪解说（~1s/切、
+> 每镜头基本只用一次）；原片 3285-3323 我逐帧看 = **4 个不同镜头**（球衣人群/灌溉田/喷头/卧室），
+> 但 `scenes.npy` 把它标成**一个 38s 假镜头**（全片中位 8s、最宽 265s，检测严重漏切）。
+> ⇒ 因果：短切落进假大镜头 → 「完整镜头」扩宽把它撑成整段 38s → 多个切点撞成同一块 → 卷轴重放 =
+> 用户看到的"重合"（"顺序乱"是同因副作用）。**不是排序问题**（ordered_search 早判负关闭）、**不是去重漏裁**
+> （那些重叠非贴接、按设计归"真实复用"不动，且就算裁画面范围本身也错）。
+> **探针（跨 4 片，`work/k_sweep_probe.py`）**：现役 scene 源区间重叠 Σ=**1432.59s**（test3 一片 909s）；
+> 相对护栏 `expanded ≤ K×core` 到 **K=2.8 都仍 = core 底噪 8.00s**（那 8s 是非贴接真实复用、core 也有），
+> **K=3.0 起 test3 从 6.00 跳到 22.00**（悬崖在 2.8↔3.0）。用户拍板 **K=2.5**（留 0.5 余量，抗检测噪声）。
+> **B 落地**：`ExportConfig.material_expand_rel_cap=2.5`（<=0 关）→ `expand_material_spans` 加 `rel_cap` 参
+> （`width > core*rel_cap` 则不扩）→ `prepare_channel_plan` 透传 → `export_project` 传 xcfg 值。
+> 门禁：后端 **630 OK(skipped=2)**（+4 护栏单测）· API **128 OK** · `check_export_plan_invariants` **FAILED=0**
+> 且已把 rel_cap 接进该镜像脚本 ⇒ 实测扩宽 **2mkv 62→4 / 覆盖 531→147s、test1 44→3、test2 30→3、test3 62→3**，
+> 时间线三通道覆盖不变（134.094→134.094）、五条不变式全绿。⚠️ **A（修镜头检测漏切）另立项**（见 Next Actions），
+> B 只是绕开扩宽这个放大器，没修检测本身。本批未提交（下一步 push）。
 
 > **▶ 2026-10-08（续63 补十）— r17 出包：补九 三件进包 + 包侧两条新锁（腿埋点已实测进档）【下个对话从这里读起】**
 > 口令「先出包吧」。构建 = `mvp/ui/scripts/build-release.ps1` 一条链（vite → compile:electron →
@@ -449,6 +466,13 @@
   `isolated`（渲染此前从未隔离）+ 卷轴去紧邻同素材重复（默认开）+ ①③ 的 UI 接线。
 
 ## Current Problem
+- 🟢 **成片"重合"根因定性 + B 已落地（2026-10-11 第十四轮）**：多模态读图确认 = `scenes.npy` 漏切
+  （3285-3323 一段 38s 实为 4 个镜头；全片中位 8s/最宽 265s）+「完整镜头」扩宽把 1s 短切撑进假大镜头
+  → 卷轴重放同一画面。跨 4 片探针：现役 scene 源重叠 Σ=1432.59s；护栏 `expanded ≤ K×core` K≤2.8 都压回
+  core 底噪 8.00s，K=3.0 起 test3 漏。**用户拍板 K=2.5** ⇒ 已落地
+  `ExportConfig.material_expand_rel_cap=2.5` + `expand_material_spans(rel_cap=)` + 两处透传。
+  门禁 630/128/invariants 全绿，实测扩宽 2mkv 62→4、覆盖 531→147s，三通道覆盖不变。**未提交（待 push）**。
+  ⚠️ **A（镜头检测漏切本身）另立项**——B 只绕开放大器，没修检测；见 Next Actions。
 - 🟢 **剪映导出崩（2026-10-10 续63 补十一 第十二轮）— 代码已修 + 全套绿 + 已进包 r20**：真机支持档
   `POST /api/export` 抛未处理 `ValueError: 截取的素材时间范围 [start=0, end=100000] 超出了素材时长(64000)`
   （`exporters.py write_jianying_draft` → pyJianYingDraft `video_segment.py:455`）；ASGI 未处理异常掐断连接
@@ -666,4 +690,4 @@
 
 ## Last Updated
 
-2026-10-10 23:32
+2026-10-11 00:10

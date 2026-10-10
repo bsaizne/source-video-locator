@@ -1,5 +1,22 @@
 # CHANGELOG
 
+## 2026-10-11（续63 补十一·第十四轮）— 成片"重合"多模态定性 + B 落地（取材扩宽相对护栏 K=2.5）
+
+- **定性（用户令"你自己拿多模态看"）**：逐帧读 `tset2-ed.mp4`(69s 快剪解说，~1s/切) + 原片 3285-3323。
+  原片该段实为 **4 个不同镜头**（球衣人群/灌溉田/喷头/卧室），但 `scenes.npy` 标成**一个 38s 假镜头**
+  （全片中位 8s、最宽 265s = 检测漏切）。因果：短切落进假大镜头 →「完整镜头」扩宽撑成整段 38s →
+  多切点撞同块 → 卷轴重放 = "重合"。**不是排序**（ordered_search 早判负）、**不是去重漏裁**（非贴接=真实复用桶）。
+- **跨 4 片探针**（`work/k_sweep_probe.py`，只读）：现役 scene 源区间重叠 Σ=**1432.59s**（test3 909s）；
+  护栏 `expanded ≤ K×core`：K≤2.8 都压回 core 底噪 **8.00s**（那 8s 是非贴接真实复用，core 也有），
+  K=3.0 起 test3 6.00→22.00（悬崖 2.8↔3.0）。**用户拍板 K=2.5**（留余量抗检测噪声）。
+- **B 落地**：`ExportConfig.material_expand_rel_cap=2.5`（<=0 关）→ `expand_material_spans` 加 `rel_cap`
+  （`width>core*rel_cap` 不扩）→ `prepare_channel_plan` 透传 → `export_project` 传 xcfg 值 → 镜像脚本
+  `check_export_plan_invariants` 也接 rel_cap（否则不反映生产）。
+- **门禁**：后端 **630 OK(skipped=2)**（+4 护栏单测 `ExpandMaterialSpansGuardTest`）· API **128 OK** ·
+  `check_export_plan_invariants` **FAILED=0**，实测扩宽 **2mkv 62→4/覆盖 531→147s、test1 44→3、test2 30→3、
+  test3 62→3**，时间线三通道覆盖不变（134.094→134.094）、五条不变式全绿。
+- ⚠️ **A（修镜头检测漏切）另立项**：B 只绕开扩宽放大器，没修 `scenes.npy` 本身。本批已提交并 push。
+
 ## 2026-10-10（续63 补十一·第十三轮）— 导出对话框 UI 修复：告警列表撑爆窗口 + 输出目录选不了
 
 - **现场**（用户截图）：导出工程对话框里一长串 LOC-2002「多段指向同一原片区间」复用告警把窗口纵向撑爆、

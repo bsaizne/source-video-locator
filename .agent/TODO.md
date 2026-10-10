@@ -7,7 +7,18 @@
 
 ## P0 — Current
 
-> **▶ 2026-10-10（续63 补十一·第十二轮）— 剪映导出崩修复：极短素材撑越 material.duration【现读这条】**
+> **▶ 2026-10-11（续63 补十一·第十四轮）— 成片"重合"定性 + B 落地（取材扩宽相对护栏 K=2.5）【现读这条】**
+> 多模态读图定性 = `scenes.npy` 漏切（3285-3323 一段 38s 实为 4 镜头）+「完整镜头」扩宽把 1s 短切撑进
+> 假大镜头 → 卷轴重放。跨 4 片探针：现役 scene 重叠 Σ=1432.59s；护栏 `expanded≤K×core` K≤2.8 压回 core
+> 底噪 8.00s、K=3 起漏 ⇒ **用户拍板 K=2.5**。已落地：`ExportConfig.material_expand_rel_cap=2.5` +
+> `expand_material_spans(rel_cap=)` + `prepare_channel_plan`/`export_project`/镜像脚本三处透传。
+> 门禁 后端 **630** / API **128** / invariants **FAILED=0**（扩宽 2mkv 62→4、覆盖 531→147s，三通道覆盖不变）。
+> **状态：本批待 push（下一步）；push 后开 A 立项。**
+> **A 立项（镜头检测漏切）** = 治本，动 `scenes.npy` 生成 → 需 `feature_version` bump + 全量重建索引 +
+> 三指标重验；先写立项文档评审、不自动开码。B 只是绕开放大器，没修检测本身。
+> 明细见 `CHANGELOG.md` 第十四轮 与 `STATE.md` Current Task 顶部同名块。
+
+> **▶（历史·已完成）2026-10-10（续63 补十一·第十二轮）— 剪映导出崩修复：极短素材撑越 material.duration**
 > 真机支持档 `POST /api/export` 抛未处理 `ValueError`（target 被 0.1s 下限撑到 100000µs > 素材 64000µs）
 > ⇒ ASGI 掐连接 ⇒ UI 误报「无法连接后端服务 (fetch failed)」。修 = 抽 `_jianying_segment_speed`
 > （锁原速仅在 `target_us≤mat_us`；末尾按素材时长回压 speed），正常素材行为不变。
