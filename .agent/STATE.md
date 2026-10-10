@@ -42,7 +42,7 @@
 
 ## Current Task
 
-> **▶ 2026-10-08（续63 补十一）— mac 出包三轮 CI 往返：①Windows 字面量断言 ②「属性不存在」≠「为 None」③资产下载抖动加固【真机已结清前两处】**
+> **▶ 2026-10-10（续63 补十一）— mac 出包链【第十一轮真机结清并发布 mac-arm64.zip】+ 第十二轮 剪映导出崩修复【现读这条】**
 > 用户手动 dispatch 的 run `37782689308`（head `382d3ac`）：`mvp-tests-macos` = failure
 > （`Ran 617 tests … FAILED (failures=1, skipped=48)`）⇒ 依赖它的 `macos-package` 被 **skipped**
 > ⇒ `mac-alpha` 没出包。job 日志无令牌取到 403，改从「failures=1 且 errors=0」这个数字反推：
@@ -241,6 +241,80 @@
 > 采坑：`attr_packaged_headless.http()` 只回 body、4xx 抛 HTTPError，我第一版按 `(code, body)` 解包
 > 把 dict 的键当值（`http=path`）⇒ 验收当场红给我看，已改 try/except 接码。
 > release/ 现三档（r17/r18/r19），按纪律该删 r17，**等口令**。
+>
+> **第十一轮 — mac 出包链真机结清（用户 dispatch，本档案此前停在「只差 dispatch」）**
+> 2026-10-10 复核 live CI（读公共 API，无令牌）⇒ 第五/六轮担心的那一步已在真机上过去：
+> ① run `37943554701`（head `f29e8d66`）与 run `37955484860`（head `31974f2` = 本档案 checkpoint HEAD）
+>   两次 `workflow_dispatch` 均 **completed success**，三 job（`mps-poc` / `mvp-tests-macos` /
+>   `macos-package`）全绿 ⇒ 补十一 前几轮反复红的 mac 线到此闭合。
+> ② **step 11 取资产走「通道 A = 直链 + sha256 逐文件当场判」一发即中**（check annotations 原文，
+>   无需 `gh` 兜底）：`dinov2_cls_patch.onnx.data via A 直链+sha256 OK (88,342,528 B, try=1)` ·
+>   `isc_ft_v107.onnx … (1,613,211 B, try=1)` · `isc_ft_v107.onnx.data … (209,190,912 B, try=1)`
+>   + 诊断行 `curl=curl 8.7.1 gh=gh version 2.100.0 src=mac-alpha` ⇒ 第五轮改挂 `mac-alpha` +
+>   step 11 简化（删掉 release JSON 那一发、靠仓库内 `asset.json` 的 sha 判完整性）这个决策**被真机验证**；
+>   第六轮登记的未证面「等值校验首次生效就在 CI 上」= 已在 CI 上验通。
+> ③ `macos-package` 之后：step 15 `Accept packaged mac bundle (gate publish)` = success ⇒
+>   step 16 `Publish (rolling tag mac-alpha)` = success（publish 受门槛 `if` 管，门槛绿才有 publish）⇒
+>   release `mac-alpha` 实测新增资产 **`Video-Locator-mac-arm64.zip` 916,769,503 B**
+>   （`updated_at=2026-10-09T16:27:38Z`，与 run `37955484860` 时间线吻合；旧 `Video.Locator-0.1.0-arm64-mac.zip`
+>   仍在，是 2026-09-06 那代）。
+> ⇒ **mac 出包链（此前 `Current Problem` 的「唯一活跃项」）已闭合**，`Current Problem` 已据此更正。
+> 仍未做的（不影响闭合，留作 H3 正式化项）：`Known Issues` 那条「mac 包多带 ≈88MB 死 ONNX 资产」未本机拆包核
+> （本机无 mac 也不该为读别人机包去取凭据），按平台裁剪 `extraResources` 是 H3 正式化时的事。
+> Windows 侧现役 r19；**release/ 已按口令删 r17**（2026-10-10，删前 `zip_identity.py` 验回滚档 r18 可读
+> `testzip=None`/7,078 条目/backend.exe sha16 `2eb651d38003d433` 与档案一致）⇒ 现两档 r18 回滚 + r19 现役。
+>
+> **第十二轮 — 真机支持档揪出剪映导出崩溃：极短素材被 0.1s 下限撑越 material.duration ⇒ 整条导出打死**
+> 附件 `video_locator_logs(1).zip`（Windows 支持档，2026-10-10，用户截图 = 导出面板红条「无法连接后端
+> 服务…(fetch failed)」）。**先证伪截图字面**：后端 `/api/health` 每 20s 稳定响应从 18:16→19:12 没断
+> ⇒ 不是连不上。真红在 18:42:24 `POST /api/export` 抛**未处理 ValueError**：
+> `截取的素材时间范围 [start=0, end=100000] 超出了素材时长(64000)`（`exporters.py:923 write_jianying_draft`
+> → `pyJianYingDraft/video_segment.py:455`）。ASGI 未处理异常 ⇒ uvicorn 掐连接不发响应 ⇒ 前端 fetch 失败
+> ⇒ UI 弹那句**误导性文案**（素材《一口气看过瘾…攀岩女王…》，segments=657）。
+> **根因**：`video_segment.py:452` 里 `source = round(target×speed)`，`:454` 判 `source.end > material.duration`
+> 就抛。`write_jianying_draft` 三处 `max(0.1, …)` 下限把 <0.1s 的短镜头（此处素材 64ms）撑成 target=100000µs，
+> 再被「|speed-1|≤0.02 锁原速」把 source 顶到 100000µs > 64000µs ⇒ 崩。**顺带暴露**：同一锁对「素材比 target
+> 短 0.2%（重编码少一帧）」的普通 clip 也会 source=target>素材 ⇒ 潜在同类崩（本机没撞上是因为抽取 clip
+> 通常 ≥ 请求宽度）。
+> **修法**（`exporters.py`，行为保持）：抽纯函数 `_jianying_segment_speed(target_us, mat_us, orig_width, mat_dur)`
+> ——① 锁原速**仅当 `target_us ≤ mat_us`**；② 末尾硬约束 `round(target×speed) > mat_us` 时回压
+> `speed = (mat_us-1000)/target_us`。正常素材（mat≥target）逐字仍是 1.0 原速 ⇒ 集成测试 `speed==1.0` 断言不破。
+> **门禁**：后端全套 **Ran 626 tests OK (skipped=2)**（622 + 新 4）· API **128 OK**。
+> 新锁 `JianyingSegmentSpeedTest` 四条：正常锁原速 / 真机崩溃形态（100000 vs 64000）回压不越界 /
+> 边际短素材（短 0.2%）不越界 / **结构锁**：`write_jianying_draft` 必须走该 helper 且旧内联判据
+> `max(0.1, min(mat_dur` 不得复活。
+> ⚠️ **覆盖边界（如实）**：没在他那台机器上跑通真导出（要他那份 657 段工程 + 短镜头素材）⇒ 判据 =
+> 库源码 `:452/:454` 的确切算法 + 日志里 `[0,100000] vs 64000` 的确切数字 + 单测复现该算术；
+> **包内实证待下次出包**（可在 accept 加一条「极短素材导出不崩」的产物级锁）。
+> ⚠️ **未做的第二层（等用户裁决，别自己扩面）**：`/api/export` 路由只 `except ApplicationError`
+> （`results.py:155`），任何库级/磁盘级**意外异常仍会**逃到 ASGI ⇒ 前端仍显示误导性的「无法连接后端服务」。
+> 本轮只掐掉了这一个具体崩；要不要把导出错误边界统一包成结构化 400（让 UI 说人话）= 独立小决策，未动。
+> **r20 出包（2026-10-10，口令「先出包」）— 把这条修复打进包里**：构建 = `build-release.ps1` 一条链
+> （`PS_EXIT=0`；patch/CLS/ISC 资产已在位，走 sha fail-fast 断言）。**r20 = 未提交工作树构建**
+> （本批 `exporters.py`/测试/档案都没提交，git 时机由用户掌握）⇒ 「包 == 工作树」对得上，对不上任何 commit。
+> zip = `Compress-Archive win-unpacked\*` Optimal ⇒ `Video-Locator-win-x64-20261010r20.zip`
+> **981,666,831B / 7,078 条目 / `testzip()=None`**；**zip 内 backend.exe 与磁盘逐字节相等**
+> （77,474,898B，sha16 `63987715436d5e31`；对 r19 的 77,474,263B +635B ⇒ 与「r19 之后 src 只有
+> exporters 那一处改动」相容，证明确实重建进包）。
+> 包内验收（本轮按改动面跑，全绿）：`accept_packaged_bundle.py` **FAILED=0**（DirectML wall=26.1s ·
+> 精排/ISC 未回退 CPU · 隔离 spawn+booted+reaped · 12 行腿埋点刻度 `[6,9,42,44,44,44,44,48,48,48,48,48]` ·
+> **UI 路径导出 http=200**）· `accept_packaged_render.py` **FAILED=0**（R1 completed wall=57s · 64 段无交叠 ·
+> 时长 136.366 vs 136.344 · h264_amf · 渲染隔离在位）· `check_export_plan_invariants.py` **FAILED=0**
+> （4 片 × 4 通道五条不变式）。
+> ⚠️ 本轮**未重跑**的三件（改动面不涉及，如实登记）：三防（release 无令牌拒启）· Electron 启动冒烟 ·
+> 包体剪映产物探针 —— 本批只动 `exporters.py` 的写段循环，不碰 UI/主进程/安全；且**包内 accept 的导出探针
+> 不带 `format` ⇒ 走 JSON 通道、不经 `write_jianying_draft`**（见上「已知缺口」）。剪映路径的实证靠源码树
+> `WriteJianyingDraftIntegrationTest`（真 ffmpeg+pyJianYingDraft，断言 speed==1.0）+ 新单测。
+> release/ 现三档（r18/r19/r20），按「最新+上一档」应删 r18，**等口令**。
+>
+> **补锁（选项 B，2026-10-10）— 把剪映路径升到包内常设锁**：`attr_packaged_headless.py` 追加一发
+> `format=jianying` 导出（min_confidence=LOW + low_policy=backup ⇒ ≥1 clip 进 plan），
+> `accept_packaged_bundle.py` 加两条断言：`jianying_http==200` + 草稿 `draft_content.json` 含 ≥1 segment
+> （否则=plan 空、写段循环没被跑到=锁形同虚设）。对 r20 win-unpacked 重跑 bundle **FAILED=0**：
+> 实测草稿 `a1.loc.jy_draft` 1 段 `target=src=45000000µs speed=1.0` + 抽出 `og0-45.mp4` ⇒ 包内真跑通
+> write_jianying_draft 且我的重构未弄坏正常导出。**只改 `mvp/scripts` 两脚本、不进 backend.exe ⇒ r20 zip 不变、无需重出。**
+> ⚠️ 边界：syn 只出 1 条常规 clip ⇒ 此锁覆盖「剪映写段路径通」，**不专门覆盖 <0.1s 回压分支**（那条靠单测；
+> 包内要覆盖需造 <0.1s 素材、易 flaky，未做）。这两脚本改动同样**未提交**（等口令）。
 
 > **▶ 2026-10-08（续63 补十）— r17 出包：补九 三件进包 + 包侧两条新锁（腿埋点已实测进档）【下个对话从这里读起】**
 > 口令「先出包吧」。构建 = `mvp/ui/scripts/build-release.ps1` 一条链（vite → compile:electron →
@@ -364,9 +438,29 @@
   `isolated`（渲染此前从未隔离）+ 卷轴去紧邻同素材重复（默认开）+ ①③ 的 UI 接线。
 
 ## Current Problem
-- **mac 出包链 = 唯一活跃项**（2026-10-08 续63 补十一 第五轮 更正）。**测试门已真机转绿**
-  （run `37795700737` 的 `mvp-tests-macos` = success，618 条全过 + MPS 冒烟）⇒ `mvp/src` 侧无遗留。
-  `macos-package` 第 11 步红了四轮，**真因由用户口述结案：`model-assets` 那个 release 被他删了**
+- 🟢 **剪映导出崩（2026-10-10 续63 补十一 第十二轮）— 代码已修 + 全套绿 + 已进包 r20**：真机支持档
+  `POST /api/export` 抛未处理 `ValueError: 截取的素材时间范围 [start=0, end=100000] 超出了素材时长(64000)`
+  （`exporters.py write_jianying_draft` → pyJianYingDraft `video_segment.py:455`）；ASGI 未处理异常掐断连接
+  ⇒ UI 误报「无法连接后端服务 (fetch failed)」。根因 = 三处 `max(0.1,…)` 下限把 <0.1s 短镜头撑过素材时长。
+  修 = 抽 `_jianying_segment_speed`（锁原速仅在 `target_us≤mat_us`；末尾按素材时长回压 speed），正常素材行为不变。
+  后端 626 / API 128 全绿，新锁 4 条（含结构锁）。**已出包 r20**（未提交工作树构建，zip 内 backend.exe
+  与磁盘逐字节相等 sha16 `63987715436d5e31`，对 r19 +635B）；包内 bundle/render/export-plan 三门 FAILED=0。
+  ✅ **剪映路径包内锁已补（2026-10-10，选项 B）**：`attr_packaged_headless.py` 现另发一发
+  `format=jianying`（min_confidence=LOW + low_policy=backup 保证 ≥1 clip 进 plan），
+  `accept_packaged_bundle.py` 断言 `jianying_http==200` 且草稿 `draft_content.json` 含 ≥1 segment
+  ⇒ 对 r20 win-unpacked 重跑 **FAILED=0**（实测 `a1.loc.jy_draft` 1 段 target=src=45s speed=1.0 + 抽出
+  `og0-45.mp4`）= write_jianying_draft 在包内被真正跑通。**改的是 `mvp/scripts` 两脚本、不进 backend.exe
+  ⇒ r20 zip 不受影响、无需重出**。⚠️ 边界：syn 只出 1 条常规 clip ⇒ 包内锁证「剪映写段路径通 + 我的重构没
+  弄坏正常导出」，**不专门覆盖 <0.1s 回压分支**（那条仍靠单测；包内要覆盖需造 <0.1s 素材，易 flaky 未做）。
+  ⚠️ **未提交**（等口令）。⚠️ 第二层未做（等裁决）：`/api/export` 只
+  `except ApplicationError`，其它意外异常仍会显示成误导性 fetch failed。
+- ✅ **mac 出包链已闭合（2026-10-10 续63 补十一 第十一轮，读 live CI 复核）**：用户 dispatch 的
+  run `37943554701`（head `f29e8d66`）与 run `37955484860`（head `31974f2` = checkpoint HEAD）均
+  **三 job 全绿**；`macos-package` 的 step 11 走「通道 A 直链 + sha256 逐文件当场判」一发即中
+  （三份资产 try=1，字节数与仓库内 `asset.json` 等值），step 15 门槛绿 ⇒ step 16 publish 绿 ⇒
+  release `mac-alpha` 新增 **`Video-Locator-mac-arm64.zip` 916,769,503 B**（2026-10-09T16:27:38Z）。
+  ⇒ 此前写的「唯一活跃项 / 只差 dispatch」已不成立；下面第三~六轮的 CI 往返过程**留档不再当待办引用**。
+- `macos-package` 第 11 步曾红四轮，**真因由用户口述结案：`model-assets` 那个 release 被他删了**
   ⇒ 我先前写的「偶发网络」与「`api.github.com` 这条 HTTP/2 通道当下对该 runner 不通」**都是错的定性**，
   过程留在 Current Task 第三/四轮但**别再当结论引用**；教训：**先验被访问对象是否还存在，再谈通道**。
   ⇒ 现按用户裁决改挂 `mac-alpha`（published prerelease，直链公开可取、CI 下载端不需要令牌），
@@ -375,7 +469,7 @@
   ✅ **已闭合（2026-10-09 00:30）**：三份权重已重新挂上 `mac-alpha`（HTTP 201 ×3；服务端 asset 列表
   三个字节数逐个与本地一致），并按 CI 用的 API octet-stream 通道（**必须带 `-L`**）回下 1.6MB 那份
   核过 sha256 匹配 ⇒ 两份大文件不做本机回下，完整性由 CI step 11 逐文件 sha256 当场判。
-  ⇒ **现在只差他 dispatch**（push 不触发）。
+  ✅ **后续 dispatch 已执行且全链绿（2026-10-10 第十一轮复核）**：见本节顶部 ✅ 条与 Current Task 第十一轮。
   本机 credential helper 这次**非交互返回**令牌（`GIT_TERMINAL_PROMPT=0`+`timeout`，没弹登录窗），
   用完的临时文件已删；⚠️ 我曾用 `Get-CimInstance` 读进程命令行而**把令牌打印进会话一次**，
   已建议他撤销该 OAuth 授权重登（他决定），后续我不再读进程命令行/不打印含令牌内容。
@@ -383,12 +477,13 @@
   （脚本「同名先删再传」⇒ 三份删了重传），又 kill 掉大文件那一发 ⇒ ISC `.data` 在服务器上缺了≈25 分钟。
   ⇒ 教训：**长上传的进度判据 = 服务端 asset 列表，不是本机 `tasklist` 里 curl 的驻留内存**。
   公开性事实（他已选定，不再重提）：`mac-alpha` 是公开 prerelease ⇒ 权重随公开包一同公开，ISC 为 NC 许可。
-- Windows 现役包 = **r19**（`Video-Locator-win-x64-20261009r19.zip`，干净 commit `3ef2b9e` 构建；
-  含隔离回登记修复；两道包内验收 FAILED=0，其中新锁实测 `export_http=200`）。
-  回滚档 = r18；r17 按"最新+上一档"待删口令（现三档并存）。
-  补九/补十/补十一 已按口令提交并 push
-  （`ba5bedd` + `382d3ac` + `d78e13a` + `3349063` + `b6a4a25` + 本次 workflow 笔）。
-  回滚档 = r17；r15/r16 已按口令删除（2026-10-09，release/ 现两档：r17 + r18）。
+- Windows 现役包 = **r20**（`Video-Locator-win-x64-20261010r20.zip`，未提交工作树构建，含剪映导出崩修复；
+  包内 bundle/render/export-plan 三门 FAILED=0，UI 路径导出 http=200）。zip 981,666,831B / 7,078 条目 /
+  `testzip=None` / zip 内 backend.exe 77,474,898B sha16 `63987715436d5e31`（== 磁盘构建，对 r19 +635B）。
+  **分发包现三档 = r20 现役 + r19 + r18**（2026-10-10 出 r20；按「最新+上一档」应删 r18，**等口令**；
+  更早 r17 已于 2026-10-10 删除，r15/r16 于 2026-10-09 删除）。
+  补九/补十/补十一 已按口令提交并 push（`ba5bedd` + `382d3ac` + `d78e13a` + `3349063` + `b6a4a25`
+  + 其后的 workflow 修复笔 + r19 相关笔，HEAD = checkpoint `31974f2`）；**第十二轮 exporters 修复未提交**。
   => 腿边界埋点与支持档降噪**已在包内支持档实测生效**（Windows 见 Current Task 补十 块；
   **mac 侧同一条链也已在 mac 测试日志里实测**：12 行 `locate leg=` 顺序/区间正确）。
 - ~~两处新 UI 缺浏览器目检~~ = 已目检（续63 补三）并**按用户裁决删除显示**（续63 补四）；
@@ -560,4 +655,4 @@
 
 ## Last Updated
 
-2026-10-09 23:51
+2026-10-10 20:05

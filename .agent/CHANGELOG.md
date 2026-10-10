@@ -1,5 +1,63 @@
 # CHANGELOG
 
+## 2026-10-10（续63 补十一·第十二轮）— 真机支持档揪出剪映导出崩：极短素材撑越 material.duration
+
+- **现场**（用户截图 + `video_locator_logs(1).zip`，Windows 支持档）：导出面板红条「无法连接后端服务…
+  (fetch failed)」。先证伪字面：`/api/health` 每 20s 稳定响应 18:16→19:12 没断 ⇒ 不是连不上；真红在
+  18:42:24 `POST /api/export` 抛未处理 `ValueError: 截取的素材时间范围 [start=0, end=100000] 超出了素材时长(64000)`
+  （`exporters.py:923 write_jianying_draft` → `pyJianYingDraft/video_segment.py:455`）。ASGI 未处理异常 ⇒
+  uvicorn 掐连接不发响应 ⇒ 前端 fetch 失败 ⇒ UI 弹误导性文案（素材《一口气看过瘾…攀岩女王…》，segments=657）。
+- **根因**：`video_segment.py:452` `source = round(target×speed)`，`:454` 判 `source.end > material.duration` 就抛。
+  `write_jianying_draft` 三处 `max(0.1,…)` 下限把 <0.1s 短镜头（素材 64ms）撑成 target=100000µs，再被
+  「|speed-1|≤0.02 锁原速」把 source 顶到 100000µs > 64000µs ⇒ 崩。顺带暴露：同锁对「素材比 target 短 0.2%
+  （重编码少一帧）」的普通 clip 也会 source=target>素材 ⇒ 潜在同类崩（本机没撞上因抽取 clip 通常 ≥ 请求宽度）。
+- **修法**（行为保持）：抽纯函数 `_jianying_segment_speed(target_us, mat_us, orig_width, mat_dur)` ——
+  ① 锁原速**仅当 `target_us ≤ mat_us`**；② 末尾 `round(target×speed) > mat_us` 时回压 `speed=(mat_us-1000)/target_us`。
+  正常素材（mat≥target）逐字仍 1.0 原速 ⇒ 集成测试 `speed==1.0` 断言不破。
+- **门禁**：后端全套 **Ran 626 tests OK (skipped=2)**（622 + 新 4）· API **128 OK**。新锁
+  `JianyingSegmentSpeedTest` 四条：正常锁原速 / 真机形态（100000 vs 64000）回压不越界 / 边际短素材不越界 /
+  **结构锁**（`write_jianying_draft` 必走该 helper、旧内联判据 `max(0.1, min(mat_dur` 不得复活）。
+- ⚠️ **覆盖边界**：没在他机器上跑通真导出（要那份 657 段工程 + 短镜头素材）⇒ 判据 = 库源码 `:452/:454`
+  确切算法 + 日志 `[0,100000] vs 64000` 确切数字 + 单测复现算术；**包内实证待下次出包**（accept 加极短素材导出锁）。
+- ⚠️ **第二层未做（等裁决）**：`/api/export` 只 `except ApplicationError`（`results.py:155`），库级/磁盘级意外
+  异常仍逃到 ASGI ⇒ 前端仍显示误导性 fetch failed。本轮只掐这一个具体崩；导出错误边界统一包成结构化 400 = 独立小决策，未动。
+- **r20 出包（2026-10-10，口令「先出包」）**：`build-release.ps1` 一条链 `PS_EXIT=0`（资产在位走 sha 断言）；
+  **未提交工作树构建**（本批未 commit）。zip `Video-Locator-win-x64-20261010r20.zip` 981,666,831B / 7,078 条目 /
+  `testzip=None`；zip 内 backend.exe 77,474,898B sha16 `63987715436d5e31` == 磁盘构建（对 r19 +635B ⇒ 重建进包）。
+  包内验收全绿：`accept_packaged_bundle` **FAILED=0**（DirectML 26.1s · 隔离 spawn+booted+reaped · 12 腿埋点 ·
+  UI 路径导出 http=200）· `accept_packaged_render` **FAILED=0**（R1 57s · 64 段无交叠 · h264_amf · 隔离）·
+  `check_export_plan_invariants` **FAILED=0**（4 片×4 通道）。**未重跑**（改动面不涉及）：三防 · Electron 启动冒烟 ·
+  包体剪映产物探针。⚠️ 已知缺口：包内 accept 导出探针不带 `format` ⇒ 走 JSON 不经 `write_jianying_draft` ⇒
+  剪映路径的包内锁需另加 `format=jianying`。release/ 现三档 r20/r19/r18，删 r18 等口令。本批未提交。
+- **补锁（选项 B，同批）— 剪映路径升到包内常设锁**：`attr_packaged_headless.py` 追加一发 `format=jianying`
+  导出（min_confidence=LOW + low_policy=backup ⇒ ≥1 clip 进 plan），`accept_packaged_bundle.py` 加两条断言
+  （`jianying_http==200` + 草稿含 ≥1 segment）。对 r20 win-unpacked 重跑 bundle **FAILED=0**：实测
+  `a1.loc.jy_draft` 1 段 target=src=45s speed=1.0 + 抽出 `og0-45.mp4` ⇒ write_jianying_draft 在包内真跑通、
+  重构未坏正常导出。**只改 `mvp/scripts` 两脚本、不进 backend.exe ⇒ r20 zip 不变、无需重出**。边界：syn 只
+  1 条常规 clip ⇒ 不专门覆盖 <0.1s 回压分支（靠单测）。两脚本改动同样未提交。
+
+## 2026-10-10（续63 补十一·第十一轮）— mac 出包链真机结清（读 live CI 复核，档案此前停在「只差 dispatch」）
+
+- **现场**：STATE.md 的「唯一活跃项」写的是「三份权重已重挂 `mac-alpha`、只差用户 dispatch」。
+  2026-10-10 用公共 API（读 runs/jobs/annotations 无需令牌）复核 ⇒ dispatch 已执行且**全链绿**。
+- **证据（primary）**：
+  - run `37943554701`（head `f29e8d66`）+ run `37955484860`（head `31974f2` = checkpoint HEAD）均
+    `workflow_dispatch` → `completed success`；三 job（`mps-poc` / `mvp-tests-macos` / `macos-package`）全绿。
+  - `macos-package` annotations（原文）：`asset dinov2_cls_patch.onnx.data / isc_ft_v107.onnx /
+    isc_ft_v107.onnx.data via A 直链+sha256 OK (…B, try=1)` 三份一发即中（走通道 A，未用 `gh` 兜底）
+    + 诊断行 `curl=curl 8.7.1 gh=gh version 2.100.0 src=mac-alpha` ⇒ 第五轮「改挂 mac-alpha + step 11
+    简化（删 release JSON 那一发、按仓库内 `asset.json` 的 sha 逐文件判）」这个决策被真机验证；
+    第六轮登记的未证面「等值校验首次生效就在 CI 上」= 已在 CI 上验通。
+  - step 15 `Accept packaged mac bundle (gate publish)` = success ⇒ step 16 `Publish (rolling tag mac-alpha)`
+    = success（publish 受门槛 `if` 管）⇒ release `mac-alpha` 新增 **`Video-Locator-mac-arm64.zip`
+    916,769,503 B**（`updated_at=2026-10-09T16:27:38Z`，与 run `37955484860` 时间线吻合）。
+- **结论**：mac 出包链闭合。`Current Problem` / `Current Task`（补十一 顶部与第十一轮）已据此更正。
+- **未做（留 H3 正式化）**：`Known Issues` 的「mac 包多带 ≈88MB 死 ONNX 资产」未本机拆包核（本机无 mac，
+  不为读别人机包去取凭据）；按平台裁剪 `extraResources` 是 H3 正式化时的事。
+- Windows 侧现役仍 r19；**按口令删 r17**（2026-10-10）⇒ release/ 现两档 r18 回滚 + r19 现役；
+  删前 `zip_identity.py` 验回滚档 r18 `testzip=None`/7,078 条目/backend.exe sha16 `2eb651d38003d433`
+  与档案逐字一致（`matches_disk_build=False` 只因磁盘现役已是 r19，属预期）。释放 ≈940MB。与 mac 线无关。
+
 ## 2026-10-09（续63 补十一·第十轮）— 真机日志揪出隔离回归：导出/渲染 no results batch；r19 出包
 
 - **现场**（用户截图 + `video_locator_logs.zip`，Windows 支持档）：22:25 提交分析 → 22:47:22

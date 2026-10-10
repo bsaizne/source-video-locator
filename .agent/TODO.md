@@ -7,7 +7,20 @@
 
 ## P0 — Current
 
-> **▶ 2026-10-08（续63 补九）— 腿边界埋点 + 支持档降噪 + 跳格锁改按最大值口径【现读这条】**
+> **▶ 2026-10-10（续63 补十一·第十二轮）— 剪映导出崩修复：极短素材撑越 material.duration【现读这条】**
+> 真机支持档 `POST /api/export` 抛未处理 `ValueError`（target 被 0.1s 下限撑到 100000µs > 素材 64000µs）
+> ⇒ ASGI 掐连接 ⇒ UI 误报「无法连接后端服务 (fetch failed)」。修 = 抽 `_jianying_segment_speed`
+> （锁原速仅在 `target_us≤mat_us`；末尾按素材时长回压 speed），正常素材行为不变。
+> 门禁 = 后端 **626 OK(skipped=2)** · API **128 OK** · 新锁 `JianyingSegmentSpeedTest` 4 条（含结构锁）。
+> **状态：已出包 r20**（未提交工作树构建；zip 内 backend.exe 与磁盘逐字节相等 sha16 `63987715436d5e31`，对 r19
+> +635B）；包内 bundle/render/export-plan 三门 FAILED=0。**未提交**（等口令）。
+> ✅ 剪映路径包内锁已补（选项 B）：accept 现另发 `format=jianying` 导出并断言 http=200 + 草稿 ≥1 segment；
+> 对 r20 重跑 bundle FAILED=0（实测 1 段 speed=1.0 + og0-45.mp4）。只改 `mvp/scripts` 两脚本、不进 backend.exe
+> ⇒ r20 zip 不变。边界：syn 只 1 条常规 clip ⇒ 不专门覆盖 <0.1s 回压分支（靠单测）。
+> 未做的第二层（等裁决，别自己扩面）：`/api/export` 只 `except ApplicationError`，其它意外异常仍显示成误导性 fetch failed。
+> release/ 现三档 r20/r19/r18，删 r18 等口令。明细见 `CHANGELOG.md` 第十二轮 与 `STATE.md` Current Task 顶部同名块。
+
+> **▶（历史·已完成）2026-10-08（续63 补九）— 腿边界埋点 + 支持档降噪 + 跳格锁改按最大值口径**
 > 口令「2」= 补七/补八 捞出的候选三件全做。动 `mvp/src` 两处（`app/locator_service.py` 埋点 ·
 > `infrastructure/logging.py` 降噪）+ 后端/API 测试 + 两个常设复核脚本。**已提交 `ba5bedd`、已出包 r17**
 > （r16 不含这三件 ⇒ 进包等 r17 授权）。门禁 = 后端 **617** · API **124** · vitest **144** ·
@@ -54,6 +67,14 @@
 > 补七 r16 出包；补八 进度链独占实测 + 支持档文件侧闭合。
 ## P1 — Next
 
+- [x] **mac 出包链 = ✅ 真机结清（2026-10-10 续63 补十一 第十一轮，读 live CI）**：run
+      `37955484860`（head `31974f2`）三 job 全绿；`macos-package` step 11 走通道 A 直链+sha256
+      三份 try=1 即中 ⇒ step 15 门槛绿 ⇒ step 16 publish 绿 ⇒ release `mac-alpha` 新增
+      `Video-Locator-mac-arm64.zip` 916,769,503B（2026-10-09T16:27:38Z）。第五/六轮担心的
+      「等值校验首次生效就在 CI 上」已验通。H3 正式化项（按平台裁 `extraResources` 的 ≈88MB 死资产）另计。
+- [x] ~~待口令：Windows release/ 三档删 r17~~ = ✅ 已删（2026-10-10）：现两档 r19 现役 + r18 回滚；
+      删前 `zip_identity.py` 验回滚档 r18 `testzip=None` / 7,078 条目 / backend.exe sha16
+      `2eb651d38003d433` 与档案一致，释放 ≈940MB。与 mac 线无关。
 - [x] 待用户口令：git 推送 = ✅（2026-10-07 续63 口令「按你的想法来」→ 推 `6a0ef88..aba3a21`
       实测 11 笔；档案原写 12 笔为计数过期）。
 - [x] **r15 出包 = ✅（2026-10-07 12:33）**：`Video-Locator-win-x64-20261007r15.zip`
