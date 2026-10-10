@@ -355,6 +355,21 @@ def main() -> int:
             except urllib.error.HTTPError as e:
                 export_http, export_path, ex_body = e.code, None, None
             print("[export] http=%s path=%s" % (export_http, export_path), flush=True)
+            # **剪映路径包内锁**（2026-10-10 第十二轮）：上面那发不带 format ⇒ 走 JSON 通道，
+            # 根本不经过 write_jianying_draft；而真机崩正是在 write_jianying_draft（极短素材被
+            # 0.1s 下限撑越 material.duration）。所以再单发一发 format=jianying，让包内真的跑一遍
+            # 写段循环（含 _jianying_segment_speed 的越界回压）。min_confidence=LOW + low_policy=backup
+            # 保证 ≥1 clip 进 plan（否则草稿空、写段循环没被跑到 = 锁形同虚设）。码自己接（http() 抛）。
+            jy_out = OUT / "jianying_draft"
+            jy_out.mkdir(parents=True, exist_ok=True)
+            try:
+                jy_body = http(base, token, "POST", "/api/export",
+                               {"output_dir": str(jy_out), "format": "jianying",
+                                "min_confidence": "LOW", "low_policy": "backup"}, timeout=180.0)
+                jianying_http, jianying_path = 200, (jy_body or {}).get("path")
+            except urllib.error.HTTPError as e:
+                jianying_http, jianying_path, jy_body = e.code, None, None
+            print("[export jianying] http=%s path=%s" % (jianying_http, jianying_path), flush=True)
             summary = {
                 "arm": "packaged_headless" if mode == "packaged" else "venv_http_headless",
                 "case": case,
@@ -374,6 +389,8 @@ def main() -> int:
                 "segments": len(result.get("results", [])),
                 "export_http": export_http,          # UI 路径：不先 load 直接导出
                 "export_path": export_path,
+                "jianying_http": jianying_http,      # 剪映通道：真的跑 write_jianying_draft
+                "jianying_path": jianying_path,
                 "task_status": status.get("status"),
                 "task_error": status.get("error"),
                 "phases": phases,

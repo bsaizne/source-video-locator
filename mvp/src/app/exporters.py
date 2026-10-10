@@ -773,6 +773,25 @@ def _us(t: float) -> int:
     return int(round(t * 1_000_000))
 
 
+def _jianying_segment_speed(target_us: int, mat_us: int, orig_width: float, mat_dur: float) -> float:
+    """剪映片段变速：让 source=round(target×speed) 始终落在素材时长内。
+
+    pyJianYingDraft 的 VideoSegment 里 `source_timerange = Timerange(0, round(target×speed))`，
+    一旦 `source.end > material.duration` 就直接抛 ValueError 打死整条导出（真机 r19 支持档：
+    一段 <0.1s 的短镜头被 0.1s 下限撑成 100000µs，素材只有 64000µs ⇒ 崩，UI 显示成误导性的
+    「无法连接后端服务 (fetch failed)」）。⇒ 锁原速只在 target 不超素材时进行，末尾再按素材
+    真实时长回压速度兜底。正常素材（mat_us >= target_us）逐字保持原有 1.0 原速行为。
+    """
+    rec_w = target_us / 1_000_000
+    speed = max(0.05, (max(0.1, min(mat_dur, orig_width)) - 1e-3) / rec_w)
+    if abs(speed - 1.0) <= 0.02 and target_us <= mat_us:
+        speed = 1.0   # 重编码时长误差 ≤2% 时锁原速（用户反馈：不要变速片段）
+    speed = round(speed, 6)
+    if round(target_us * speed) > mat_us:   # 极短素材：source 越界 ⇒ 回压速度到素材时长内
+        speed = round(max(0.05, (mat_us - 1000) / target_us), 6)
+    return speed
+
+
 @dataclass
 class JianyingAsset:
     """一个抽取的素材 clip 及其在时间轴上的摆位（反馈实测 v1 修复：素材必须
@@ -913,15 +932,15 @@ def write_jianying_draft(script, assets: list[JianyingAsset], draft_dir: Path) -
         if asset.clip_path is None or not asset.clip_path.exists():
             continue
         mat = dj.VideoMaterial(str(asset.clip_path))
-        mat_dur = asset.clip_duration or (mat.duration / 1_000_000)
+        mat_us = int(mat.duration)          # 素材真实时长（微秒）= 越界判据的分母
+        mat_dur = asset.clip_duration or (mat_us / 1_000_000)
         for p in sorted(asset.placements, key=lambda x: x["edited_start"]):
             rec_w = max(0.1, p["edited_end"] - p["edited_start"])
-            speed = max(0.05, (max(0.1, min(mat_dur, asset.orig_width)) - 1e-3) / rec_w)
-            if abs(speed - 1.0) <= 0.02:
-                speed = 1.0   # 重编码时长误差 ≤2% 时锁原速（用户反馈：不要变速片段）
+            target_us = _us(rec_w)
             # trange 的 float 参数按微秒解释——必须传 _us() 微秒整数
-            seg = dj.VideoSegment(mat, target_timerange=dj.trange(_us(p["edited_start"]), _us(rec_w)),
-                                  speed=round(speed, 6))
+            seg = dj.VideoSegment(mat, target_timerange=dj.trange(_us(p["edited_start"]), target_us),
+                                  speed=_jianying_segment_speed(target_us, mat_us,
+                                                                asset.orig_width, mat_dur))
             script.add_segment(seg, track=track_for(p["kind"], p["sub_index"]))
     script.save()
     return draft_dir

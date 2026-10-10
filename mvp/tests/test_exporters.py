@@ -28,7 +28,8 @@ import numpy as np
 
 from app.exporters import (ExportClip, build_export_plan, plan_jianying_assets,
                            render_edl, render_fcp7_xml, seconds_to_frames,
-                           snap_clips_to_scenes, timecode_ndf)
+                           snap_clips_to_scenes, timecode_ndf,
+                           _jianying_segment_speed)
 from app.models import CancellationToken
 from domain import (Confidence, ConfidenceLevel, IndexMeta, OriginalSegment,
                     Result, ResultBatch, TimeSpan)
@@ -484,6 +485,42 @@ class WriteJianyingDraftIntegrationTest(unittest.TestCase):
         # 素材路径指向草稿内 clips；时间单位必须为微秒（trange float 陷阱回归）
         for v in content["materials"]["videos"]:
             self.assertTrue((Path(v["path"])).exists())
+
+
+# --------------------------------------------------------------------- #
+# 剪映片段变速：source=round(target×speed) 绝不越素材时长（真机 r19 崩溃回归）
+# --------------------------------------------------------------------- #
+class JianyingSegmentSpeedTest(unittest.TestCase):
+    """pyJianYingDraft 里 source_timerange = round(target×speed)，> material.duration 直接抛
+    ValueError 打死整条导出。真机支持档：一段 <0.1s 短镜头被 0.1s 下限撑成 100000µs、
+    素材只有 64000µs ⇒ 崩（UI 误报「无法连接后端服务 fetch failed」）。"""
+
+    def test_normal_material_locks_original_speed(self):
+        # 素材 >= target：逐字保持原速 1.0（集成测试断言的常态）
+        sp = _jianying_segment_speed(5_000_000, 5_000_000, 5.0, 5.0)
+        self.assertEqual(sp, 1.0)
+
+    def test_short_material_does_not_overflow(self):
+        # 真机崩溃形态：target 100000µs、素材 64000µs ⇒ 必须回压速度使 source 落进素材
+        target_us, mat_us = 100_000, 64_000
+        sp = _jianying_segment_speed(target_us, mat_us, orig_width=0.05, mat_dur=0.064)
+        self.assertLess(sp, 1.0)
+        self.assertLessEqual(round(target_us * sp), mat_us)
+
+    def test_marginal_short_reencode_does_not_overflow(self):
+        # 素材比 target 短 0.2%（重编码少一帧）：旧写法会锁 1.0 → source=target>素材 → 崩
+        target_us, mat_us = 5_000_000, 4_990_000
+        sp = _jianying_segment_speed(target_us, mat_us, orig_width=5.0, mat_dur=4.99)
+        self.assertLessEqual(round(target_us * sp), mat_us)
+
+    def test_write_jianying_draft_routes_through_helper(self):
+        """结构锁：write_jianying_draft 的 per-placement 变速必须走 _jianying_segment_speed，
+        不得再把公式内联回去（否则越界回归会静默复发）。"""
+        import inspect
+        from app.exporters import write_jianying_draft
+        src = inspect.getsource(write_jianying_draft)
+        self.assertIn("_jianying_segment_speed", src)
+        self.assertNotIn("max(0.1, min(mat_dur", src)   # 旧内联判据不得复活
 
 
 # --------------------------------------------------------------------- #

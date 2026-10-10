@@ -122,6 +122,28 @@ def main() -> int:
         else:
             check("分析后直接导出（UI 路径，不先 load）", ex_http == 200,
                   "http=%s path=%s" % (ex_http, summary.get("export_path")))
+        # **剪映路径包内锁**（2026-10-10 第十二轮）：JSON 通道不经 write_jianying_draft，而真机崩
+        # 正是在那里（极短素材被 0.1s 下限撑越 material.duration ⇒ ValueError 打死整条导出）。
+        # 探针另发了一发 format=jianying ⇒ 断言它 200 且草稿里真的落了 ≥1 个 segment
+        # （否则 = plan 空、写段循环没被跑到 = 锁形同虚设）。
+        jy_http = summary.get("jianying_http")
+        if jy_http is None:
+            print("[info] 探针产物无 jianying_http 字段（早于本次改动）⇒ 剪映通道未实测，别当已验收")
+        else:
+            check("剪映通道导出（真跑 write_jianying_draft）", jy_http == 200,
+                  "http=%s path=%s" % (jy_http, summary.get("jianying_path")))
+            jy_path = summary.get("jianying_path")
+            n_seg = None
+            if jy_path:
+                dc = Path(jy_path) / "draft_content.json"
+                if dc.exists():
+                    try:
+                        content = json.loads(dc.read_text(encoding="utf-8"))
+                        n_seg = sum(len(t.get("segments", [])) for t in content.get("tracks", []))
+                    except Exception as exc:  # noqa: BLE001
+                        n_seg = "读失败:%s" % exc
+            check("剪映草稿含 ≥1 segment（写段循环被真正执行）",
+                  isinstance(n_seg, int) and n_seg >= 1, "segments=%s" % n_seg)
         # 打包态任务级进程隔离（六项立项 ④，2026-10-07 续62 补六；r14 及以前没有此项 ⇒ 红）：
         # PyInstaller 下 spawn 子进程必须起得来（入口 freeze_support 已接），
         # 证据 = 包内后端 stdout 的隔离启动行。起不来会静默回落线程内执行，
