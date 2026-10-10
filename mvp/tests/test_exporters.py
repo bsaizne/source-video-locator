@@ -524,6 +524,54 @@ class JianyingSegmentSpeedTest(unittest.TestCase):
 
 
 # --------------------------------------------------------------------- #
+# 取材扩宽相对护栏（2026-10-11 B）：短切不被撑进比自身大 rel_cap 倍的（疑似漏切）镜头
+# --------------------------------------------------------------------- #
+class ExpandMaterialSpansGuardTest(unittest.TestCase):
+    def setUp(self):
+        import numpy as np
+        # 假镜头表：[0,1] 小、[1,41] 是被漏切并成的 40s 假大镜头、[50,52] 是 2s 真镜头
+        self.scenes = np.array([[0.0, 1.0], [1.0, 41.0], [50.0, 52.0]])
+
+    def _clips(self):
+        # clipX: 1s 核心落在 40s 假镜头内（应被护栏挡住）；clipY: 1s 核心在 2s 真镜头内（应放行）
+        return [
+            ExportClip("main", 0.0, 1.0, 2.0, 3.0, "HIGH", 0.9, seg_index=0),
+            ExportClip("main", 1.0, 2.0, 50.5, 51.5, "HIGH", 0.9, seg_index=1),
+        ]
+
+    def test_guard_blocks_short_cut_into_huge_scene(self):
+        from app.exporters import expand_material_spans
+        clips = self._clips()
+        n = expand_material_spans(clips, self.scenes, max_span_s=60.0, rel_cap=2.5)
+        self.assertEqual(n, 1)
+        self.assertEqual((clips[0].orig_start, clips[0].orig_end), (2.0, 3.0))  # X 未扩
+        self.assertEqual((clips[1].orig_start, clips[1].orig_end), (50.0, 52.0))  # Y 扩到真镜头
+
+    def test_guard_off_restores_legacy_behavior(self):
+        from app.exporters import expand_material_spans
+        clips = self._clips()
+        n = expand_material_spans(clips, self.scenes, max_span_s=60.0, rel_cap=0.0)
+        self.assertEqual(n, 2)  # 关掉护栏 → X 也被撑成 [1,41]
+        self.assertEqual((clips[0].orig_start, clips[0].orig_end), (1.0, 41.0))
+
+    def test_abs_cap_still_independent(self):
+        from app.exporters import expand_material_spans
+        clips = self._clips()
+        # rel_cap 关闭，但绝对上限 10s 仍能挡住 40s 假镜头；2s 真镜头照扩
+        n = expand_material_spans(clips, self.scenes, max_span_s=10.0, rel_cap=0.0)
+        self.assertEqual(n, 1)
+        self.assertEqual((clips[0].orig_start, clips[0].orig_end), (2.0, 3.0))
+
+    def test_prepare_channel_plan_threads_rel_cap(self):
+        # 结构锁：prepare_channel_plan 必须把 rel_cap 透传给 expand_material_spans（否则旋钮是死值）
+        import inspect
+        from app.exporters import prepare_channel_plan
+        src = inspect.getsource(prepare_channel_plan)
+        self.assertIn("material_expand_rel_cap", src)
+        self.assertIn("rel_cap=float(material_expand_rel_cap)", src)
+
+
+# --------------------------------------------------------------------- #
 # service.export_project 接线
 # --------------------------------------------------------------------- #
 class TestServiceExportProject(unittest.TestCase):

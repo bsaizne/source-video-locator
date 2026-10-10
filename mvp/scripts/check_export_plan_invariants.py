@@ -115,6 +115,7 @@ def main() -> int:
                 boundary_split_enabled=bool(xcfg.boundary_split_enabled),
                 boundary_min_piece_s=float(xcfg.boundary_min_piece_s),
                 material_expand=(ch == "jianying" and bool(xcfg.material_expand)),
+                material_expand_rel_cap=float(xcfg.material_expand_rel_cap),
                 min_clip_s=float(xcfg.min_clip_s))
             plans[ch] = plan
             pre, post = st["audit_pre_trim"], st["audit"]

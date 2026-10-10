@@ -405,6 +405,7 @@ def prepare_channel_plan(batch: ResultBatch, *, channel: str,
                          boundary_split_enabled: bool = True,
                          boundary_min_piece_s: float = 0.5,
                          material_expand: bool = False,
+                         material_expand_rel_cap: float = 0.0,
                          min_clip_s: float | None = None
                          ) -> tuple[list[ExportClip], dict]:
     """四个产物出口**共用**的导出计划序列（纯函数，不探测、不 IO）。
@@ -449,7 +450,7 @@ def prepare_channel_plan(batch: ResultBatch, *, channel: str,
                                             orig_duration=orig_duration)
     n_expanded = 0
     if material_expand and plan and scenes is not None:
-        n_expanded = expand_material_spans(plan, scenes)
+        n_expanded = expand_material_spans(plan, scenes, rel_cap=float(material_expand_rel_cap))
     # 去重叠**之前**的计划层体检（只读）：与之后各算一次，供调用方/验收断言
     # 「重复裁到 0、并集覆盖一块不丢、真实复用没被动」。见 ``audit_source_overlaps``。
     audit_pre = audit_source_overlaps(plan)
@@ -810,13 +811,18 @@ class JianyingAsset:
 
 
 def expand_material_spans(plan: list[ExportClip], scenes, *,
-                          max_span_s: float = 60.0) -> int:
+                          max_span_s: float = 60.0, rel_cap: float = 0.0) -> int:
     """导出取材扩展 v5（反馈四轮：相似度游走会跨镜头→溯源错乱）。
 
     用索引镜头表（``scenes.npy``，原片真实切点）把每个主定位核心窗口扩成
     **它所覆盖的完整原片镜头**（被覆盖场景的并集）——切片=完整镜头，天然不跨
     镜头、可精确溯源。并集宽度 > ``max_span_s`` 的长场景不扩（保守回退核心窗）。
     无镜头表（旧索引）不扩。只影响导出素材宽度，不改 Result 定位语义。
+
+    ``rel_cap``（2026-10-11 B 护栏，>0 生效）：扩宽后的宽度还不得超过该 clip **核心宽度的
+    rel_cap 倍**。scenes.npy 漏切时会把连续多个真镜头并成一个假"大镜头"（实测某片 3285-3323
+    一段 38s 里含 4 个不同镜头），一个 1s 短切落进去就被撑成 38s → 卷轴把同一段重放多遍。
+    绝对上限 max_span_s 挡不住（38<60），故加相对护栏：短切不配拥有比它自身大得多的取材窗。
     返回被扩宽的 clip 数。
     """
     if scenes is None or getattr(scenes, "shape", (0, 0))[0] == 0:
@@ -825,15 +831,19 @@ def expand_material_spans(plan: list[ExportClip], scenes, *,
     for c in plan:
         if c.split_index >= 0:
             continue   # 切点展开段已按真实转场定界, 再扩会与相邻段重叠（展示层两件套①）
-        if c.orig_end - c.orig_start <= 0:
+        core = c.orig_end - c.orig_start
+        if core <= 0:
             continue
         covered = scenes[(scenes[:, 0] < c.orig_end) & (scenes[:, 1] > c.orig_start)]
         if covered.size == 0:
             continue
         new_s, new_e = round(float(covered[:, 0].min()), 2), round(float(covered[:, 1].max()), 2)
-        if (new_e - new_s) > max_span_s:
+        width = new_e - new_s
+        if width > max_span_s:
             continue   # 长场景（如大段对话）不扩，保守回退核心窗口
-        if (new_e - new_s) > (c.orig_end - c.orig_start) + 1e-6:
+        if rel_cap > 0 and width > core * rel_cap + 1e-6:
+            continue   # 相对护栏：短切不被撑进比自身大 rel_cap 倍的（疑似漏切）镜头
+        if width > core + 1e-6:
             c.orig_start, c.orig_end = new_s, new_e
             changed += 1
     return changed

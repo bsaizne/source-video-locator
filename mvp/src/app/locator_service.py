@@ -1639,6 +1639,7 @@ class SourceLocatorService:
             boundary_min_piece_s=float(xcfg.boundary_min_piece_s),
             material_expand=(fmt == "jianying" and xcfg.material_expand
                              and do_expand and bundle is not None),
+            material_expand_rel_cap=float(xcfg.material_expand_rel_cap),
             min_clip_s=float(xcfg.min_clip_s))
         n_snapped = stats["n_snapped"]
         # 导出前碎片告警（竞品 segments.builder 语义）：门槛后、吸附前算，只告警不裁剪，

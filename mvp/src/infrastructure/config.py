@@ -454,6 +454,10 @@ class ExportConfig:
     snap_scenes: bool = True
     snap_tolerance_s: float = 1.0
     material_expand: bool = True   # 剪映卷轴取材扩展：核心窗口沿帧相似度扩到内容边界（反馈三轮）
+    # 取材扩宽相对护栏（2026-10-11 续63 补十一·B）：扩宽后的 span 不得超过 core_width × 此系数。
+    # 治「快剪解说里 1s 短切被 scenes.npy 漏切并进 30~50s 假镜头 → 卷轴重放同一段」——跨 4 片实测
+    # K=2.5 时源区间重叠回落到 core 底噪（8.0s）且保住 14 条合理扩宽。<=0 = 关闭护栏（退回旧行为）。
+    material_expand_rel_cap: float = 2.5
     min_clip_s: float = 0.15       # 导出前碎片告警阈值（竞品 segments.builder「单帧片段=闪烁视频」）
     # 重复认领告警（2026-09-29 续31）: 多个导出 clip 指向原片同一区间时提示可合并。
     # 竞品 max_duplicate_scene_ratio 的同构安全形态——只提示, 不删答案（删答案形态实测砍
