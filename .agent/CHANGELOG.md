@@ -21,8 +21,9 @@
   （对 r20 77,474,898B +18,145B ⇒ 与「r20 后 `mvp/src` 只有 A2 一处改动面」相容，证明确实重建进包）。
 - ⚠️ 包内**未实测**项（如实登记）：老用户 `derived_stale` 首触重刷路径（accept 夹具是全新索引态，
   不经这条路）；(ii) 已拍板维持现状，该项留作观察，不建包侧锁。
-- release/ 现四档（r21 现役 + r20 + r19 + r18）；按「最新+上一档」应删 r18，**等口令**
-  （删前照例 `zip_identity.py` 验回滚档可读）。
+- release/ 现三档（r21 现役 + r20 + r19）：**r18 已按口令删除（2026-10-11，「开始吧」）**——
+  删前 `zip_identity.py` 验 r19 可读 `testzip=None` / 7,078 条目 / backend.exe sha16
+  `86d2007c00cfc673` 与档案逐字一致，释放 ≈940MB。
 - 采坑一条：`accept_bundle_r21.log` 混编码，`grep` 当二进制、GBK 控制台 `print` 提取行直接崩
   （`\ufffd` 不可编码）⇒ 提取脚本一律 `stdout.reconfigure(utf-8)`（教训速查同族，再犯登记）。
 
