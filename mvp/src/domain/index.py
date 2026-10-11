@@ -93,10 +93,16 @@ class IndexMeta:
 
 @dataclass(frozen=True)
 class IndexValidation:
-    """FeatureStore.validate_index 的结果。INVALID 时带 reason。"""
+    """FeatureStore.validate_index 的结果。INVALID 时带 reason。
+
+    ``derived_stale`` = 「特征本身没变，只有**派生表**（场景表/事件表）的版本位过期」。
+    它不进 ``to_dict``：对外仍是一个普通的 INVALID（UI 该提示重建就提示），
+    只在内部决定「能不能走 ``refresh_derived`` 只重算派生表、不重抽 CLS 特征」这条便宜路。
+    """
 
     status: IndexValidationStatus
     reason: str | None = None
+    derived_stale: bool = False
 
     def to_dict(self) -> dict:
         return {"status": self.status.value, "reason": self.reason}

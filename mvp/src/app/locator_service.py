@@ -55,6 +55,7 @@ from engine.segment import (ShotSegment, adjacent_distances,
                             brightness_spike_regions, drop_brightness_spike_cuts,
                             drop_flash_cuts, dynamic_min_shot, frame_mean_brightness,
                             is_flash_frame, merge_flash_segments)
+from engine.segment.scene_detect import SceneDetectConfig
 from infrastructure import fsbrowse, paths, settings_repo
 from infrastructure.config import AppConfig, PipelineConfig, load_config
 from infrastructure.errors import (ApplicationError, DeviceError,
@@ -197,8 +198,30 @@ class SourceLocatorService:
     @property
     def store(self) -> FeatureStore:
         if self._store is None:
-            self._store = FeatureStore(self.ffmpeg, self.index_root,
-                                       sampling_fps=self.config.pipeline.index_sampling_fps)
+            pc = self.config.pipeline
+            self._store = FeatureStore(
+                self.ffmpeg, self.index_root,
+                sampling_fps=pc.index_sampling_fps,
+                scene_cfg=SceneDetectConfig(
+                    pixel_enabled=bool(pc.scene_pixel_enabled),
+                    pixel_fps=float(pc.scene_pixel_fps),
+                    pixel_width=int(pc.scene_pixel_width),
+                    pixel_height=int(pc.scene_pixel_height),
+                    pixel_hist_weight=float(pc.scene_pixel_hist_weight),
+                    pixel_thr=float(pc.scene_pixel_thr),
+                    pixel_abs_floor=float(pc.scene_pixel_abs_floor),
+                    pixel_rel_mult=float(pc.scene_pixel_rel_mult),
+                    pixel_rel_win=int(pc.scene_pixel_rel_win),
+                    cls_cut_abs=float(pc.scene_cls_cut_abs),
+                    cls_weight=float(pc.scene_cls_weight),
+                    min_gap_s=float(pc.scene_min_gap_s),
+                    min_shot_s=float(pc.scene_min_shot_s),
+                    block_gate=bool(pc.scene_block_gate),
+                    block_pre=int(pc.scene_block_pre),
+                    block_post=int(pc.scene_block_post),
+                    block_skip=int(pc.scene_block_skip),
+                    block_dist_thr=float(pc.scene_block_dist_thr),
+                    block_dev_thr=float(pc.scene_block_dev_thr)))
         return self._store
 
     # ------------------------------------------------------------------ #
@@ -290,6 +313,19 @@ class SourceLocatorService:
             else:
                 if v.status is IndexValidationStatus.INVALID and v.reason:
                     self._log.info("rebuild index (%s): %s", original.name, v.reason)
+                if v.derived_stale:
+                    # 基座特征逐字可用，只有派生表（场景/事件）判据过期 => 只重算派生表。
+                    # 省掉的是全片 1fps 全分辨率抓帧 + 推理（建索引墙钟的大头）。
+                    self._notify(on_progress, ProgressStage.INDEX_BUILD,
+                                 message=f"正在升级母片镜头表（复用已有特征）：{original.name}")
+                    meta = self.store.refresh_derived(
+                        original, progress=self._index_progress(on_progress, cancel_token))
+                    self._log.info("index derived refreshed video=%s version=%s",
+                                   original.name, meta.feature_version)
+                    bundle = self.store.load_index(original)
+                    self._notify(on_progress, ProgressStage.INDEX_BUILD,
+                                 message="母片镜头表已更新")
+                    return bundle
                 self._notify(on_progress, ProgressStage.INDEX_BUILD,
                              message=f"正在建立母片索引：{original.name}")
                 meta = self.store.create_index(
@@ -2742,10 +2778,14 @@ class SourceLocatorService:
         def cb(p) -> None:
             if cancel_token is not None:
                 cancel_token.raise_if_cancelled()
-            if on_progress is not None:
-                on_progress(ProgressEvent(ProgressStage.INDEX_BUILD,
-                                          current=p.done, total=p.total,
-                                          message=f"母片索引构建中 {p.done}/{p.total} 帧"))
+            if on_progress is None:
+                return
+            # 像素预扫的帧数是索引 fps 的 10 倍：文案要跟着换，否则同一根进度条
+            # 会在「母片索引构建」名义下突然从 N/10 涨回 0/10N，看着像卡住重来。
+            text = (f"正在扫描母片镜头边界 {p.done}/{p.total} 帧" if p.stage == "pixel_scan"
+                    else f"母片索引构建中 {p.done}/{p.total} 帧")
+            on_progress(ProgressEvent(ProgressStage.INDEX_BUILD,
+                                      current=p.done, total=p.total, message=text))
         return cb
 
     @staticmethod

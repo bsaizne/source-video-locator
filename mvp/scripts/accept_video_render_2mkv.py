@@ -20,6 +20,7 @@ Run:
 from __future__ import annotations
 
 import json
+import math
 import os
 import subprocess
 import sys
@@ -144,33 +145,78 @@ def grab_gray(path: Path, t: float, width: int = 320):
     return arr.reshape(arr.size // width, width).astype(np.float32)
 
 
+def clip_mid_times(clips: list[tuple[float, float]], fps: Fraction) -> list[tuple[float, float, int]]:
+    """逐段返回 ``(成片取帧时刻, 原片取帧时刻, 段帧数)``，两侧都按**整数帧号**推。
+
+    - 成片侧：段首帧号 = 前面各段的**帧数**之和（CFR 下精确），再取段内第 ``m = n//2`` 帧。
+      （用名义秒累加会假跑出几帧"漂移"，踩过。）
+    - 原片侧：段首帧号 = ``floor(a0*fps)``，不是 ``a0`` 那个时刻本身。
+    - 取帧时刻 = ``(帧号 - 0.499)/fps``。``-ss`` 前置于 ``-i`` 的语义是「返回第一个
+      PTS ≥ t 的帧」，所以 t 必须落在目标帧**之前**、上一帧之后；写成 ``+0.5`` 会恰好
+      取到下一帧（2026-10-11 我就这么错过一次，偏移分布整体平移一帧）。
+
+    ⚠️ 原片侧仍有 **±1 帧的取帧不确定性**（源容器 PTS 不是精确的 ``k/fps``，fast seek 还要
+    从关键帧解码丢弃）⇒ 「绝对偏移必须为 0」这类判据物理上做不到，只能判**离散度**，
+    见 :func:`alignment_probe`。
+    """
+    from media.ffmpeg.timeline_render import expected_frames
+
+    out = []
+    movie_frame = 0
+    fr = float(fps)
+    for a0, a1 in clips:
+        n = expected_frames(a1 - a0, fps)
+        m = n // 2
+        src_frame = int(math.floor(a0 * fr + 1e-6)) + m
+        out.append(((movie_frame + m - 0.499) / fr, (src_frame - 0.499) / fr, n))
+        movie_frame += n
+    return out
+
+
 def alignment_probe(movie: Path, source: Path, clips: list[tuple[float, float]],
                     fps: Fraction, sample: int = 8) -> list[dict]:
-    """逐段中帧对齐度量：成片第 i 段中帧 vs 原片同区间中帧，±4 帧内找最优匹配。
+    """逐段中帧对齐度量：成片第 i 段中帧 vs 原片对应帧，±4 帧内找最优匹配。
 
-    判据 = 最优偏移必须 ≤1 帧（42ms@23.976）；偏移更大说明成片时间线累加或段长算错。
+    判据 = **离散度**（各段偏移对"多数段偏移"的最大偏离 ≤1 帧），不是绝对偏移。
+    三条理由都是 2026-10-11 实测出来的：
+
+    1. 绝对偏移含一个**常数项**：原片侧 fast-seek 有 ±1 帧取帧不确定性（见
+       :func:`clip_mid_times`）。旧判据写 ``<=1`` 而实测恒定就有 -1 ⇒ 在「1 帧系统性错位」
+       方向上**零余量**，它该抓的错看不见。常数项不是错，只有**段间不一致**才是时间线累加错。
+    2. 静态镜头里 MAD 曲线是平的（实测 0.378 vs 0.364，只差 0.014），argmin 挑到噪声
+       ⇒ 非零偏移必须**伴随 MAD 显著下降**（``mad_best < 0.5*mad_at_zero``）才算数，
+       否则这条门会天天误报（真越界的形态是断崖：2.959→0.350）。
+    3. 抽 8 条太稀，定性一次「判据红但产品没错」花了全量复跑 ⇒ 段数不多时直接全跑。
     """
-    from media.ffmpeg.timeline_render import expected_frames, frames_to_seconds
-
     idxs = sorted(set(int(round(x)) for x in np.linspace(0, len(clips) - 1, sample)))
+    mids = clip_mid_times(clips, fps)
     rows = []
     for i in idxs:
-        a0, a1 = clips[i]
-        n = expected_frames(a1 - a0, fps)
-        movie_t = sum(frames_to_seconds(expected_frames(b - a, fps), fps)
-                      for a, b in clips[:i]) + frames_to_seconds(n, fps) / 2.0
-        src_mid = (a0 + a1) / 2.0
+        movie_t, src_t, n = mids[i]
         fm = grab_gray(movie, movie_t)
-        d0 = float(np.abs(fm - grab_gray(source, src_mid)).mean())
+        d0 = float(np.abs(fm - grab_gray(source, src_t)).mean())
         best = (d0, 0)
         for k in range(-4, 5):
-            d = float(np.abs(fm - grab_gray(source, src_mid + k / float(fps))).mean())
+            d = float(np.abs(fm - grab_gray(source, src_t + k / float(fps))).mean())
             if d < best[0]:
                 best = (d, k)
+        sig = best[1] != 0 and best[0] < 0.5 * d0      # 曲线平 => argmin 无信息
         rows.append({"clip": i, "frames": n, "movie_t": round(movie_t, 3),
-                     "src_mid": round(src_mid, 2), "mad_at_zero": round(d0, 3),
-                     "best_offset_frames": best[1], "mad_best": round(best[0], 3)})
+                     "src_t": round(src_t, 3), "mad_at_zero": round(d0, 3),
+                     "raw_offset_frames": best[1], "mad_best": round(best[0], 3),
+                     "significant": bool(sig)})
     return rows
+
+
+def alignment_verdict(rows: list[dict]) -> dict:
+    """把探针原始行折成判据量：常数项偏移 + 离散度（纯函数，便于单测）。"""
+    sig = [r["raw_offset_frames"] for r in rows if r["significant"]]
+    if not sig:                       # 全片都是平曲线（例：整段静止素材）=> 无可判信息
+        return {"base_offset": 0, "dispersion": 0, "n_significant": 0, "ok": True}
+    base = int(np.median(sig))
+    return {"base_offset": base,
+            "dispersion": int(max(abs(k - base) for k in sig)),
+            "n_significant": len(sig), "ok": max(abs(k - base) for k in sig) <= 1}
 
 
 def main() -> int:
@@ -237,22 +283,17 @@ def main() -> int:
         print("  EDL 前 5 段:", edl_ranges[:5])
         print("  成片前 5 段:", movie_ranges[:5])
 
-    # --- 3. 逐段画面对照图（成片段中帧 vs 原片同时间帧） ------------------ #
-    # 段在成片里的位置 = **帧精确**累加（用名义秒累加会假跑出 4 帧"漂移"，踩过）；
-    # clip 区间取 service **实际渲染**用的那份（吸附 + 切点展开之后），不在脚本里重算。
-    from media.ffmpeg.timeline_render import expected_frames, frames_to_seconds
-
+    # --- 3. 逐段画面对照图（成片段中帧 vs 原片对应帧） -------------------- #
+    # 取帧时刻一律走 clip_mid_times（与对齐度量同一套）：段在成片里的位置要按**帧数**累加，
+    # 段在原片里的起点要按渲染器的 fast-seek 约定取 ceil(a0*fps)（用名义秒/用 a0 本身都踩过坑）。
     fps = Fraction(info["fps"])
     clips = [(float(a), float(b)) for a, b in info["clip_ranges"]]
-    widths = [frames_to_seconds(expected_frames(b - a, fps), fps) for a, b in clips]
-    cursor = 0.0
+    mids = clip_mid_times(clips, fps)      # 与对齐度量同一套取帧时刻（两处各写一份必漂移）
     review_dir = OUT / "review"
     review_dir.mkdir(parents=True, exist_ok=True)
     made = []
     for i, (a0, a1) in enumerate(clips):
-        mid_movie = cursor + widths[i] / 2.0
-        mid_src = (a0 + a1) / 2.0
-        cursor += widths[i]
+        mid_movie, mid_src, _n = mids[i]
         lm = review_dir / f"clip{i:02d}_movie_{mid_movie:.2f}s.png"
         ls = review_dir / f"clip{i:02d}_source_{mid_src:.2f}s.png"
         if grab(movie, mid_movie, lm) and grab(original, mid_src, ls):
@@ -263,12 +304,22 @@ def main() -> int:
     for row in made:
         print("  clip", row)
 
-    # --- 4. 对齐度量：逐段中帧在原片 ±4 帧内找最优匹配（>1 帧 = 时间线算错）--- #
-    align = alignment_probe(movie, original, clips, fps)
-    worst = max(abs(r["best_offset_frames"]) for r in align)
+    # --- 4. 对齐度量：逐段中帧在原片 ±4 帧内找最优匹配（判据 = 离散度，见 alignment_probe）--- #
+    # 默认抽 8 条太稀（2026-10-11 那次误报就是靠全量复跑才定性的）⇒ 段数不多时直接全跑。
+    align = alignment_probe(movie, original, clips, fps,
+                            sample=len(clips) if len(clips) <= 96 else 8)
+    verdict = alignment_verdict(align)
     checks["alignment_sample"] = align
-    checks["alignment_within_1_frame"] = worst <= 1
+    checks["alignment_base_offset"] = verdict["base_offset"]
+    checks["alignment_dispersion_frames"] = verdict["dispersion"]
+    checks["alignment_dispersion_within_1_frame"] = verdict["ok"]
+    checks["alignment_offset_hist"] = {str(k): sum(1 for r in align
+                                                   if r["raw_offset_frames"] == k)
+                                       for k in range(-4, 5)}
     print("ALIGNMENT", json.dumps(align, ensure_ascii=False))
+    print("ALIGN_VERDICT base=%+d dispersion=%d sig=%d/%d ok=%s hist=%s" % (
+        verdict["base_offset"], verdict["dispersion"], verdict["n_significant"], len(align),
+        verdict["ok"], {k: v for k, v in checks["alignment_offset_hist"].items() if v}))
 
     (OUT / "render_accept_summary.json").write_text(json.dumps({
         "batch": str(BATCH_JSON), "original": str(original), "info": {**info},
@@ -280,7 +331,7 @@ def main() -> int:
 
     ok = bool(checks["movie_exists"] and checks["frames_match"] and checks["audio_codec"]
               and plan_consistent and checks["seams_clean"]
-              and checks["alignment_within_1_frame"])
+              and checks["alignment_dispersion_within_1_frame"])
     print("VERDICT", "PASS" if ok else "FAIL")
     return 0 if ok else 2
 

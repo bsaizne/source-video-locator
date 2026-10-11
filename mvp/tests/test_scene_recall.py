@@ -213,7 +213,7 @@ class SceneTableLifecycleTest(unittest.TestCase):
     def test_build_writes_scene_table_and_validates(self):
         with tempfile.TemporaryDirectory() as td:
             store = FeatureStore(self.ffmpeg, td)
-            self.assertIn("+scn1", store.feature_version)
+            self.assertIn("+scn2", store.feature_version)
             meta = store.create_index(SYNTH, FakeBackend())
             d = store.index_dir(SYNTH)
             self.assertTrue((d / "scenes.npy").exists())

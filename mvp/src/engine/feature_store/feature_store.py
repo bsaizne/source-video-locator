@@ -33,6 +33,7 @@ from domain import (ExtractorConfig, IndexMeta, IndexProgress, IndexValidation,
                     IndexValidationStatus)
 from engine.common import pipeline_map
 from engine.segment import detect_shots
+from engine.segment.scene_detect import PixelStream, SceneDetectConfig, build_scene_table
 from infrastructure.errors import LocatorError
 from media.ffmpeg import FFmpegIO, MediaError
 from .index_bundle import IndexBundle
@@ -40,12 +41,14 @@ from .index_bundle import IndexBundle
 ProgressFn = Callable[[IndexProgress], None]
 
 # --- 场景表（Phase 21 召回扩展层,索引侧派生缓存）---
-# 参数来自 research_scene_retrieval.py 验证口径（349 场景 / p26 救回）。
-SCENE_CUT_ABS = 0.15
+# scn1 = 旧口径：纯 CLS 局部 z-score 切分（边界尺子实测召回 0.232，见 FINDINGS_SHOT_DETECTION_A1）。
+# scn2 = 现口径：像素/颜色通道 + CLS 证据融合（同尺 P 0.70 / R 0.92 / F1 0.796）。
+#   参数与判据实现见 ``engine/segment/scene_detect.py``；换判据必须重过边界尺子。
+SCENE_CUT_ABS = 0.15       # （scn1 旧参数，仅 refresh 失败兜底路径与历史测试引用）
 SCENE_Z_THRESH = 1.5
 SCENE_MIN_SHOT_S = 3.0
 SCENE_SMOOTH = 1
-SCENE_TABLE_VERSION = "scn1"
+SCENE_TABLE_VERSION = "scn2"
 # --- 事件表（方向 A 完整阶段, 2026-09-05 用户拍板立项; 探针 POSITIVE）---
 # 场景 -> 事件单元归并: 时序近邻(中心时间差<=EVENT_T_GAP_S) + 场景指纹相似(>=EVENT_S_SIM)
 # 联合连通分量。参数固化在探针网格最优区(60-120s / 0.55-0.60)取 60s/0.60 保守值。
@@ -61,13 +64,23 @@ class FeatureStoreError(LocatorError):
     user_message = "原片索引不可用，请重新建立该原片的索引后再试。"
 
 
+def _version_base(fps: float) -> str:
+    """**特征语义**版本位（改了它 = CLS 向量本身不可比 = 必须重抽特征）。"""
+    return f"handwritten_vits14_cls_384d@{fps:g}_l2"
+
+
+def _version_derived() -> str:
+    """**派生表**版本位（改了它 = 只需按已存特征重算场景表/事件表，不必重抽特征）。
+
+    +scn2：场景表含像素通道; +evt1：含事件表（方向 A 完整阶段）。
+    +b1 曾试做后回退: 生产实测 batch=1 建索引 10.1fps < batch8 11.2fps（2026-09-05）, 无收益;
+    数值口径纪律保留——任何改动 embed 数值口径的参数（如 batch）必须 bump 基座版本并全程统一。
+    """
+    return f"{SCENE_TABLE_VERSION}+{EVENT_TABLE_VERSION}"
+
+
 def _feature_version(fps: float) -> str:
-    # +scn1：索引含场景表（scenes.npy + scene_feats.npy）; +evt1：含事件表
-    # （events.npy + event_feats.npy, 方向 A 完整阶段）。+b1 曾试做后回退: 生产实测 batch=1
-    # 建索引 10.1fps < batch8 11.2fps（2026-09-05）, 无收益; 数值口径纪律保留——任何改动
-    # embed 数值口径的参数（如 batch）必须 bump 此版本号并全程（索引+查询）统一。
-    return (f"handwritten_vits14_cls_384d@{fps:g}_l2"
-            f"+{SCENE_TABLE_VERSION}+{EVENT_TABLE_VERSION}")
+    return f"{_version_base(fps)}+{_version_derived()}"
 
 
 _PROBE_SEED = 20260928          # 固定输入 -> 固定指纹（改种子等于换口径，会让全部索引失效）
@@ -94,11 +107,13 @@ class FeatureStore:
 
     def __init__(self, ffmpeg: FFmpegIO, index_root: str | Path, *,
                  sampling_fps: float = 0.5, chunk_frames: int = 32,
-                 feature_version: str | None = None):
+                 feature_version: str | None = None,
+                 scene_cfg: SceneDetectConfig | None = None):
         self.ffmpeg = ffmpeg
         self.index_root = Path(index_root)
         self.sampling_fps = sampling_fps
         self.chunk_frames = chunk_frames
+        self.scene_cfg = scene_cfg or SceneDetectConfig()
         self.feature_version = feature_version or _feature_version(sampling_fps)
 
     # ------------------------------------------------------------------ #
@@ -131,7 +146,8 @@ class FeatureStore:
         _notify(progress, IndexProgress("writing"))
         np.save(d / "features.npy", feats)
         np.save(d / "times.npy", times)
-        scenes, scene_feats = self._build_scene_table(feats, times)
+        pixel = self._scan_pixel_boundaries(video, vmeta, progress)
+        scenes, scene_feats = self._build_scene_table(feats, times, pixel=pixel)
         np.save(d / "scenes.npy", scenes)
         np.save(d / "scene_feats.npy", scene_feats)
         events, event_feats = self._build_event_table(scenes, scene_feats)
@@ -188,15 +204,61 @@ class FeatureStore:
         times = np.asarray(times_all, dtype=np.float32)
         return feats, times
 
-    def _build_scene_table(self, feats: np.ndarray,
-                           times: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        """从索引特征派生场景表：detect_shots 切场景 → 场景内帧均值 L2 作场景指纹。
+    def _scan_pixel_boundaries(self, video: Path, vmeta, progress: ProgressFn | None,
+                               ) -> tuple[np.ndarray, np.ndarray, np.ndarray] | None:
+        """像素通道预扫：低分辨率 ``pixel_fps`` 逐帧算相邻帧颜色/灰度差 + 每帧直方图。
+
+        返回 ``(新镜头首帧时间[], 差分数[], 每帧直方图[n,32])``。直方图供 A-B-A 持续性门
+        判断「切过去之后有没有待住」——闪电/爆白/甩镜这类瞬时尖峰靠它拦。
+
+        成本判据（FINDINGS §5 实测）：300s 片段整段解码 17~18s，**与输出 300 帧还是 3000 帧几乎无关**
+        ⇒ 成本主体是解码本身，直方图是零头；且纯 CPU，可与 DML/MPS 推理并发。
+        失败（解码异常等）返回 ``None`` ⇒ 场景表退回「只有 CLS 证据」，不阻塞索引构建。
+        """
+        cfg = self.scene_cfg
+        if not cfg.pixel_enabled:
+            return None
+        stream = PixelStream(hist_weight=cfg.pixel_hist_weight)
+        total_est = int(float(vmeta.duration) * cfg.pixel_fps) + 1
+        try:
+            for t, frame in self.ffmpeg.iter_frames(
+                    video, cfg.pixel_fps, scale=(cfg.pixel_width, cfg.pixel_height),
+                    meta=vmeta):
+                stream.push(float(t), frame)
+                if len(stream.times) % 512 == 0:
+                    _notify(progress, IndexProgress("pixel_scan", done=len(stream.times),
+                                                    total=total_est))
+        except (MediaError, OSError, ValueError) as exc:
+            self._log_pixel_scan_failure(exc)
+            return None
+        times, scores = stream.arrays()
+        if times.size < 3:
+            return None
+        return times, scores, stream.hist_matrix()
+
+    @staticmethod
+    def _log_pixel_scan_failure(exc: Exception) -> None:
+        """像素预扫失败只降级不致命，但必须留痕（否则 scn2 静默退回 scn1 行为没人知道）。"""
+        import logging
+        logging.getLogger("engine.feature_store").warning(
+            "pixel boundary scan failed, scene table falls back to CLS evidence only: %s: %s",
+            type(exc).__name__, exc)
+
+    def _build_scene_table(self, feats: np.ndarray, times: np.ndarray,
+                           pixel: tuple[np.ndarray, np.ndarray] | None = None,
+                           ) -> tuple[np.ndarray, np.ndarray]:
+        """从索引特征派生场景表（scn2：像素 + CLS 证据融合）。
 
         - ``scenes.npy``：[S,2] float32（场景起止秒；start 闭 / end 开，覆盖全部帧）。
         - ``scene_feats.npy``：[S,384] float32 L2，与 scenes 行对齐（与 features.npy 同 schema）。
         场景切分为派生缓存（确定性），失败不阻塞索引构建（返回单场景兜底）。
         """
         fps = self.sampling_fps
+        try:
+            return build_scene_table(feats, times, pixel, self.scene_cfg, float(fps))
+        except Exception:
+            pass
+        # 兜底一：旧 scn1 口径（纯 CLS 局部 z-score），至少不是「整片一个场景」
         try:
             shots = detect_shots(feats, times, cut_abs=SCENE_CUT_ABS,
                                  z_thresh=SCENE_Z_THRESH, min_shot_s=SCENE_MIN_SHOT_S,
@@ -274,6 +336,49 @@ class FeatureStore:
                     np.array([scene_feats.mean(axis=0)], dtype=np.float32))
 
     # ------------------------------------------------------------------ #
+    # Derived-table refresh (scn1 -> scn2 这类「基座语义未变」的升级)
+    # ------------------------------------------------------------------ #
+    def refresh_derived(self, original_video: str | Path,
+                        progress: ProgressFn | None = None) -> IndexMeta:
+        """只重算派生表（``scenes`` / ``scene_feats`` / ``events`` / ``event_feats``），**不重抽特征**。
+
+        为什么单独有这条路：派生判据（怎么定镜头边界）变了，而 CLS 向量本身没变——
+        走 ``create_index`` 等于把全片 1fps 全分辨率抓帧 + 推理（建索引墙钟的大头）白付一遍。
+        这里只付一遍低分辨率像素预扫（实测成本主体是解码，与帧数几乎无关）。
+
+        前提（由 ``validate_index`` 的 ``derived_stale`` 判据保证）：文件哈希/大小/时长/
+        sampling_fps/基座版本都已核对通过。四张表**全部算完才落盘**，
+        中途失败不会留下「新场景表 + 旧事件表」的混搭。
+        """
+        video = Path(original_video)
+        d = self.index_dir(video)
+        meta = self._read_meta(d)
+        for need in ("features.npy", "times.npy"):
+            if not (d / need).exists():
+                raise FeatureStoreError(f"cannot refresh derived tables without {need}: {d}")
+        feats = np.load(d / "features.npy")
+        times = np.load(d / "times.npy")
+        _notify(progress, IndexProgress("pixel_scan"))
+        vmeta = self.ffmpeg.metadata(video)
+        pixel = self._scan_pixel_boundaries(video, vmeta, progress)
+        scenes, scene_feats = self._build_scene_table(feats, times, pixel=pixel)
+        events, event_feats = self._build_event_table(scenes, scene_feats)
+        np.save(d / "scenes.npy", scenes)
+        np.save(d / "scene_feats.npy", scene_feats)
+        np.save(d / "events.npy", events)
+        np.save(d / "event_feats.npy", event_feats)
+        meta.feature_version = self.feature_version
+        # 预处理指纹覆盖「基座版本 + fps + dim + 真实预处理行为」；这里基座行为逐字未动，
+        # 变的只有派生表版本位，所以按当前口径重写它（不重写的话下次校验会报
+        # "preprocess changed"，把一条本来省掉全量推理的升级又打回全重建）。
+        meta.extractor = ExtractorConfig(**{**meta.extractor.to_dict(),
+                                            "preprocess_sha": self.preprocess_sha(
+                                                int(meta.feature_dim))})
+        (d / "index.json").write_text(
+            json.dumps(meta.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8")
+        return meta
+
+    # ------------------------------------------------------------------ #
     # Load
     # ------------------------------------------------------------------ #
     def load_index(self, original_video: str | Path) -> IndexBundle:
@@ -345,12 +450,30 @@ class FeatureStore:
         if meta.sampling_fps != self.sampling_fps:
             return IndexValidation(IndexValidationStatus.INVALID, "sampling fps changed")
         if meta.feature_version != self.feature_version:
-            return IndexValidation(IndexValidationStatus.INVALID, "feature version changed")
+            # 只有**派生表**版本位变了（基座语义没动）=> 特征可复用，走 refresh_derived。
+            # 基座位变了 => CLS 向量不可比，只能全量重建。
+            # 比的是**两条版本串各自的基座段**，不是拿 sampling_fps 反推——
+            # FeatureStore 可以被显式传入任意 feature_version（测试与历史索引比对都这么用），
+            # 那时反推出来的基座会把「基座变了」误判成「只有派生过期」，把该重建的放过去。
+            stored_base = str(meta.feature_version).split("+", 1)[0]
+            cur_base = str(self.feature_version).split("+", 1)[0]
+            if stored_base != cur_base:
+                return IndexValidation(IndexValidationStatus.INVALID, "feature version changed")
+            derived_stale = True
+        else:
+            derived_stale = False
 
         # 硬检：内容哈希（仅在快检通过时，确实保护同 size/duration 不同内容）
+        # 注意：派生表过期这条也必须过内容哈希——特征对应的必须是**同一份内容**才允许复用。
         cur_hash = "sha256:" + self.ffmpeg.hash_file(video)
         if cur_hash != meta.file_hash:
             return IndexValidation(IndexValidationStatus.INVALID, "content hash changed")
+
+        if derived_stale:
+            return IndexValidation(
+                IndexValidationStatus.INVALID,
+                f"derived table version changed ({meta.feature_version} -> {self.feature_version})",
+                derived_stale=True)
 
         # 预处理指纹（INDEX_SPEC §4）：空值 = 该字段实装前建的历史索引 -> 回填后放行（不重建）
         sha = self.preprocess_sha(meta.feature_dim)

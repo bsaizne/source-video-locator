@@ -145,6 +145,31 @@ class PipelineConfig:
     seg_z_thresh: float = 1.7
     seg_min_shot_s: float = 0.8
     seg_smooth: int = 1
+    # --- 原片侧场景表（scenes.npy）边界检测：scn2 = 像素通道 + CLS 证据融合 ---
+    # 判据实现在 engine/segment/scene_detect.py；默认值是 2026-10-11 在 44 窗 / 125 条
+    # **画面确认**边界尺子上选定并经留出窗复验的那一档（P 0.70 / R 0.92 / F1 0.796，
+    # 旧 scn1 口径同尺 F1 0.349）。改这些数 = 换判据，必须重过尺子（见
+    # mvp/docs/FINDINGS_SHOT_DETECTION_A1_20261011.md）。
+    scene_pixel_enabled: bool = True
+    scene_pixel_fps: float = 10.0        # 像素预扫密度（成本主体=解码，与帧数几乎无关）
+    scene_pixel_width: int = 160
+    scene_pixel_height: int = 90
+    scene_pixel_hist_weight: float = 0.5  # mix = w*直方图L1 + (1-w)*灰度均值差
+    scene_pixel_thr: float = 0.12
+    scene_pixel_abs_floor: float = 0.08
+    scene_pixel_rel_mult: float = 3.0     # 相对邻域中位数倍率（精度主要靠这一腿）
+    scene_pixel_rel_win: int = 8
+    # A-B-A 持续性门：候选前后块直方图距离须够大，否则是「闪一下又回原画面」（闪电/爆白/甩镜）
+    scene_block_gate: bool = True
+    scene_block_pre: int = 4
+    scene_block_post: int = 4
+    scene_block_skip: int = 2
+    scene_block_dist_thr: float = 0.10   # 前后块直方图距离下限（真的换了画面）
+    scene_block_dev_thr: float = 0.30    # 后块内部最大偏离上限（新状态要落定）
+    scene_cls_cut_abs: float = 0.30       # CLS 证据腿距离门（不再用局部 z-score）
+    scene_cls_weight: float = 0.6         # 融合时 CLS 候选强度系数（像素优先）
+    scene_min_gap_s: float = 0.5          # 融合后 NMS 间隔
+    scene_min_shot_s: float = 1.0         # 最短场景（旧 scn1 是 3.0，快切片上会并掉真镜头）
     # --- 蒙太奇多段定位参数（向召回侧微调：短子镜头成簇、粗段适度拆分、弱子镜头保留）---
     montage_min_frames: int = 2
     montage_min_sim: float = 0.40

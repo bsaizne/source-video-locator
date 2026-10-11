@@ -1,0 +1,1150 @@
+{
+ "version": "shot-boundary-gt-v1",
+ "created": "2026-10-11",
+ "method": "4fps 接触表逐格目检（每格标签=绝对秒）；边界=与前一格不同镜头的首格时间",
+ "tolerance_note": "GT 时间粒度 0.25s（4fps 接触表目检）；现役索引 CLS 采样 1fps（边界粒度 1s）⇒ 匹配主口径 ±1.0s，±0.5s 作次口径参考",
+ "coverage_limits": [
+  "只覆盖 4 片 × 10~14 个 12s 窗（合计约 540s / 全片 31124s ≈ 1.7%），是抽样尺子不是全片标注",
+  "4fps 目检：短于 0.25s 的镜头无法保证入尺",
+  "标注含 conf=low 条目（正反打/手持漂移/变焦歧义），主口径另算「只用 conf=high」一档",
+  "窗口选点=分层随机（seed 20261011）+ test2 定向 4 窗（已知漏切区 3285-3333）"
+ ],
+ "windows": [
+  {
+   "case": "2mkv",
+   "t0": 484.21,
+   "t1": 496.21,
+   "annotator": "subagent",
+   "boundaries": [
+    {
+     "t": 485.71,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 488.46,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 493.46,
+     "kind": "hard",
+     "conf": "high"
+    }
+   ],
+   "notes": "墓地对话段落，全景→女子近景→男子过肩→女子近景，共三次正反打切换；红框只标了后两次。"
+  },
+  {
+   "case": "2mkv",
+   "t0": 1189.79,
+   "t1": 1201.79,
+   "annotator": "subagent",
+   "boundaries": [
+    {
+     "t": 1200.54,
+     "kind": "hard",
+     "conf": "high"
+    }
+   ],
+   "notes": "前 10.75 秒是同一个沿石柱移动/摇摄的大远景（人物在画面中走位、构图持续变化但不是切换），只在 1200.54 切到人物近景。"
+  },
+  {
+   "case": "2mkv",
+   "t0": 1620.13,
+   "t1": 1632.13,
+   "annotator": "subagent",
+   "boundaries": [
+    {
+     "t": 1621.63,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 1627.38,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 1628.38,
+     "kind": "hard",
+     "conf": "low"
+    },
+    {
+     "t": 1629.13,
+     "kind": "hard",
+     "conf": "low"
+    },
+    {
+     "t": 1629.63,
+     "kind": "hard",
+     "conf": "high"
+    }
+   ],
+   "notes": "雷暴夜戏，1620.63/1627.63/1628.88 三处红框都是闪电爆白造成的整幅提亮（同镜头内），未标为边界；1621.63-1627.13 的钟是同一镜头。"
+  },
+  {
+   "case": "2mkv",
+   "t0": 3055.82,
+   "t1": 3067.82,
+   "annotator": "subagent",
+   "boundaries": [
+    {
+     "t": 3056.32,
+     "kind": "hard",
+     "conf": "low"
+    },
+    {
+     "t": 3058.57,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 3061.82,
+     "kind": "hard",
+     "conf": "high"
+    }
+   ],
+   "notes": "3061.82 之后的背后中景是同一镜头绕着尸体缓慢移动，直到表尾未再切换。"
+  },
+  {
+   "case": "2mkv",
+   "t0": 3484.27,
+   "t1": 3496.27,
+   "annotator": "subagent",
+   "boundaries": [
+    {
+     "t": 3489.52,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 3491.02,
+     "kind": "hard",
+     "conf": "low"
+    },
+    {
+     "t": 3492.27,
+     "kind": "hard",
+     "conf": "high"
+    }
+   ],
+   "notes": "前半段（3484.27-3489.27）是同一跟拍长镜头，人物走动与前景蜡烛变化都不是切换。"
+  },
+  {
+   "case": "2mkv",
+   "t0": 3997.02,
+   "t1": 4009.02,
+   "annotator": "subagent",
+   "boundaries": [
+    {
+     "t": 3998.52,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 4000.27,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 4001.77,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 4003.02,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 4003.77,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 4006.77,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 4007.02,
+     "kind": "hard",
+     "conf": "low"
+    }
+   ],
+   "notes": "3997.27 的红框只是同一男子近景里的动作变化，未标；4004 之后黄雾沼泽大远景为单镜头。"
+  },
+  {
+   "case": "2mkv",
+   "t0": 4851.74,
+   "t1": 4863.74,
+   "annotator": "subagent",
+   "boundaries": [
+    {
+     "t": 4852.74,
+     "kind": "soft",
+     "conf": "low"
+    },
+    {
+     "t": 4853.24,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 4857.49,
+     "kind": "hard",
+     "conf": "high"
+    }
+   ],
+   "notes": "4855.49/4858.24/4860.74 三处红框分别是监视器画面变化、摄影机经过灯管、镜头转入暗部，都是同一镜头内的明暗变化，未标。"
+  },
+  {
+   "case": "2mkv",
+   "t0": 6014.0,
+   "t1": 6026.0,
+   "annotator": "subagent",
+   "boundaries": [],
+   "notes": "单镜头：黄昏栏杆边白衣女子的同一个机位缓慢推近，12 秒内只有景别变大和人物细微动作，没有任何切换（整表也没有红框）。"
+  },
+  {
+   "case": "2mkv",
+   "t0": 6557.22,
+   "t1": 6569.22,
+   "annotator": "subagent",
+   "boundaries": [
+    {
+     "t": 6557.97,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 6563.47,
+     "kind": "hard",
+     "conf": "low"
+    },
+    {
+     "t": 6565.72,
+     "kind": "hard",
+     "conf": "low"
+    },
+    {
+     "t": 6567.22,
+     "kind": "hard",
+     "conf": "high"
+    }
+   ],
+   "notes": "6559.22 与 6560.22 的红框位于桌面→灰西装躯干→面部的连续上摇过程中，属同一镜头，未标。"
+  },
+  {
+   "case": "2mkv",
+   "t0": 7271.33,
+   "t1": 7283.33,
+   "annotator": "subagent",
+   "boundaries": [],
+   "notes": "单镜头：黑底片尾字幕滚动，48 格都是同一份字幕表向上滚动，无镜头切换（整表无红框）。"
+  },
+  {
+   "case": "test1",
+   "t0": 168.11,
+   "t1": 180.11,
+   "annotator": "subagent",
+   "boundaries": [],
+   "notes": "单镜头：披风骑手与白马在木栅城门前的同一机位，12秒内持续缓慢拉远（从近景收到带台阶与士兵的全景），骑手低头、抬手均为镜头内动作，无切换。"
+  },
+  {
+   "case": "test1",
+   "t0": 1540.57,
+   "t1": 1552.57,
+   "annotator": "subagent",
+   "boundaries": [
+    {
+     "t": 1542.07,
+     "kind": "hard",
+     "conf": "high"
+    }
+   ],
+   "notes": "首格起为特写，1542.07切出后整段为同一雾景空镜的缓慢横摇，片尾地面人物入画属同一镜头。"
+  },
+  {
+   "case": "test1",
+   "t0": 2086.25,
+   "t1": 2098.25,
+   "annotator": "subagent",
+   "boundaries": [],
+   "notes": "单镜头：摄影机持续跟拍长发男子穿过帐篷营地，一路右摇掠过篝火、铁砧，最终停在坐地的长发男身上，景别变化由移动完成，无切换。"
+  },
+  {
+   "case": "test1",
+   "t0": 3243.85,
+   "t1": 3255.85,
+   "annotator": "subagent",
+   "boundaries": [],
+   "notes": "单镜头：火光下持物坐地男子的一镜到底，画面亮度的周期性起伏是火光闪烁，全部红框均为爆闪误报。"
+  },
+  {
+   "case": "test1",
+   "t0": 3763.59,
+   "t1": 3775.59,
+   "annotator": "subagent",
+   "boundaries": [],
+   "notes": "单镜头：极暗夜景，人立灌木旁的同一机位缓慢微调，明暗变化为云层/曝光波动，无切换。"
+  },
+  {
+   "case": "test1",
+   "t0": 4271.01,
+   "t1": 4283.01,
+   "annotator": "subagent",
+   "boundaries": [],
+   "notes": "单镜头：荒原灰袍男从甩头（两格运动模糊即红框处）到俯身倒伏，同一机位同一构图连续动作，红框为运动模糊误报。"
+  },
+  {
+   "case": "test1",
+   "t0": 5406.71,
+   "t1": 5418.71,
+   "annotator": "subagent",
+   "boundaries": [
+    {
+     "t": 5411.46,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 5415.46,
+     "kind": "hard",
+     "conf": "high"
+    }
+   ],
+   "notes": "标准正反打对话：女(5406.71起)—男(5411.46起)—女(5415.46起)；5408.21/5408.96/5416.21/5417.96等红框为火光闪烁误报。"
+  },
+  {
+   "case": "test1",
+   "t0": 6261.73,
+   "t1": 6273.73,
+   "annotator": "subagent",
+   "boundaries": [
+    {
+     "t": 6271.73,
+     "kind": "hard",
+     "conf": "low"
+    }
+   ],
+   "notes": "夜景火炬集会大场面，整体持续推近；大量红框集中在火把晃动的亮暗突变格，均为误报。"
+  },
+  {
+   "case": "test1",
+   "t0": 7284.2,
+   "t1": 7296.2,
+   "annotator": "subagent",
+   "boundaries": [],
+   "notes": "单镜头：乌云压地平线的空镜，仅云层缓慢流动，无任何切换。"
+  },
+  {
+   "case": "test1",
+   "t0": 7404.37,
+   "t1": 7416.37,
+   "annotator": "subagent",
+   "boundaries": [],
+   "notes": "单镜头：雾中持剑男同一机位连续动作（横剑—俯身—起身举盾入画），7415.12红框为动作瞬间模糊误报。"
+  },
+  {
+   "case": "test2",
+   "t0": 418.48,
+   "t1": 430.48,
+   "annotator": "subagent",
+   "boundaries": [
+    {
+     "t": 418.98,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 419.48,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 420.23,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 420.98,
+     "kind": "soft",
+     "conf": "high"
+    },
+    {
+     "t": 422.23,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 422.98,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 423.73,
+     "kind": "soft",
+     "conf": "high"
+    },
+    {
+     "t": 424.23,
+     "kind": "hard",
+     "conf": "low"
+    },
+    {
+     "t": 424.98,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 425.48,
+     "kind": "soft",
+     "conf": "high"
+    },
+    {
+     "t": 425.98,
+     "kind": "hard",
+     "conf": "low"
+    },
+    {
+     "t": 426.73,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 426.98,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 427.48,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 428.23,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 429.23,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 429.48,
+     "kind": "soft",
+     "conf": "high"
+    },
+    {
+     "t": 429.98,
+     "kind": "hard",
+     "conf": "high"
+    }
+   ],
+   "notes": "派对/颁奖蒙太奇段，正反打硬切密集，多次以单帧黑场(闪黑)过渡。"
+  },
+  {
+   "case": "test2",
+   "t0": 931.51,
+   "t1": 943.51,
+   "annotator": "subagent",
+   "boundaries": [
+    {
+     "t": 932.26,
+     "kind": "hard",
+     "conf": "low"
+    },
+    {
+     "t": 932.51,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 933.01,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 933.51,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 934.26,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 935.51,
+     "kind": "hard",
+     "conf": "low"
+    },
+    {
+     "t": 939.26,
+     "kind": "hard",
+     "conf": "high"
+    }
+   ],
+   "notes": "赌场对话正反打，随后切到俯拍烟灰缸长镜头，末尾切 BRAWNDO 海报特写。"
+  },
+  {
+   "case": "test2",
+   "t0": 1327.99,
+   "t1": 1339.99,
+   "annotator": "subagent",
+   "boundaries": [
+    {
+     "t": 1328.24,
+     "kind": "hard",
+     "conf": "low"
+    },
+    {
+     "t": 1332.99,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 1338.99,
+     "kind": "hard",
+     "conf": "high"
+    }
+   ],
+   "notes": "体育场看台两人对话，正反打越肩切换（1332.99、1338.99 各换一次方向）。"
+  },
+  {
+   "case": "test2",
+   "t0": 1814.96,
+   "t1": 1826.96,
+   "annotator": "subagent",
+   "boundaries": [
+    {
+     "t": 1815.46,
+     "kind": "hard",
+     "conf": "low"
+    },
+    {
+     "t": 1816.96,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 1818.96,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 1820.46,
+     "kind": "hard",
+     "conf": "high"
+    }
+   ],
+   "notes": "机舱内橙衣男子戏：侧面特写、正面特写与含格子衫男子的全景来回硬切，后半段为同一正面特写。"
+  },
+  {
+   "case": "test2",
+   "t0": 2094.29,
+   "t1": 2106.29,
+   "annotator": "subagent",
+   "boundaries": [
+    {
+     "t": 2096.79,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 2097.79,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 2100.04,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 2104.54,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 2105.79,
+     "kind": "hard",
+     "conf": "low"
+    }
+   ],
+   "notes": "机舱三人对话与 PULL OVER 安全卡插帧交替，末尾切到昏暗酒吧/夜店镜头。"
+  },
+  {
+   "case": "test2",
+   "t0": 2759.44,
+   "t1": 2771.44,
+   "annotator": "subagent",
+   "boundaries": [
+    {
+     "t": 2760.44,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 2762.44,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 2766.44,
+     "kind": "soft",
+     "conf": "high"
+    },
+    {
+     "t": 2767.94,
+     "kind": "soft",
+     "conf": "low"
+    }
+   ],
+   "notes": "游行花车中景切全景再切街道俯拍，随后淡出黑场、淡入华盛顿纪念碑水面大远景。"
+  },
+  {
+   "case": "test2",
+   "t0": 3051.72,
+   "t1": 3063.72,
+   "annotator": "subagent",
+   "boundaries": [
+    {
+     "t": 3053.72,
+     "kind": "hard",
+     "conf": "low"
+    },
+    {
+     "t": 3055.22,
+     "kind": "hard",
+     "conf": "low"
+    },
+    {
+     "t": 3059.47,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 3060.97,
+     "kind": "hard",
+     "conf": "high"
+    }
+   ],
+   "notes": "两人跑过田野的远景跟拍段，多处机位变化存疑；后段切近景对话再切纸上涂鸦特写。"
+  },
+  {
+   "case": "test2",
+   "t0": 3285.0,
+   "t1": 3297.0,
+   "annotator": "main-agent",
+   "boundaries": [
+    {
+     "t": 3287.0,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 3289.75,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 3292.5,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 3294.75,
+     "kind": "hard",
+     "conf": "high"
+    }
+   ],
+   "notes": "已知漏切定向窗（主代理逐格目检）"
+  },
+  {
+   "case": "test2",
+   "t0": 3297.0,
+   "t1": 3309.0,
+   "annotator": "main-agent",
+   "boundaries": [
+    {
+     "t": 3299.75,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 3301.0,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 3303.0,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 3305.0,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 3306.75,
+     "kind": "hard",
+     "conf": "high"
+    }
+   ],
+   "notes": "已知漏切定向窗（主代理逐格目检）"
+  },
+  {
+   "case": "test2",
+   "t0": 3309.0,
+   "t1": 3321.0,
+   "annotator": "main-agent",
+   "boundaries": [
+    {
+     "t": 3310.0,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 3310.75,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 3312.25,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 3313.0,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 3315.25,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 3317.25,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 3319.25,
+     "kind": "hard",
+     "conf": "high"
+    }
+   ],
+   "notes": "已知漏切定向窗（主代理逐格目检）"
+  },
+  {
+   "case": "test2",
+   "t0": 3321.0,
+   "t1": 3333.0,
+   "annotator": "main-agent",
+   "boundaries": [
+    {
+     "t": 3324.25,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 3326.0,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 3328.0,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 3330.0,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 3332.25,
+     "kind": "hard",
+     "conf": "high"
+    }
+   ],
+   "notes": "已知漏切定向窗（主代理逐格目检）"
+  },
+  {
+   "case": "test2",
+   "t0": 3536.24,
+   "t1": 3548.24,
+   "annotator": "subagent",
+   "boundaries": [
+    {
+     "t": 3539.99,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 3540.99,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 3545.24,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 3547.49,
+     "kind": "hard",
+     "conf": "high"
+    }
+   ],
+   "notes": "竞技场怪兽卡车段：全景-奔跑者特写-卡车全景-观众席-红衣壮汉，四次硬切。"
+  },
+  {
+   "case": "test2",
+   "t0": 4041.01,
+   "t1": 4053.01,
+   "annotator": "subagent",
+   "boundaries": [
+    {
+     "t": 4041.76,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 4045.26,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 4048.51,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 4049.26,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 4051.76,
+     "kind": "hard",
+     "conf": "high"
+    }
+   ],
+   "notes": "观众特写切喷火男长镜头（火焰为镜头内效果不标），再切近景、蓝烟全景、末尾回喷火男。"
+  },
+  {
+   "case": "test2",
+   "t0": 4566.79,
+   "t1": 4578.79,
+   "annotator": "subagent",
+   "boundaries": [
+    {
+     "t": 4568.04,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 4570.54,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 4573.29,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 4575.79,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 4578.29,
+     "kind": "hard",
+     "conf": "high"
+    }
+   ],
+   "notes": "沙发全景与恐龙布景交替，再切两人越肩正反打，最后单人特写，均为硬切。"
+  },
+  {
+   "case": "test3",
+   "t0": 555.74,
+   "t1": 567.74,
+   "annotator": "subagent",
+   "boundaries": [
+    {
+     "t": 557.49,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 558.99,
+     "kind": "hard",
+     "conf": "high"
+    }
+   ],
+   "notes": "老年比尔博坐姿镜头 -> 书页字幕“there lived a Hobbit” -> 袋底洞室内长摇（从门口圆窗一路摇过挂画墙、落到绿色圆门走廊），558.99 之后整段为同一连续摇镜，559.74~563.49 的构图变化都是摇镜本身，不算切换。"
+  },
+  {
+   "case": "test3",
+   "t0": 1602.28,
+   "t1": 1614.28,
+   "annotator": "subagent",
+   "boundaries": [
+    {
+     "t": 1608.78,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 1610.28,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 1612.28,
+     "kind": "hard",
+     "conf": "high"
+    }
+   ],
+   "notes": "1602.28~1608.53 是众人围桌的广角长镜；之后地图特写/索林特写/地图特写三次插入互切。红框 1610.53、1613.53 落在镜头内部（1613.53 只是手臂伸入画面），未采纳。"
+  },
+  {
+   "case": "test3",
+   "t0": 2423.79,
+   "t1": 2435.79,
+   "annotator": "subagent",
+   "boundaries": [
+    {
+     "t": 2426.29,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 2433.79,
+     "kind": "hard",
+     "conf": "high"
+    }
+   ],
+   "notes": "地面跟拍比尔博跑动 -> 2426.29 硬切到夏尔正俯航拍（航拍段 2426.29~2433.54 为一整条缓慢拉升镜头）-> 2433.79 硬切回篱笆边行人地面镜头。"
+  },
+  {
+   "case": "test3",
+   "t0": 3707.04,
+   "t1": 3719.04,
+   "annotator": "subagent",
+   "boundaries": [
+    {
+     "t": 3710.04,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 3712.29,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 3713.04,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 3715.04,
+     "kind": "hard",
+     "conf": "low"
+    },
+    {
+     "t": 3717.04,
+     "kind": "hard",
+     "conf": "high"
+    }
+   ],
+   "notes": "洞穴内过肩镜头与咕噜特写、比尔博站立远景来回互切，剪辑密度中等。"
+  },
+  {
+   "case": "test3",
+   "t0": 4639.88,
+   "t1": 4651.88,
+   "annotator": "subagent",
+   "boundaries": [
+    {
+     "t": 4641.63,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 4644.38,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 4645.88,
+     "kind": "hard",
+     "conf": "low"
+    },
+    {
+     "t": 4649.38,
+     "kind": "hard",
+     "conf": "high"
+    }
+   ],
+   "notes": "甘道夫藏石后特写 <-> 山坡远景（小马奔走）互切两次；4645.88 起为队伍从石头后涌出的中景，一直持续到 4649.13，再切到乱石坡大全景直到表尾。红框 4650.63 在同一远景内，未采纳。"
+  },
+  {
+   "case": "test3",
+   "t0": 5385.4,
+   "t1": 5397.4,
+   "annotator": "subagent",
+   "boundaries": [
+    {
+     "t": 5387.4,
+     "kind": "hard",
+     "conf": "low"
+    },
+    {
+     "t": 5387.65,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 5389.4,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 5392.4,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 5395.65,
+     "kind": "hard",
+     "conf": "high"
+    }
+   ],
+   "notes": "瑞文戴尔蓝调大厅：埃尔隆德特写 -> 甘道夫特写 -> 过肩双人镜头 -> 带蜡烛的甘道夫特写 -> 5395.65 切到大厅全景（拱门下人物站立）。"
+  },
+  {
+   "case": "test3",
+   "t0": 6674.36,
+   "t1": 6686.36,
+   "annotator": "subagent",
+   "boundaries": [
+    {
+     "t": 6676.36,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 6678.61,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 6682.36,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 6684.11,
+     "kind": "hard",
+     "conf": "high"
+    }
+   ],
+   "notes": "比尔博特写 <-> 戴帽矮人特写 <-> 人群中的比尔博中景 <-> 矮人特写 <-> 比尔博持剑站立，四次硬切，节奏均匀。"
+  },
+  {
+   "case": "test3",
+   "t0": 7235.14,
+   "t1": 7247.14,
+   "annotator": "subagent",
+   "boundaries": [
+    {
+     "t": 7237.39,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 7244.39,
+     "kind": "hard",
+     "conf": "high"
+    }
+   ],
+   "notes": "洞穴远景（比尔博站立）-> 咕噜特写长段（7237.39~7244.14 机位基本不动，只是咕噜自己转头）-> 7244.39 切回含比尔博与咕噜的远景。"
+  },
+  {
+   "case": "test3",
+   "t0": 8871.36,
+   "t1": 8883.36,
+   "annotator": "subagent",
+   "boundaries": [
+    {
+     "t": 8871.86,
+     "kind": "hard",
+     "conf": "low"
+    },
+    {
+     "t": 8872.61,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 8873.86,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 8875.36,
+     "kind": "hard",
+     "conf": "low"
+    },
+    {
+     "t": 8875.86,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 8877.36,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 8878.61,
+     "kind": "hard",
+     "conf": "low"
+    },
+    {
+     "t": 8879.61,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 8881.11,
+     "kind": "hard",
+     "conf": "high"
+    },
+    {
+     "t": 8882.36,
+     "kind": "hard",
+     "conf": "high"
+    }
+   ],
+   "notes": "火烧森林会战段，剪辑极碎：暖色半兽人特写 -> 冷蓝火把镜头 -> 座狼火场 -> 马上骑手 -> 苍白兽人特写 -> 索林特写 -> 矮人群像 -> 白须矮人特写。本表内还有若干未被红框标出的可能切点（如 8872.11/8872.36 的糊帧、8873.36/8873.61 冷蓝段内部），受 4fps 采样限制无法确认。"
+  },
+  {
+   "case": "test3",
+   "t0": 9913.91,
+   "t1": 9925.91,
+   "annotator": "subagent",
+   "boundaries": [],
+   "notes": "单镜头：整张表 12 秒都是黑底滚动片尾字幕，字幕连续上滚，无机位/场景变化。"
+  }
+ ]
+}
