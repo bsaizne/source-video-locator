@@ -49,6 +49,7 @@ D:\claudework\benchmark
 | `mvp/scripts/review_progress_chain.py` | 进度链跳格复核（源码树记 on_progress，经产品自己的 `map_progress_stage`+`ProgressDebouncer` 换算；**按 pct 变化折叠**算停留；测量须独占设备） |
 | `mvp/scripts/review_packaged_support_log.py` | 真实**支持档**事后复核（隔离链配对 / 会话账 / 腿标记 / ERROR 信噪比；`started==0` 判 N/A 不算 PASS） |
 | `mvp/scripts/check_export_plan_invariants.py` | 导出计划四通道不变式常态守卫（4 片 × 4 通道，退出码可挂门槛） |
+| `mvp/scripts/shot_detect/eval_shot_detector.py` | 原片**镜头边界**评测 harness（尺子 = 同目录 `boundary_gt_v1.json`，44 窗 / 125 条 conf=high 目检边界；模式 `ablation`/`arms`/`ceiling`/`holdout`/`region`；主容差 ±1.0s 因现役索引 1fps） |
 | `mvp/scripts/smoke_*.py` | 冒烟：media 23 / device+feature_store 25 / retrieval+ranking 6 / localization+confidence 9 / segment 6 |
 
 ---

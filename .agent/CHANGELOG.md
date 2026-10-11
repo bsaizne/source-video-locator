@@ -1,5 +1,136 @@
 # CHANGELOG
 
+## 2026-10-11（补十三后专项）— test1 长镜头定性：门 v2 判负假设不成立，主因=同场景切换两通道无信号
+
+- **触发**：用户选做补十三 ⑥ 的两项遗留 —— (iii) test1 >30s 假镜头变差单独定性 + (ii) 老用户
+  `derived_stale` 升级路径拍板材料。
+- **口径更正（先改自己的档案数）**：档案原写「39 → 50」，39 实为 **v1 门中间产物**
+  （`work/shot_gt/a2_refresh_report_run1_preedit.json`：scn1=33 → v1=39），终版 v2=50。
+  与 scn1 基线比是 **33 → 50**。
+- **读表**（`work/shot_gt/t1_long_probe.py`，只读）：scn2 的 50 条 >30s 中 14 条在 scn1 同段亦 >30s
+  （原样保留）、36 条新出现/加宽；宽度增量集中在 30-60s 档（+30）。
+- **目检**（50 条逐条接触表 @0.25fps 全段覆盖，4 子代理同协议标注 + 主代理抽读极值 3 张复核一致）：
+  **24 漏切 / 17 真长拍 / 9 存疑**。漏切形态 = 同场景正反打/机位硬换（《北人》解说片）；
+  idx942（500s）= 片尾字幕块，不切反而合理。
+- **归因**（`work/shot_gt/t1_missed_attr.py` + 像素序列缓存 `t1_pixel_cache.npz`，52 个目检切换时刻
+  逐条走生产判据链）：**43/52 两腿皆无候选**（像素分中位 0.04 ≪ 门 0.12，CLS 距离亦不足）；
+  **9/52 被持续性门否** = 7 条 dist<0.10（同场景 A-B-A，正属门的设计意图）+ 2 条 dev>0.30。
+  ⇒ **「门 v2 过严」判负**：放宽门最多救 9/52 且放洪误切 ⇒ **不动参数、不立项**；
+  这 43 条 = 「兄弟机位/同质场景」已知特征上限族在边界通道上的投影，要攻需新证据通道（局部差异/主体跟踪）。
+- **(ii) 现状核清**（只读代码，未改）：重刷在**首次分析任务内**触发
+  （`locate → build_original_index → derived_stale → refresh_derived`），UI 阶段标签「准备原片索引」+
+  文案「正在升级母片镜头表（复用已有特征）」→ 逐帧进度「正在扫描母片镜头边界 N/M」→ 可取消
+  （cancel_token 每 512 帧检查）；实测 ≈1.1~2.7 min/小时源片。**建议 = 维持现状**，
+  不做启动期后台预扫（像素预扫纯 CPU 解码，与前台任务抢资源，收益只是把等待挪个位置）。
+- 本专项 `mvp/src` 零改动；产物在 `work/shot_gt/`（不入库），档案三处原地更新
+  （STATE `Current Problem` 首条附注 + `Current Task` ⑥(a) + `Next Actions` 10；TODO P0 块）。
+
+## 2026-10-11（续63 补十三）— A2 落地：scn2 = 像素通道 + CLS 证据 + 持续性门（镜头检测治本线兑现）
+
+- **触发**：补十二 待拍板的 (a)「A2 开码」获口令。目标 = 把 `scenes.npy` 的边界召回从
+  0.232（只找回 23% 真边界）抬起来，且**不重抽 CLS 特征**。
+- **新增层**：`mvp/src/engine/segment/scene_detect.py`（像素流式判据 `PixelStream` +
+  `detect_pixel_boundaries`（局部极大 + 绝对门 + 相对邻域中位数）+ `block_stats`/`block_gate_ok`
+  持续性门 + `detect_scene_bounds` 双腿融合 + `build_scene_table`）；参数进
+  `PipelineConfig.scene_*` 18 个旋钮；`FeatureStore` 加 `_scan_pixel_boundaries` 与
+  **`refresh_derived`（只重算派生表）**；`IndexValidation` 加内部字段 `derived_stale`
+  （不进 `to_dict` ⇒ 对外契约不变）；派生版本位 `scn1 → scn2`。
+- **两处真缺陷（本批的核心价值）**：
+  ① **持续性门 v1 无效**：只要求「后块 ≠ 前块」压不住闪电/爆白（每一发本身都不一样）。
+     v2 改判「**后块内部要落定**」= `(前后块距离 >= 0.10) 且 (后块内最大偏离 <= 0.30)`。
+     同尺留出半窗 F1：无门 0.796 → v1 0.842 → **v2 0.875**。
+  ② **网格吸附一律向上取整**：`searchsorted(times, t, side="left")` 把每条像素边界系统性推晚，
+     落盘表命中条有符号位移中位 **+0.215s**/绝对 0.28s（探针臂 0.05s）。改 `_snap_index()` 就近吸附后
+     同批候选尺子 F1 **0.785 → 0.832**；落盘表全窗 0.752→0.779、内区 0.771→0.800、
+     **±0.5s 档 0.539→0.697**（落点变准的直接证据）。
+- **四片重刷实测**（`refresh_derived`，纯 CPU、复用特征）：墙钟 206.8/373.5/229.7/192.8s；
+  边界 2675 → **7606**（×2.8）；中位镜头宽 7/9/8/7s → **2/4/2/2s**；原投诉区 test2 3285-3333
+  从「38s+47s 两块假镜头」变 1~8s 细段（该 48s 切 20 条 vs 目检 21 条）。
+- **验收（同脚本双臂，逐项命令输出留档 `work/v2_accept/`）**：后端全套 **Ran 661 OK (skipped=2)** ·
+  API **Ran 128 OK** · `check_export_plan_invariants.py` **FAILED=0**（贴接重叠全 0、并集覆盖 Δ=0）·
+  派生表成套体检 **BAD=0** · `rerun_fastglobal_default.py` 四片 + `measure_four_results.py`：
+  **严格 130→135/139、导出实得（仅主 span）112→131/139（+19）**、场景 138/139 持平、负例 4/9 持平、
+  支撑率 55.9%→64.8% ⇒ **严格与导出实得缺口 −18→−4**（续31 口径缺陷被顺带吃掉大半）。
+- **成片渲染 = 一条子判据红，已定性为判据缺陷**：`accept_video_render_2mkv.py` 对 2.mkv 真渲染
+  72 段 / 3249 帧（帧数逐帧等值、帧间隔无异常、音轨在位、`h264_amf`、接缝干净）却 `VERDICT FAIL`，
+  唯一越界项 `alignment_within_1_frame`。把探针从抽 8 条扩到**全 72 条**：偏移分布
+  **{-1: 35, 0: 36, -2: 1}** ⇒ −1 是取中帧的半帧舍入律；唯一 −2 的 clip51
+  `mad_at_zero=0.378 / mad_best=0.364`（差 0.014，曲线平）= 静态镜头上 argmin 挑噪声，
+  而真越界形态是断崖（clip0 2.959→0.350、clip10 1.497→0.402）。逐张读图确证 clip51/clip00
+  同机位同构图 ⇒ **不是定位错**。建议（未动，等口令）：该判据加「偏移≠0 须伴随 MAD 显著下降」。
+- **我自己的操作失误（留痕 + 已修）**：重刷脚本在刷新前**无条件覆盖备份**，第二次跑把 2mkv/test1 的
+  真 scn1 表冲成了 scn2 产物。已用「从现存特征重算 scn1」复原，且**先在 test2/test3 上验过与真备份
+  逐字相等**才动手（`work/shot_gt/a2_restore_scn1.py`；重算行数 699/644 亦与首次日志 before 值对得上）；
+  备份改 write-once。⚠️ 备份目录里 `index.json` 仍是 scn2 时代 ⇒ 真回滚要连版本串一起改。
+  另一次：我第一次起四片重跑被脚本的「产物已存在即 skip」静默跳过，靠读日志发现（差点把 skip 当成跑过）。
+- **档案**：`Current Task` 新增本块并把 **续63 补十** 整块逐字迁 `archive/STATE_history_20261011.md`
+  （保持 ≤3 块）；`TODO.md` P0 换成本批、把 **补十二** 块逐字迁 `archive/TODO_history_20261011.md`；
+  `Current Problem` 顶部加本批结论并把 A1 条的「待拍板」更正为已落地；`Next Actions` 第 9 条结案、
+  第 10 条换成本批待办与三项遗留；`Known Issues` 加教训 ⑱。
+- **同批追加（13:4x，口令「直接开始修对那档」）— 对齐判据修完，门槛转绿**：
+  `alignment_within_1_frame` 换成**离散度**判据（新增纯函数 `clip_mid_times` + `alignment_verdict`），
+  并修掉两层取帧错：`-ss` 语义是「第一个 PTS ≥ t」⇒ 取第 k 帧要请求 `(k-0.499)/fps`（写 `+0.5`
+  会取到下一帧）；原片侧本有 ±1 帧不确定性 ⇒ 绝对偏移判据超出测量精度，常数项归「约定」。
+  实测：`mad_at_zero` 中位 0.919→**0.370**；72 段里 15 段有信息且全部 -1 ⇒ `base=-1, dispersion=0`
+  ⇒ **`VERDICT PASS` / exit 0**。新增 `mvp/tests/test_render_alignment.py` **7 项锁**，
+  后端全套 **Ran 668 OK (skipped=2)**、API **Ran 128 OK**。
+  ⚠️ 踩到一次**空锁**：新测试首版用 `io.StringIO` 挡脚本模块级 `stdout.reconfigure`（该类没这方法）
+  ⇒ 7 项全 skip 却报 `OK`；已换成带 `reconfigure` 的替身，并把「只有缺 cv2 才允许 skip」写死。
+- **未提交、未出包**（等口令）。
+
+## 2026-10-11（续63 补十二）— A1 离线扫参 + 边界尺子 + A2 预演（镜头检测治本线第一步，`mvp/src` 零改动）
+
+- **触发**：口令「3」= 开 `PLAN_SHOT_DETECTION_20261011.md` §8 的第一步（A1 扫参 + §5.1 边界 GT，
+  都不动 runtime、不重建索引）。
+- **① 先造尺子**（§5.1「没有尺子禁止开 runtime 改动」）：4 片分层抽 44 个 12s 窗（seed 20261011，
+  含 test2 已知漏切区定向 4 窗）= 540s（全片 31124s 的 **1.7%**），4fps 接触表（192×108 逐格带绝对秒）
+  **逐格目检** ⇒ **150 条边界 / 125 条 conf=high**。入库 `mvp/scripts/shot_detect/boundary_gt_v1.json`
+  + `windows_v1.json` + 常设 harness `eval_shot_detector.py`（5 模式：ablation/arms/ceiling/holdout/region）。
+  标注分工：4 个子代理按同一协议分片，主代理**亲自抽读三端极值**（0 边界窗=单镜头长拍 / 18 边界窗=闪黑
+  蒙太奇 / 10 边界窗=快切）逐张复核后采信。
+  ⚠️ **口径更正**：现役索引是 **1fps**（`times.npy` `dt=1.000`、`feature_version=...@1_l2`），
+  立项文档 §1 写的「0.5fps」是错的 ⇒ 检测器边界粒度 1s ⇒ **主容差只能 ±1.0s**，±0.5s 只对像素通道公平。
+- **② 现役成绩**：`scenes.npy` **P 0.707 / R 0.232 / F1 0.349**（±1.0s，conf=high）= **只找回 23% 真边界**；
+  定向区铁证 = test2 3285-3333 这 48s 目检 **21 个边界（平均镜头 2.2s）**，现役给 **2 段**（38s + 47s 假镜头）。
+- **③ 分腿消融**：`z_thresh` 1.5→关 单腿 R 0.232→**0.504**；`min_shot_s` 3.0→1.0 单腿 **+0.008**；
+  `cut_abs` 单腿 +0.000；但 **ms1.0 + z 关 = R 0.664** ⇒ 两腿**强交互**（z 先杀光候选，最短镜头腿无从下手）
+  ⇒ 教训 ⑰「单旋钮消融会互相掩蔽」。机理：局部 z-score 以自身邻域均值为基线，快切段邻域本身就全是切
+  ⇒ 真切的 z 只有 0.5~1.2（现役参数下 **79~94% 真边界邻域 z<1.5**）；且 `min_shot_s=3.0` > test2 平均镜头
+  2.2s ⇒ 在该类片上**结构性**把真镜头并成假镜头。
+- **④ 天花板**：真边界邻域内 s 中位 0.70~0.88（`<0.15` 占 0~1%）⇒ 不是「CLS 看不见」而是**看见了但无
+  可分离尖峰位置**。「候选集可达召回」2mkv 0.762 / test3 0.806 / test1 1.0(n=3 不外推) / **test2 0.557**
+  ⇒ **快切片 44% 真边界在 1fps CLS 序列上连局部极大都没有**，任何阈值救不了；调参后 CLS 实得 R 已贴顶。
+- **⑤ 留出窗对照**（防「扫参扫到噪声上」）：每片按时间奇偶分半，只在选参半选 TOP5 再到留出半验
+  ⇒ 现役 F1 0.341→留出 0.359；调参臂 0.727→留出 **0.653** / 0.723→**0.660** ⇒ **增益复现，非过拟合**。
+  ⚠️ 只做了「窗」的二分，未做「片」的二分 ⇒ 跨片泛化未独立验。
+- **⑥ A2 预演**（把赌注做成数据）：像素通道 = 160×90/10fps 解码 + 相邻帧 32-bin 灰度直方图 L1 与
+  mean-abs-diff 各半加权 + 局部极大 + NMS(0.4s) ⇒ 同尺同窗 **P 0.706 / R 0.864 / F1 0.777**（±1.0s；
+  ±0.5s 也几乎不掉，因像素通道粒度 0.1s）；定向区切出 19 边界 vs 目检 21。
+  ⚠️ **朴素并集不能用**：CLS∪像素 R 0.944 但 **P 塌到 0.461** ⇒ A2 融合必须「像素定位置 + CLS 作第二证据
+  + NMS + min_shot」，不是 OR。
+- **⑦ 成本**：300s 片段整段解码实测 17~18s，**与输出 300 帧还是 3000 帧几乎无关**（1fps 全分辨率 18.4s /
+  1fps 缩放 16.9s / 10fps 缩放 17.6s）⇒ 成本主体=解码，直方图是零头；现役建索引已在为全片解码付钱
+  ⇒ A2 边际 ≈ 再一遍解码 ≈ **+5min/5000s 片**（相对现役 22~31min），纯 CPU 可与 DML/MPS 并发 ⇒ 墙钟近零。
+  ⚠️ 该数来自探针单进程，非生产索引路径，A2 实现时须同脚本双臂实测。
+- **⑧ 门禁**：本批 `mvp/src` 与 `mvp/api` **零改动** ⇒ 无新单测、未跑后端全套（不适用）；
+  自证 = 常设 harness 从新位置复跑，逐条复现探索期读数（ablation 表与 `work/shot_gt/a1_ablation.json` 一致、
+  arms 表与 `work/shot_gt/a2_preview.json` 一致）。
+- **修自己的探针 bug 两处（留痕）**：(a) 消融臂把 `context_window` 显式设成 3，而生产走
+  `_context_window(smooth=1)=7` ⇒ 现役臂一度 0 预测、z 分布整体失真，改用 `SEG._context_window` 后
+  现役臂精确复现 `scenes.npy` 基线（P/R/F1 0.707/0.232/0.349、2671 边界）= 复算与生产同一性的自检；
+  (b) 三个脚本各自 `TextIOWrapper(sys.stdout.buffer)` 重复包装 ⇒ 旧 wrapper 被 GC 时关掉共享 buffer
+  ⇒ `ValueError: I/O operation on closed file`，改 `sys.stdout.reconfigure(...)`（原地改，不新建对象）。
+- **档案**：`Current Task` 新增本块并把 **续63 补九** 整块逐字迁 `.agent/archive/STATE_history_20261011.md`
+  （保持 ≤3 块）；`TODO.md` P0 新增本块并把 3 个退休块逐字迁 `.agent/archive/TODO_history_20261011.md`
+  （保持 ≤1 块）；`Current Problem` 顶部加本批结论并把第十四轮那句「**未提交（待 push）**」**更正为已提交已推**
+  （B 代码笔 `098021b`、档案笔 `c873e18`，实测均在 origin/master）；`Known Issues` 加教训 ⑰；
+  `PLAN_SHOT_DETECTION_20261011.md` 里 B 的提交指针由 `c873e18`（档案笔）更正为 `098021b`（代码笔）。
+- **待拍板（未动 runtime）**：(a) **A2 开码**（推荐，`scn1→scn2` bump 只重算场景/事件表、不重抽 CLS）/
+  (b) **A1 调参批**（R 0.23→0.63，代价=全片边界数翻倍 2671→5288~5910，下游吸附/扩宽/事件表全受影响）/
+  (c) **A3** 接 PySceneDetect 只当第三方评测尺子核「目检与像素同源」的偏置量。B 护栏 K=2.5 保留。
+- **未提交**（等口令）：`mvp/scripts/shot_detect/*` + `mvp/docs/FINDINGS_SHOT_DETECTION_A1_20261011.md`
+  + 本批档案改动 + 立项文档指针更正。
+
 ## 2026-10-11（续63 补十一·第十四轮）— 成片"重合"多模态定性 + B 落地（取材扩宽相对护栏 K=2.5）
 
 - **定性（用户令"你自己拿多模态看"）**：逐帧读 `tset2-ed.mp4`(69s 快剪解说，~1s/切) + 原片 3285-3323。
@@ -2670,3 +2801,19 @@ STATE `Current Task` 顶部新增补八块并把补七的开放项②标为闭�
 ### Notes
 
 - Created `checkpoint-2026-10-11-0036.md` checkpoint (2 modified/untracked file(s)).
+
+### Notes
+
+- Created `checkpoint-2026-10-11-0039.md` checkpoint (1 modified/untracked file(s)).
+
+### Notes
+
+- Created `checkpoint-2026-10-11-024836.md` checkpoint (18 modified/untracked file(s)).
+
+### Notes
+
+- Created `checkpoint-2026-10-11-1349.md` checkpoint (21 modified/untracked file(s)).
+
+### Notes
+
+- Created `checkpoint-2026-10-11-1349.md` checkpoint (22 modified/untracked file(s)).
