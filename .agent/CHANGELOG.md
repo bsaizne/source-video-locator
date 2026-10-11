@@ -1,5 +1,31 @@
 # CHANGELOG
 
+## 2026-10-11（续63 补十四）— A2 提交推送 + 出包 r21（干净 commit 构建）
+
+- **触发**：口令「不用加，push吧，然后出包」——(ii) 拍板 = 升级路径维持现状、文案不加预计耗时；
+  补十三全批提交并出 r21。
+- **提交**：代码笔 `9481f39`（scene_detect/feature_store/config/domain/locator_service + 4 测试文件
+  + 尺子 shot_detect/ + 渲染判据修复 + 两份文档，15 files +3099/−54）+ 档案笔 `09714ab`
+  （STATE/TODO/CHANGELOG/INDEX + 历史迁 archive + 3 checkpoint）⇒ push `c873e18..09714ab`（3 笔，
+  含此前 `4b44a47`）。
+- **出包前门禁（同树重跑拿实时输出）**：后端 **Ran 668 OK (skipped=2)** · API **Ran 128 OK** ·
+  `git status` 干净 ⇒ **r21 = 干净 commit `09714ab` 构建**（包 == commit，同 r18/r19 口径；
+  含 A2 scn2 全部 + 第十三轮导出对话框 UI 修复）。
+- **构建**：`build-release.ps1` 一条链 `PS_EXIT=0`（资产 sha fail-fast 断言全过）。
+- **包内三道验收全绿**（`work/v2_accept/{accept_bundle,accept_render,invariants}_r21.log`）：
+  bundle **26 PASS / 0 FAIL**（DirectML 生效 wall=33.1s · 剪映通道 http=200 草稿在位 ·
+  隔离 `reaped exitcode=0` · 12 行腿埋点在位）· render **FAILED=0**（R1 completed wall=60.1s ·
+  64 段无交叠 · 136.366 vs 136.344 · h264_amf）· 导出计划不变式 **FAILED=0**（4 片 × 4 通道）。
+- **zip 身份**：`Video-Locator-win-x64-20261011r21.zip` 981,685,359B / 7,078 条目 / testzip=None；
+  **zip 内 backend.exe 77,493,043B sha16 `fa3c394567cc17d2` 与磁盘逐字节相等**
+  （对 r20 77,474,898B +18,145B ⇒ 与「r20 后 `mvp/src` 只有 A2 一处改动面」相容，证明确实重建进包）。
+- ⚠️ 包内**未实测**项（如实登记）：老用户 `derived_stale` 首触重刷路径（accept 夹具是全新索引态，
+  不经这条路）；(ii) 已拍板维持现状，该项留作观察，不建包侧锁。
+- release/ 现四档（r21 现役 + r20 + r19 + r18）；按「最新+上一档」应删 r18，**等口令**
+  （删前照例 `zip_identity.py` 验回滚档可读）。
+- 采坑一条：`accept_bundle_r21.log` 混编码，`grep` 当二进制、GBK 控制台 `print` 提取行直接崩
+  （`\ufffd` 不可编码）⇒ 提取脚本一律 `stdout.reconfigure(utf-8)`（教训速查同族，再犯登记）。
+
 ## 2026-10-11（补十三后专项）— test1 长镜头定性：门 v2 判负假设不成立，主因=同场景切换两通道无信号
 
 - **触发**：用户选做补十三 ⑥ 的两项遗留 —— (iii) test1 >30s 假镜头变差单独定性 + (ii) 老用户
