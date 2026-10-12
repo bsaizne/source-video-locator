@@ -30,6 +30,10 @@
   （需 dispatch `h3-macos-mps.yml`，head=master 即含本批修复），**Windows zip 不挂 GitHub**。
   我此前理解成上传 Windows zip，且 credential helper 挂死（rc=124 零输出，按纪律不重试）停在待传
   ⇒ 该动作作废。mac 更新仍走老路：用户手动 dispatch（或给令牌由我 dispatch）。
+- **mac 更新已结清（同批 22:5x）**：用户 dispatch run `38262048171`（head `686b178`）三 job 全绿
+  （mps-poc 5.8 / tests-macos 14.9 / package 11.4 min，全程 27min）⇒ `mac-alpha` mac zip 覆盖为
+  916,823,896B（updated_at 2026-10-12T14:45:51Z，+54KB vs 旧版）。⚠️ 档案旧口径「一次≈180 macOS
+  分钟」与实测 27 分钟差 6 倍，未深究（可能是旧值含排队/多 attempt），引用时以实测为准。
 
 ## 2026-10-11（续63 补十四）— A2 提交推送 + 出包 r21（干净 commit 构建）
 

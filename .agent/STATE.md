@@ -75,6 +75,11 @@
 > **口径更正（用户澄清）**：「推 release」= **更新 mac-alpha 上的 mac 包**（走 mac CI dispatch），
 > **Windows zip 不挂 GitHub**（继续本地分发）。我先前把「挂r22即可」理解成上传 Windows zip，
 > 并因 helper 挂死停在待传——该动作作废，Windows zip 不传。
+> **⑦ mac 更新已结清（2026-10-12 22:5x 实测公开 API）**：用户 dispatch 的 run `38262048171`
+> （head `686b178`，含 SegmentOverlap 修复）三 job 全绿 = mps-poc 5.8min / mvp-tests-macos 14.9min /
+> macos-package 11.4min，全程 27min（远快于档案写的 ≈180 macOS 分钟——该口径过期，留待下次核）；
+> `mac-alpha` 的 `Video-Locator-mac-arm64.zip` 已覆盖 = **916,823,896B / updated_at 2026-10-12T14:45:51Z**
+> （对旧版 916,769,503B +54KB，与本批代码改动量相容）。
 > 产物：`mvp/src/app/exporters.py` · `mvp/api/routes/results.py` · `mvp/tests/test_exporters.py` ·
 > `mvp/api/tests/test_api.py`；真机日志与解包在 `work/support_20261011b/`（不入库）。
 
@@ -528,4 +533,4 @@
 
 ## Last Updated
 
-2026-10-12 21:55
+2026-10-12 22:55

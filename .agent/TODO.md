@@ -12,7 +12,7 @@
 > 修 = 卷轴槽位与累加同吃下限（结构性无重叠）+ `/api/export` 意外异常落结构化 400（UI 不再误报
 > fetch failed）。门禁 670/130/不变式全绿。**顺带真机实证 derived_stale 首触重刷路径（109s）**。
 > **r22 已出**（干净 commit `36dec63`，三道包内验收全绿，zip backend.exe sha16 `f0d00f10c4123813`）；
-> 「推release」=更新 mac 包（需 dispatch，Windows zip 不挂）；release/ 四档 r22/r21/r20/r19，删 r19 等口令。
+> ✅ mac 包已更新（用户 dispatch run 38262048171 三 job 全绿，mac zip 覆盖为 916,823,896B）；Windows zip 不挂 GitHub；release/ 四档 r22/r21/r20/r19，删 r19 等口令。
 > 明细 = STATE Current Task 顶部「补十五」块。
 
 ## P1 — Next
