@@ -26,8 +26,10 @@
   `36dec63` 构建；bundle/render/不变式三道 FAILED=0；zip 981,686,020B / 7,078 条目 / testzip=None /
   backend.exe 77,493,384B sha16 `f0d00f10c4123813` == 磁盘（对 r21 +341B）。
   release/ 现四档 r22/r21/r20/r19，删 r19 等口令。
-- **挂 GitHub release 未成**（口令「挂r22即可」）：credential helper 挂死（rc=124 零输出，
-  `GIT_TERMINAL_PROMPT=0` 下不弹窗、按纪律不重试）⇒ zip 本地待传，等用户给可写令牌或网页端手拖。
+- **口径更正（用户澄清「我说的推release是更新mac版本」）**：「挂r22」= 更新 mac-alpha 的 **mac 包**
+  （需 dispatch `h3-macos-mps.yml`，head=master 即含本批修复），**Windows zip 不挂 GitHub**。
+  我此前理解成上传 Windows zip，且 credential helper 挂死（rc=124 零输出，按纪律不重试）停在待传
+  ⇒ 该动作作废。mac 更新仍走老路：用户手动 dispatch（或给令牌由我 dispatch）。
 
 ## 2026-10-11（续63 补十四）— A2 提交推送 + 出包 r21（干净 commit 构建）
 

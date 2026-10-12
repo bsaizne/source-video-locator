@@ -72,8 +72,9 @@
 > 不变式 FAILED=0）；zip `Video-Locator-win-x64-20261012r22.zip` 981,686,020B / 7,078 条目 /
 > testzip=None / **zip 内 backend.exe 77,493,384B sha16 `f0d00f10c4123813` == 磁盘**（对 r21 +341B，
 > 与本批两处小改动相容）。release/ 现四档 r22/r21/r20/r19，按「最新+上一档」应删 r19，等口令。
-> **挂 GitHub release（mac-alpha，口令「挂r22即可」）**：上传死在 credential helper 挂死
-> （rc=124 零输出，GIT_TERMINAL_PROMPT=0 下不弹窗不重试）⇒ **zip 已在本地待传**。
+> **口径更正（用户澄清）**：「推 release」= **更新 mac-alpha 上的 mac 包**（走 mac CI dispatch），
+> **Windows zip 不挂 GitHub**（继续本地分发）。我先前把「挂r22即可」理解成上传 Windows zip，
+> 并因 helper 挂死停在待传——该动作作废，Windows zip 不传。
 > 产物：`mvp/src/app/exporters.py` · `mvp/api/routes/results.py` · `mvp/tests/test_exporters.py` ·
 > `mvp/api/tests/test_api.py`；真机日志与解包在 `work/support_20261011b/`（不入库）。
 
