@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -59,6 +60,25 @@ def main() -> int:
     if not exe.exists():
         print("FAILED=1")
         return 1
+
+    # --- 桥接层包侧锁（2026-10-12 续63 补十六）---
+    # 真机 r21/r22 支持档：分钟级**同步**导出撞 Node global fetch 的 undici 默认
+    # headersTimeout=300s（实测 reject_after_ms=300504 / message="fetch failed"）⇒ UI 弹
+    # 「无法连接后端服务」，而后端仍在跑（同档实测 571s/475s 的成功导出 = 成功被报成失败）。
+    # 修 = 桥接层默认走 node:http（无隐式头超时）+ 30min 显式兜底；另：非 2xx 必须把错误体
+    # 当 data 带回，否则包内看不到后端写好的中文话术与 LOC 码（dev 态正常 ⇒ 只有包内暴露）。
+    # 两处都在 Electron 主进程 JS 里 ⇒ 只能实测包体，源码树全绿抓不到（教训 ⑧ 同族）。
+    bridge_js = RES / "app" / "out" / "electron" / "backend" / "bridge.js"
+    if bridge_js.exists():
+        btxt = bridge_js.read_text(encoding="utf-8", errors="replace")
+        check("桥接层默认走 node:http（非 undici global fetch）",
+              'require("node:http")' in btxt and "fetchImpl = globalThis.fetch" not in btxt,
+              str(bridge_js))
+        check("桥接层非 2xx 把错误体透传成 data（UI 才拿得到 message/code）",
+              re.search(r"if \(!res\.ok\) \{\s*\n\s*return \{[\s\S]{0,300}?data: bodyData,", btxt)
+              is not None, "")
+    else:
+        check("桥接层 JS 在位", False, str(bridge_js))
 
     manifest = PATCH_DIR / "asset.json"
     check("patch 资产清单在位", manifest.exists(), str(manifest))

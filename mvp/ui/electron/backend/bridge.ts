@@ -6,6 +6,7 @@
 //   - createBackendRequestHandler(...)   -> the main-process handler for `backend:request`
 // The main process does the actual fetch (Node), so the renderer never talks to
 // localhost directly — which removes the CORS restriction a `file://` page hits.
+import * as http from 'node:http'
 import type { BackendConfig } from './config'
 
 export interface BridgeRequestPayload {
@@ -50,6 +51,54 @@ type FetchLike = (
   url: string,
   init?: { method?: string; headers?: Record<string, string>; body?: string },
 ) => Promise<{ ok: boolean; status: number; json(): Promise<unknown> }>
+
+/** 桥接请求的显式兜底上限。取值依据 = 真机支持档实测最坏导出 783s（另有 571s/475s 的成功
+ *  导出），留出 ~2× 余量；不是「无限等」——连接真挂死仍会被切断并回 network:true。 */
+export const BRIDGE_REQUEST_TIMEOUT_MS = 30 * 60 * 1000
+
+/** 为什么不用 globalThis.fetch：Node 全局 fetch 走 undici，默认 headersTimeout=300s
+ *  （实测 `reject_after_ms=300504` / `message="fetch failed"`），而剪映/工程导出是分钟级
+ *  同步请求 ⇒ 客户端 300s 先放弃，UI 弹「无法连接后端服务」，后端却仍在跑并最终产出草稿
+ *  （成功被报成失败）。node:http 客户端没有隐式头超时，超时只由显式 setTimeout 决定。
+ *  形状与 FetchLike 一致，故调用点（含单测桩）契约不变。 */
+export function httpRequester(
+  url: string,
+  init: { method?: string; headers?: Record<string, string>; body?: string } = {},
+  timeoutMs: number = BRIDGE_REQUEST_TIMEOUT_MS,
+): Promise<{ ok: boolean; status: number; json(): Promise<unknown> }> {
+  return new Promise((resolve, reject) => {
+    const u = new URL(url)
+    const req = http.request(
+      {
+        hostname: u.hostname,
+        port: u.port ? Number(u.port) : 80,
+        path: `${u.pathname}${u.search}`, // 会话令牌在查询串里，必须一起转发
+        method: init.method ?? 'GET',
+        headers: { 'content-type': 'application/json', ...(init.headers ?? {}) },
+      },
+      (res) => {
+        const chunks: Buffer[] = []
+        res.on('data', (c: Buffer) => chunks.push(c))
+        res.on('end', () => {
+          const text = Buffer.concat(chunks).toString('utf-8')
+          const status = res.statusCode ?? 0
+          resolve({
+            ok: status >= 200 && status < 300,
+            status,
+            json: async () => JSON.parse(text) as unknown,
+          })
+        })
+        res.on('error', reject)
+      },
+    )
+    req.setTimeout(timeoutMs, () => {
+      req.destroy(new Error(`bridge request timed out after ${timeoutMs}ms`))
+    })
+    req.on('error', reject)
+    if (init.body != null) req.write(init.body)
+    req.end()
+  })
+}
 
 const ALLOWED_METHODS = new Set(['GET', 'POST', 'PUT', 'DELETE', 'PATCH'])
 
@@ -108,7 +157,7 @@ export function buildBackendBridge(ipc: BackendIpc): BackendBridge {
  *  and normalises the reply to a BridgeResponse (never throws). */
 export function createBackendRequestHandler(
   config: BackendConfig,
-  fetchImpl: FetchLike = (globalThis as unknown as { fetch: FetchLike }).fetch,
+  fetchImpl: FetchLike = httpRequester,
 ): (payload: BridgeRequestPayload) => Promise<BridgeResponse> {
   return async (payload) => {
     const path = normalizePath(payload?.path)
@@ -146,17 +195,22 @@ export function createBackendRequestHandler(
       }
     }
 
-    let data: { error?: string; detail?: string } | unknown = null
+    let data: { code?: string; message?: string; error?: string; detail?: string } | unknown = null
     try {
       data = await res.json()
     } catch {
       /* non-JSON body */
     }
-    const bodyData = (data ?? {}) as { error?: string; detail?: string }
+    const bodyData = (data ?? {}) as { code?: string; message?: string; error?: string; detail?: string }
     if (!res.ok) {
+      // `data` 必须一起带回：渲染层 HttpServiceAdapter 按 `data.message`/`data.code` 呈现
+      // 后端写好的中文话术与稳定错误码。旧写法只给 error/detail ⇒ 打包态把
+      // 「导出失败（…），请把日志发给支持人员（LOC-9999）」这类成品文案降级成
+      // 英文技术串（dev 态走 fetchTransport 有 data，不受影响 ⇒ 只有包内暴露）。
       return {
         ok: false,
         status: res.status,
+        data: bodyData,
         error: bodyData.error,
         detail: bodyData.detail ?? `HTTP ${res.status}`,
       }

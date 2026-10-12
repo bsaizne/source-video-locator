@@ -1,7 +1,10 @@
 // Electron backend bridge tests (vitest, node env). The main-process handler and
-// the preload object builder are exercised with fakes — no Electron, no network.
+// the preload object builder are exercised with fakes; the `httpRequester` block below
+// uses a real 127.0.0.1 server on an ephemeral port (no Electron, no external network).
 import { describe, it, expect, vi } from 'vitest'
-import { buildBackendBridge, createBackendRequestHandler } from '../bridge'
+import * as http from 'node:http'
+import type { AddressInfo } from 'node:net'
+import { buildBackendBridge, createBackendRequestHandler, httpRequester } from '../bridge'
 import type { BridgeResponse } from '../bridge'
 import { createBackendConfig } from '../config'
 
@@ -43,6 +46,31 @@ describe('createBackendRequestHandler', () => {
     expect(res.ok).toBe(false)
     expect(res.status).toBe(500)
     expect(res.detail).toBe('boom')
+  })
+
+  it('forwards the error body as data on non-2xx (packaged UI reads message/code from it)', async () => {
+    // 后端第二层边界/结构化错误的成品文案在 body.message + body.code 里。
+    // 旧桥接层非 ok 时不回 data ⇒ 渲染层拿不到话术，包内只显示英文技术串。
+    const fetchImpl = vi.fn().mockResolvedValue(jsonRes(400, {
+      code: 'LOC-9999',
+      message: '导出失败（SegmentOverlap），请把日志发给支持人员',
+      error: 'SegmentOverlap',
+      detail: 'New segment overlaps with existing segment',
+    }))
+    const handler = createBackendRequestHandler(cfg, fetchImpl)
+    const res = await handler({ path: '/api/export', method: 'POST' })
+    expect(res.ok).toBe(false)
+    expect(res.network).toBeUndefined()
+    expect(res.data).toMatchObject({ code: 'LOC-9999', message: expect.stringContaining('支持人员') })
+  })
+
+  it('still returns detail fallback when the error body is not JSON', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue({ ok: false, status: 502, json: async () => { throw new Error('bad json') } })
+    const handler = createBackendRequestHandler(cfg, fetchImpl)
+    const res = await handler({ path: '/api/index', method: 'POST' })
+    expect(res.ok).toBe(false)
+    expect(res.detail).toBe('HTTP 502')
+    expect(res.data).toEqual({})
   })
 
   it('reports network:true when fetch rejects', async () => {
@@ -137,5 +165,89 @@ describe('buildBackendBridge', () => {
     // close() sends a client-close to stop the main-side socket.
     handle.close()
     expect(ipc.send).toHaveBeenCalledWith('backend:ws:client-close', { id: sentId.id })
+  })
+})
+
+// 分钟级同步导出 × 客户端 300s 头超时（真机 r21/r22 支持档实测 374s/783s 崩、571s/475s 成功
+// 却被报成「无法连接后端服务」）。根因 = Node 全局 fetch 的 undici headersTimeout=300s
+// （实测 reject_after_ms=300504、message="fetch failed"）⇒ 桥接层默认实现换成 node:http
+// （无隐式头超时，超时只由显式 setTimeout 决定）。下列锁跑真 socket，不用桩。
+describe('httpRequester (node:http 默认 transport)', () => {
+  function startServer(onRequest: (req: http.IncomingMessage, res: http.ServerResponse) => void) {
+    return new Promise<{ s: http.Server; port: number }>((resolve) => {
+      const s = http.createServer(onRequest)
+      s.listen(0, '127.0.0.1', () => resolve({ s, port: (s.address() as AddressInfo).port }))
+    })
+  }
+  async function stop(s: http.Server) {
+    s.closeAllConnections?.()
+    await new Promise<void>((r) => s.close(() => r()))
+  }
+
+  it('round-trips status + json 并转发查询串（会话令牌在串里）', async () => {
+    const { s, port } = await startServer((req, res) => {
+      res.writeHead(200, { 'content-type': 'application/json' })
+      res.end(JSON.stringify({ path: req.url }))
+    })
+    try {
+      const out = await httpRequester(`http://127.0.0.1:${port}/api/health?svl_session=abc123`)
+      expect(out.ok).toBe(true)
+      expect(out.status).toBe(200)
+      expect(await out.json()).toEqual({ path: '/api/health?svl_session=abc123' })
+    } finally {
+      await stop(s)
+    }
+  })
+
+  it('createBackendRequestHandler 默认走 node:http（不是 global fetch）', async () => {
+    // 结构锁：不注入桩 = 生产装配路径。若哪天默认又回 globalThis.fetch，undici 的 300s
+    // 会在长导出上原样复发，而这条锁先红。
+    let seen = false
+    const { s, port } = await startServer((req, res) => {
+      seen = true
+      res.writeHead(200, { 'content-type': 'application/json' })
+      res.end('{"path":"ok"}')
+    })
+    try {
+      const handler = createBackendRequestHandler(createBackendConfig({ port }))
+      const r = await handler({ path: '/api/export', method: 'POST', body: '{}' })
+      expect(r.ok).toBe(true)
+      expect(seen).toBe(true)
+    } finally {
+      await stop(s)
+    }
+  })
+
+  it('显式超时到点会断（挂死连接不静默永久转圈），并经处理层落 network:true', async () => {
+    const { s, port } = await startServer(() => {
+      /* 永不发响应头：模拟后端挂死 */
+    })
+    try {
+      await expect(httpRequester(`http://127.0.0.1:${port}/boom`, {}, 150)).rejects.toThrow(/timed out/)
+      const handler = createBackendRequestHandler(
+        createBackendConfig({ port }),
+        (url, init) => httpRequester(String(url), init, 150),
+      )
+      const r = await handler({ path: '/api/export', method: 'POST' })
+      expect(r.network).toBe(true)
+      expect(r.ok).toBe(false)
+      expect(r.detail).toMatch(/timed out/)
+    } finally {
+      await stop(s)
+    }
+  })
+
+  it('服务端主动断连（非超时）也落 network:true', async () => {
+    const { s, port } = await startServer((req) => {
+      req.socket.destroy()
+    })
+    try {
+      const handler = createBackendRequestHandler(createBackendConfig({ port }))
+      const r = await handler({ path: '/api/index', method: 'POST' })
+      expect(r.network).toBe(true)
+      expect(r.status).toBe(0)
+    } finally {
+      await stop(s)
+    }
   })
 })
