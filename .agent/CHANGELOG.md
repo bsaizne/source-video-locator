@@ -1,5 +1,28 @@
 # CHANGELOG
 
+## 2026-10-12（续63 补十五）— 真机 SegmentOverlap 崩修复 + 导出第二层错误边界 + derived_stale 真机实证
+
+- **触发**：用户递截图（导出框「无法连接后端服务 (fetch failed)」）+ `video_locator_logs(2).zip`。
+- **版本定性**：日志含 `derived table version changed (…scn1 → …scn2)` + `index derived refreshed`
+  （109s）⇒ 真机跑的正是 **r21/scn2**，且 **derived_stale 老用户首触重刷路径首获真机实证**
+  （重刷后 locate 3.8h/657 段正常完成）。
+- **新崩法**：`pyJianYingDraft.SegmentOverlap`（`write_jianying_draft → track.add_segment`，
+  新段 [728326000,730242000] 与轨上段严格相交）。根因链：贴接裁开 64 对 → <0.1s 窄素材
+  （上一条槽宽恰 0.084s）→ `min_clip_s=0.15` 只告警不裁 → 卷轴按真实宽度排槽 →
+  write 的 `max(0.1,…)` 把 target 撑出槽位 0.016s → 与下一条相交 ⇒ 导出整死 ⇒ 意外异常逃 ASGI
+  ⇒ UI 误报 fetch failed。**与十二轮同族（0.1 下限），这次越目标轴**（十二轮越素材时长轴）。
+- **修复**：A=`plan_jianying_assets` 槽位与累加都吃 `max(0.1, w)`（与 write 同口径，结构性无重叠；
+  窄素材占 0.1s 槽、speed 走十二轮回压腿）；B=`/api/export` 第二层错误边界（十二轮「等裁决」
+  项被真机裁决）：意外异常 → 结构化 400（message 带真实异常名）+ traceback 落支持档。
+- **锁**：后端 +2（窄素材槽位不重叠 + 结构锁「累加必须用下限后宽度」）· API +2（意外异常→400 /
+  ApplicationError 分支不被吞）。门禁：后端 **Ran 670 OK (skipped=2)** · API **Ran 130 OK** ·
+  不变式 **FAILED=0**（日志 `work/v2_accept/{backend,api}_suite_segfix.log`）。
+- **覆盖边界**：未在他机复现真导出（判据=日志数字与算术相容+单测）；第二层只加 `/api/export`
+  一条路由，其它路由未扩面；「<0.1s 直接丢」变体未做（取最保守默认=不丢画面）。
+- 档案：STATE Current Task 新增补十五块、**补十一块逐字迁 `archive/STATE_history_20261011.md`**
+  （保持 ≤3 块）；TODO P0 补十三块迁 `archive/TODO_history_20261011.md` 后换补十五块。
+- 本批先提交后出 **r22**（口令「立档 → 提交 → 出 r22」）。
+
 ## 2026-10-11（续63 补十四）— A2 提交推送 + 出包 r21（干净 commit 构建）
 
 - **触发**：口令「不用加，push吧，然后出包」——(ii) 拍板 = 升级路径维持现状、文案不加预计耗时；
@@ -2844,3 +2867,7 @@ STATE `Current Task` 顶部新增补八块并把补七的开放项②标为闭�
 ### Notes
 
 - Created `checkpoint-2026-10-11-1349.md` checkpoint (22 modified/untracked file(s)).
+
+### Notes
+
+- Created `checkpoint-2026-10-11-1549.md` checkpoint (1 modified/untracked file(s)).

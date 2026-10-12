@@ -116,3 +116,307 @@
 > 「验收脚本首跑要预期红」：红要先判是包的问题还是判据的问题，别改包也别放宽阈值。
 > 分发包现状 = **r17 现役 + r16 回滚 + r15**（r15 是否按保留规矩删除，等口令）。
 > macOS workflow 仍是 dispatch-only，按既有搁置裁决**未**手动触发。
+
+### 迁移（2026-10-12 补十五立档时逐字迁入）：STATE Current Task「续63 补十一」块
+
+> **▶ 2026-10-11（续63 补十一）— mac 出包结清 / 剪映导出崩修复 / r20 / UI 导出框 / 取材扩宽护栏 B(K=2.5) 落地【现读这条】**
+> 用户手动 dispatch 的 run `37782689308`（head `382d3ac`）：`mvp-tests-macos` = failure
+> （`Ran 617 tests … FAILED (failures=1, skipped=48)`）⇒ 依赖它的 `macos-package` 被 **skipped**
+> ⇒ `mac-alpha` 没出包。job 日志无令牌取到 403，改从「failures=1 且 errors=0」这个数字反推：
+> **红点是 `mvp/tests/test_logging.py::ProactorNoiseFilterTest.test_our_module_connection_reset_still_error`
+> 里的 `assertIn("WinError 10054", main)`**。CPython 在非 Windows 平台**忽略** `OSError` 的
+> `winerror` 入参（官方文档原话 "On other platforms, the winerror argument is ignored"），
+> `exc.winerror` 恒 None ⇒ 日志渲染成 `[Errno 10054]`，那个 Windows 字面量在 mac 上永不出现。
+> **降噪判定本身在 mac 上是对的**（走 `is_benign_connection_noise()` 的「winerror 缺省退 errno」
+> 分支），错的是断言。⇒ 三条改动（`d78e13a`，已 push origin/master）：
+> ① `_reset()` 按平台给形态（nt=5 元组真机样 / 其余=2 元组），不再在 mac 上造出真机不存在的对象；
+> ② 新增 `_code_token()`，ERROR 侧断言取平台对应字面量（`WinError`/`Errno`），支持档侧同理；
+> ③ 新增**常驻锁** `test_errno_only_shape_still_downgraded`：用「没有 winerror」的跨平台形态直接
+> 压 errno 回退分支（本机实测：2 元组 → `[Errno 10054] msg`，5 元组 → `[WinError 10054] msg`），
+> 把 mac 那半边从「等 CI 替我验」变成每平台都验。
+> 验证面（如实登记）：Windows 本机 `mvp.tests.test_logging` **31 tests OK**（原 30 + 新增 1）；
+> **mac 侧未本机实测**（无 mac 环境，`os.name` 打补丁模拟会被 pathlib/tempfile 反咬，已放弃那条路），
+> 判据 = 文档 + 现役判定分支 + 「failures=1 且 errors=0」这个只与「断言落空」相容的计数。
+> ⚠️ 第一轮顺手登记一次自伤：本次 push 先误打 `HEAD:main`（本仓默认分支是 **master**）⇒ 远端多出一个
+> `main` 分支，已 `push origin master:master` + `push origin --delete main` 复原，现远端仅 master。
+> 教训（同一族，见 `Known Issues` 教训速查 ⑮）：**跨平台断言里「日志字面量」是平台产物，
+> 不是逻辑事实**；测另一平台的分支要在本机用「该平台的对象形态」造出来当常驻锁。
+> **第二轮（用户递来包内日志 `D:\mvp-macos-test-log.zip`）— 红点搬家到我新加的那条常驻锁**
+> 用户提供 mac 测试日志（zip 内只有 `mvp_test_macos.log`）⇒ run `37787565939`（head `3349063`，
+> 用户 dispatch）：`Ran 618 tests in 995.344s / FAILED (**errors=1**, skipped=48)`。
+> ① **第一轮的修复已被真机证明有效**：`test_our_module_connection_reset_still_error` 在 mac 上
+> **ok** ⇒ `_code_token()` 取 `Errno 10054` 这条推断成立（原先的 `failures=1` 消失）。
+> ② 新的红 = 我那条“mac 那半边不用等 CI”的常驻锁自己：
+> `AttributeError: 'ConnectionResetError' object has no attribute 'winerror'`（`test_logging.py:364`）
+> —— 官方文档那句 “the winerror argument is ignored, and the attribute **does not exist**” 里的
+> 后半句我才真机碰到：mac 上不是 `winerror=None`，是**属性不存在** ⇒ `exc.winerror` 直接抛。
+> 产品判据本来就用的是 `getattr(exc, "winerror", None)`（`logging.py:161`）⇒ **只有测试写死了属性存在**。
+> ⇒ 修：断言改 `getattr(exc, "winerror", None)`（与判据同写法），并把 `_reset`/`_code_token` 的
+> docstring 从“恒为 None”更正为“属性根本不存在”；`logging.py` 那条注释同步说清两条腿（Windows 靠
+> winerror、跨平台靠 errno）。全套 617 里其余项 mac 全绿（含腿埋点 5 条 + 降噪 7 条 + MPS 真跑）。
+> ③ **顺带拿到 mac 侧腿埋点真机证据**（此前只有 Windows 包内）：mac 支持档出现 12 行 `locate leg=`
+> 且区间/顺序正确（`global_anchor 0->6/48` … `consecutive_resolve 44->48/48`，
+> `patch_refine elapsed=91.1s` 在 MPS 上），`locate refine start legs=` 亦在 ⇒ 埋点跨平台成立。
+> **第三轮 — mac 测试门真机转绿；卡点搬到 `macos-package` 第 11 步（资产下载抖动）**
+> run `37791429326`（head `b6a4a25`）：**`mvp-tests-macos` = success**（618 条全过，MPS 冒烟也跑了）
+> ⇒ 补十一 两轮的判断到此被真机结清（断言按平台取字面量 + `getattr` 取 winerror，两处都对）。
+> **`macos-package` 首跑即红**，红在第 11 步 `Fetch model assets for mac bundle` =
+> `Run set -euo pipefail / Error: Process completed with exit code 56`（curl 56 = 对端中途断流）。
+> ⇒ 定性依据：同一步骤在 run `37471104792`（2026-10-06，head `7589659`）是 **success**，且那之后
+> 这一步的代码没动过 ⇒ 偶发网络形态，不是新缺陷。**但代价不对称**：一次抖动 = 整轮 19 分钟 +
+> 后面步骤全没跑，而当时只有资产下载带 `--retry 5`，**取 release JSON 那一发一次重试都没有**。
+> ⇒ 加固（不改逻辑，只补韧性）：① 元数据 `curl` 补 `--retry 5 --retry-all-errors --retry-connrefused`；
+> ② `fetch()` 外面再套**整发 3 次重试**；③ 完成判据从「>0 字节」升级成**与 API 报的 `size` 逐字节等值**
+> （旧口径截断成半体能过闸，要等 sha 校验才打死整轮）；④ 每发失败都打 `::warning::` 带 try 次与 curl rc，
+> 下次读日志不用再猜。
+> 本地彩排（`work/r17_mac_log/step11_harness.sh`，桩 curl 三情形）：首发截断→二发齐 = 恢复 rc=0；
+> 三发全截断 = `::error::` rc=1；一发即齐 = 走原路径 rc=0。YAML 解析 + `bash -n` 均过。
+> ⚠️ 未证面：本机取不到 `model-assets` 元数据（无令牌 404，该 release 是 draft；不为本机答案去取凭据）
+> ⇒ **三个资产的 `id`/`size` 真实值没在本地核过**，等值校验首次生效就在 CI 上。若第四轮仍红在 56，
+> 就不再当抖动处理：改走 `gh release download` 或 `releases/download/<tag>/<name>` 并留对照证据。
+> **下一步（需用户口令/手动）**：再 dispatch 一轮 ⇒ 结果见下面「第四轮」
+>
+> **第四轮 — 加固版仍红在 56 ⇒ 定性改判「这条入口当下不通」，并把「拿不到元数据」与「拿不到资产」解耦**
+> ⚠️（**本节关于网络根因的判断已被第五轮作废**——真因是资产源被删；过程与观测面保留，别当结论引用）
+> run `37795700737`（head `cf4b61f`，**已含上一轮的 --retry 5 + 整发 3 次**）= `macos-package`
+> 第 11 步仍然 `exit code 56`，`mvp-tests-macos` 继续绿。
+> **关键观测（不用令牌就能拿到的通道 = check annotations）**：
+> `GET /repos/.../check-runs/<job_id>/annotations` 对本公共仓库返回 200，而这一轮注解里
+> **只有 3 条**（Node 20 弃用告警 / exit 56 / arm64 排队提示），**我上一轮加的 `::warning::` 一条都没出现**
+> ⇒ 脚本死在**元数据那一发**（`json="$(curl …)"` 在 `set -e` 下直接把整步判死），根本没走到下载循环
+> ⇒ 同一发请求 6 次尝试全同码 ⇒ **上一轮「偶发网络抖动」的定性是错的**：当下 `api.github.com`
+> 这个入口对该 runner 就是拿不通（根因未定，候选＝IPv6 路由 / HTTP/2 复位 / draft release 的
+> tags 端点行为 —— 三条都只是**假设**，本轮把它们变成可读数据而不是赌其中一个）。
+> ⇒ 这一轮不再猜，改结构（四处）：
+> ① **元数据四条独立入口**：`api/tags`、`api/list?per_page=100`（draft release 走列表更稳）
+>   × `curl`（`-4 --http1.1`）与 `gh api`（Go 独立实现）；
+> ② **资产三条通道**：A=api octet-stream by id、B=gh api by id、C=`github.com/.../releases/download`
+>   直链，每条的 `rc` / `http_code` / stderr 头**全部打进注解**；
+> ③ **解耦**：元数据全灭**不再等于整步死** —— 改走「直链 + 仓库内 `asset.json` 的 sha256 当场比对」
+>   （那条路一个字都不碰 `api.github.com`；sha256 与文件名在仓里，`verify_model_asset_shas.py` 同源）
+>   ⇒ 「api 今天不通」这类事从「出不了包」降级为「慢一点、少一道 size 闸」；
+> ④ **fail-fast 换位**：整步上移到 `Download DINOv2 weights` 之前 ⇒ 红一轮从 ≈19 分钟降到 ≈2-3 分钟
+>   （已核 `Build backend bundle` 不清 `resources/models`，先取资产安全）。
+> 本地彩排升级为**直接跑 workflow 原样抽出的脚本**（`extract_step11.py` 抽取 → `step11_harness3.sh`
+> 用 `stubs3/{curl,gh,python3,sleep}` 顶掉网络，不手抄）四情形全 PASS：
+> N1「api 双实现全挂、直链给满字节」⇒ **rc0 走直链+sha**（就是本轮 CI 形态）；
+> N2「连直链也 404」⇒ rc90 且注解带 `-6/-4` 路由对照；N3「tags 挂、list 成」⇒ rc0 走 ch2+A；
+> N4「元数据只有 gh 成、curl 资产恒截断」⇒ rc0 走 ch3+B。
+> ⚠️ 仍未证面（如实登记）：`-4`/`--http1.1` 是否命中根因、`gh api` 在 mac runner 取 draft 资产能否通、
+> **直链对 draft release 到底 200 还是 404**（这是③能不能真兜住的关键，本机无令牌测不了）
+> —— 全都只能由下一轮 CI 定；若直链也 404，下一步就得改资产存放位置（需用户裁决：把 `model-assets`
+> 从 draft 改成 published 会让 NC 许可的权重公开，不能我自己动）。
+> **第五轮（真根因，用户口述）— `model-assets` 那个 release 被他删了；资产改挂 `mac-alpha`，前四轮的网络定性作废**
+> 用户一句话结案：「哦，那个 release 的 tag 被我删了」，并裁决「放去 mac-alpha 呗，本来就是放进这里的，
+> 你非要开一个 tag」⇒ **第四轮那三条候选根因（IPv6 路由 / HTTP/2 复位 / draft 的 tags 端点行为）
+> 连同「`api.github.com` 这条入口当下不通」的改判全部作废**：源不存在，任何通道都拿不到。
+> 教训入档：**缺一个前提（资产还在不在）时，我会把「查不到的网络症状」归因成协议问题**——
+> 以后遇到「同源历史上绿、今天全灭」先问/先验**被访问对象是否还存在**，再谈通道。
+> ⇒ 落地两处：① 资产挂 **滚动发布 release `mac-alpha`**（published prerelease ⇒ `releases/download`
+>   直链公开可取、**不需要令牌**；本机实测 `releases/tags/mac-alpha` 无令牌 http=200）；
+> ② step 11 大幅简化：通道 A=直链 `curl`、通道 B=`gh release download`，完整性一律由**仓库内
+>   `asset.json` 的 sha256 逐文件当场判**（不再需要 release JSON 那一发，也不再靠元数据 size）；
+>   缺项时 `::error::` 点名三份资产的文件名与字节数（下次再有人删 release，日志自己会说话）。
+> 前几轮里真正值得留的两处保住：**fail-fast 换位**（整步在 `Download DINOv2 weights` 之前 ⇒ 红一轮
+> ≈2-3 分钟而非 ≈19 分钟）与 **annotations 自证**（无令牌也能读 rc/http_code/stderr 头）。
+> 本地彩排 `work/r17_mac_log/step11_harness4.sh` + `stubs4/{curl,gh,python3,sleep}`（跑的仍是
+> workflow 原样抽出的脚本）四情形全 PASS：P1 直链 200→rc0(A)；P2 直链 404 且 gh 失败→**rc91 且文案含
+> 「release mac-alpha 上必须挂着 …」**；P3 首发 500 二发 200→rc0（重试有效）；P4 直链恒 404、
+> gh 兜住→rc0(B)。彩排当场抓到一个真 bug：`echo` 里用反引号包 `$SRC_TAG` 被 bash 当命令替换
+> ⇒ 报错文案把 tag 名吞成空串，已去掉反引号。
+> 本机实测三份资产在位、sha256 全过（`verify_model_asset_shas.py` FAILED=0：patch .data 88,342,528B /
+> isc .onnx 1,613,211B / isc .data 209,190,912B）⇒ **上传内容就绪**。
+> ⚠️ **当时未闭合（已被下面「上传已执行完」段推翻，留作时序）**：`mac-alpha` 现在只有两个 zip（实测 asset 列表），三份权重尚未挂上
+> ⇒ 下一轮 CI 仍会红，但红得明白（rc91 + 点名）。我本机无任何 GitHub 凭据（也不为一个上传去弹登录）
+> ⇒ 要么他在网页端把三个文件拖到 `mac-alpha` 的 assets，要么给一次可写令牌由我传。
+> 另一条要他知道的事实：`mac-alpha` 是公开 prerelease ⇒ 权重从此公开可下载，而 ISC 是 NC 许可
+> （用户已明确选择放这里，我不自己改回 draft 或另开 tag）。
+> **上传已执行完（2026-10-09 00:30）— 三份资产重新挂在 `mac-alpha` 上，服务端字节逐个核对一致**
+> 令牌来源：本机 credential helper 这次**非交互直接返回**（`GIT_TERMINAL_PROMPT=0` + `timeout`，没弹登录窗）
+> ⇒ 用 `mvp/scripts/upload_mac_model_assets.sh`（默认已指 `mac-alpha`）传完三份：
+> `dinov2_cls_patch.onnx.data` 88,342,528B / `isc_ft_v107.onnx` 1,613,211B / `isc_ft_v107.onnx.data` 209,190,912B
+> ⇒ 全部 HTTP 201，服务端 asset 列表三个字节数与本地**逐一相等**（`releases/tags/mac-alpha` 核过三遍）。
+> 端到端抽验一份：走 CI 用的 API octet-stream 通道（带 `-L`，1.6MB 那份）下载后 sha256 与
+> `asset.json` **匹配 True**；两份大文件没本机回download（300MB 上行已完成，下行再走一遍不值）
+> ⇒ 它们的完整性由 CI step 11 的逐文件 sha256 当场判（这也是这道判据存在的意义）。
+> ⚠️ 我这轮自己的操作失误（留痕）：第一次上传其实**已经全绿完成**，我在看到 `TaskStop` 之后又以为它没跑成，
+> 起了第二次 detached 运行 ⇒ 脚本按「同名先删再传」把三份**删了重传**，中途还手动 kill 掉大文件那一发，
+> 让 `isc_ft_v107.onnx.data` 在服务器上**缺失了约 25 分钟**（第三次单发补齐）。
+> 根因是我拿 `tasklist` 里 curl 的驻留内存当"进度"读、又误读了后台任务的 kill 语义 ⇒ 判据应该是
+> **服务端 asset 列表**，不是本机进程表象。
+> ⚠️ 一件要说清的安全事：我用 `Get-CimInstance Win32_Process` 看 curl 命令行时，**把完整令牌打进了
+> 会话输出**（那次是为了确认哪个 curl 在传哪个文件）。临时文件 `/tmp/gcm.txt` 与几个 json 已删，
+> 但令牌已经在 transcript 里露过一次 ⇒ 建议他去 GitHub 设置里撤销该 OAuth 授权并重登（会要重输一次凭据）。
+> 我自己以后不再读进程命令行、也不再打印任何含令牌的串。
+> **下一步**：直接 dispatch `h3-macos-mps.yml` ⇒ step 11 应当绿（直链或 gh 两条通道 + sha256），
+> 后面构建 → mac 包体门槛 → publish 覆盖 `mac-alpha` 的 zip。
+>
+> **第七轮 — 我上一轮的补丁脚本把 workflow 改坏了：残段被 YAML 吸收进上一步，CI 报 exit 127**
+> run `37813707426`（head `6fbf717`，用户 01:04 触发）红在 `Install backend build deps`：
+> `line 4: note: command not found` / `exit code 127`。pip 安装本身全成 ⇒ 那一步的脚本里凭空多了
+> **49 行不属于它的 shell**。根因是我 `patch_step11.py` 用「第一处 `verify_model_asset_shas.py` 行」
+> 当截断锚点，而旧正文里那行**出现两次**（兜底分支一次 + 末尾一次）⇒ 截错位置，旧尾巴留在原地，
+> 缩进比 `run: |` 更深 ⇒ **被 YAML 当字面块吸收进上一步**。
+> ⚠️ **为什么我三道本地校验都没抓到**：`yaml.safe_load` 通过、`bash -n` 通过、抽出的 step 11 也正常
+> ⇒ **改 YAML 字面块后，"能解析"不等于"内容对"**；必须**逐步骤打印 run 行数与首末行**才看得见污染。
+> 修法 `work/r17_mac_log/fix_workflow_stray.py`（断言式，含"任何步骤里不许有游离 note/warn/sha_ok/fetch/get 行"
+> 与"install 步恰好 2 行"）；对 `524c9bb` 净差异 = 只删 48 行 + 1 空行 ⇒ 没顺手删掉别的步骤内容。
+> 防复发：`patch_step11.py` 加 `assert text.count(VERIFY_TAIL) == 1` + 写前结构自检。
+> 彩排 P1-P4 修完重跑全 PASS。**代价：用户白等一轮 macOS 分钟（该轮 tests 已绿、包没出）。**
+> **下一步**：再 dispatch 一次（head = 本次修复）⇒ 该走到取资产那步。
+>
+> **第八轮 — 用户递来的包内日志里捞出一条真缺陷：合并阶段进度回调漏 None ⇒ 渲染整条 LOC-9999**
+> 附件 `video_locator_logs.zip`（Windows 支持档，跨 09-10→10-09 16:19，8.9MB）。两件事：
+> ① **包内三件已在他机器上生效**：`backend selected=directml` ×10、`patch reranker device=dml` ×4 /
+>   `isc refine device=dml` ×4、腿埋点 23 行 `locate leg=` + 2 行 `locate refine start`；
+>   `_call_connection_lost` 最后一次是 10-08 18:xx（r17 之前那批），之后到 10-09 16:19 零出现
+>   ⇒ 与降噪生效一致，但**不算铁证**（也可能只是没发生客户端强关）。
+> ② **真缺陷**：10-08 19:00 与 19:12 两次 `task … render failed [LOC-9999]
+>   TypeError: unsupported operand type(s) for *: 'float' and 'NoneType'`（素材《巅峰猎杀…》）。
+>   支持档只留一行摘要（traceback 在调试档）⇒ 靠**异常签名反推代码位置**：
+>   `timeline_render.py` 合并两处回调写的是 `emit(min(0.995, 0.96 + 0.035 * f), …)`，而
+>   `_run_monitored` 按约定在**算不出读数**时发 `f=None`（同文件 `_seg_cb:632` 有这个判定，
+>   合并这两处没抄）⇒ 文案还没发出去就抛，整条渲染任务被判死、用户只看到通用码 LOC-9999。
+>   ⇒ 修：抽 `merge_stage_frac(frac, base=0.96, span=0.035, cap=0.995)`，None 时**读数不动、只发文案**
+>   （与 `_seg_cb` 同约定）；新增 `MergeStageFracTest` 四条（None 不抛 / 区间映射 / 封顶 /
+>   **结构锁**：`on_frac=lambda f:` 且带 `emit(` 的行必须走该函数）。
+>   门禁：后端全套 **Ran 622 tests OK (skipped=2)**、API **124 OK**。
+>   ⚠️ 覆盖边界：没在他那台机器上复现过（要 `SVL_LOG_DEBUG=1` 重跑一次才有 traceback 定死），
+>   判据是「异常签名字面量 + 全仓只有这两处 `float * 可为 None`」的相容性 ⇒ 属**强推断非实证**。
+>
+> **第九轮 — r18 出包（Windows），把渲染那条修复打进包里**
+> 口令「那重新打包啊，那个日志是 windows 上的问题」。构建 = `build-release.ps1` 一条链，
+> **从干净工作树 head `9eaee64` 构建**（不像 r17 是未提交工作树构建 ⇒ 这次「包 == commit」可追溯）。
+> 验收两道全绿：`accept_packaged_bundle.py` **FAILED=0**（资产 sha 全过、合成冒烟
+> `DirectML 生效 wall=30.1s`、隔离链 `reaped exitcode=0`、腿埋点 12 行刻度
+> `[6,9,42,44,44,44,44,48,48,48,48,48]`）+ `accept_packaged_render.py` **FAILED=0**
+> （R1 渲染 completed wall=63s、64 段无交叠、时长 136.366 vs 136.344、隔离在位、`h264_amf` 硬编）。
+> zip = `Compress-Archive win-unpacked\*` Optimal ⇒ `Video-Locator-win-x64-20261009r18.zip`
+> 981,665,372B / **7,078 条目** / `testzip()=None`；**zip 内 backend.exe 与磁盘逐字节相等**
+> （77,473,147B，sha256[:16]=`2eb651d38003d433`）；对 r17 的 backend.exe 尺寸差 +382B
+> （77,472,765 → 77,473,147）⇒ 与「r17 之后 `mvp/src` 只有渲染那一处改动」相容。
+> ⚠️ 如实登记：包内渲染冒烟**走不到**那条 None 分支（整条渲染 63s、合并段 <5s，而心跳要 5s 无读数
+> 才发 None；他崩的是 2 小时长片）⇒ 该修复在包内**无实证**，锁在单测（`MergeStageFracTest` 四条
+> 含结构锁）+ 「构建自干净 commit」这条链上。
+> release/ 按口令（2026-10-09）删到两档：**r18 现役 + r17 回滚**（r15/r16 已删，释放 ≈1.96GB）。
+>
+> **第十轮 — 真机日志揪出隔离回归：分析跑完导出/渲染 `no results batch`；r19 出包**
+> 用户截图（导出面板两条红条）+ 支持档：22:47:22 `locate finished segments=84 elapsed=1310.7s` ⇒
+> 22:48:02/07 `POST /api/tasks/render` 与 `POST /api/export` 双双 400 `no results batch`；
+> 日志里**从没有** `/api/results/load` ⇒ UI 依赖"后端自己记得最近一次批"。
+> 根因 = **任务级进程隔离（r16 起）的状态回归**：locate 跑在子进程，写的是子进程那份 service 的
+> `_current_batch` ⇒ 父进程 `last_result_batch()` 永远 None（其 docstring 还承诺"异步 analyze 也会设置"，
+> 隔离后在父进程失效）。**验收为何一直绿**：包内探针自己先 load 了批 = 走了 UI 不走的路 ⇒ 假绿；
+> 教训：**夹具必须复刻真实 UI 的调用序列**。
+> 修法 `isolated.py::_adopt_parent_batch()`：终态信封落地处把批 `ResultBatch.from_dict` 还原并
+> `service.adopt_result_batch()` 登记回父进程（render 批提交时锁定不回登记；失败只记日志）。
+> 锁：`ParentBatchAdoptTest` 四条（API 128 OK / 后端 622 OK）+ **包侧 UI 真实路径锁**
+> （分析后不先 load 直接导出，断言 200；字段缺失判"未实测"）⇒ r19 包内实测 `export_http=200`、
+> `a1__35e1ddf8.results.json` 落地。r19 = 干净 commit `3ef2b9e` 构建，两道验收 FAILED=0，
+> zip 981,667,323B / 7,078 条目 / testzip None / zip 内 backend.exe 与磁盘逐字节相等
+> （77,474,263B，sha16 `86d2007c00cfc673`，对 r18 +1,116B）。
+> 采坑：`attr_packaged_headless.http()` 只回 body、4xx 抛 HTTPError，我第一版按 `(code, body)` 解包
+> 把 dict 的键当值（`http=path`）⇒ 验收当场红给我看，已改 try/except 接码。
+> release/ 现三档（r17/r18/r19），按纪律该删 r17，**等口令**。
+>
+> **第十一轮 — mac 出包链真机结清（用户 dispatch，本档案此前停在「只差 dispatch」）**
+> 2026-10-10 复核 live CI（读公共 API，无令牌）⇒ 第五/六轮担心的那一步已在真机上过去：
+> ① run `37943554701`（head `f29e8d66`）与 run `37955484860`（head `31974f2` = 本档案 checkpoint HEAD）
+>   两次 `workflow_dispatch` 均 **completed success**，三 job（`mps-poc` / `mvp-tests-macos` /
+>   `macos-package`）全绿 ⇒ 补十一 前几轮反复红的 mac 线到此闭合。
+> ② **step 11 取资产走「通道 A = 直链 + sha256 逐文件当场判」一发即中**（check annotations 原文，
+>   无需 `gh` 兜底）：`dinov2_cls_patch.onnx.data via A 直链+sha256 OK (88,342,528 B, try=1)` ·
+>   `isc_ft_v107.onnx … (1,613,211 B, try=1)` · `isc_ft_v107.onnx.data … (209,190,912 B, try=1)`
+>   + 诊断行 `curl=curl 8.7.1 gh=gh version 2.100.0 src=mac-alpha` ⇒ 第五轮改挂 `mac-alpha` +
+>   step 11 简化（删掉 release JSON 那一发、靠仓库内 `asset.json` 的 sha 判完整性）这个决策**被真机验证**；
+>   第六轮登记的未证面「等值校验首次生效就在 CI 上」= 已在 CI 上验通。
+> ③ `macos-package` 之后：step 15 `Accept packaged mac bundle (gate publish)` = success ⇒
+>   step 16 `Publish (rolling tag mac-alpha)` = success（publish 受门槛 `if` 管，门槛绿才有 publish）⇒
+>   release `mac-alpha` 实测新增资产 **`Video-Locator-mac-arm64.zip` 916,769,503 B**
+>   （`updated_at=2026-10-09T16:27:38Z`，与 run `37955484860` 时间线吻合；旧 `Video.Locator-0.1.0-arm64-mac.zip`
+>   仍在，是 2026-09-06 那代）。
+> ⇒ **mac 出包链（此前 `Current Problem` 的「唯一活跃项」）已闭合**，`Current Problem` 已据此更正。
+> 仍未做的（不影响闭合，留作 H3 正式化项）：`Known Issues` 那条「mac 包多带 ≈88MB 死 ONNX 资产」未本机拆包核
+> （本机无 mac 也不该为读别人机包去取凭据），按平台裁剪 `extraResources` 是 H3 正式化时的事。
+> Windows 侧现役 r19；**release/ 已按口令删 r17**（2026-10-10，删前 `zip_identity.py` 验回滚档 r18 可读
+> `testzip=None`/7,078 条目/backend.exe sha16 `2eb651d38003d433` 与档案一致）⇒ 现两档 r18 回滚 + r19 现役。
+>
+> **第十二轮 — 真机支持档揪出剪映导出崩溃：极短素材被 0.1s 下限撑越 material.duration ⇒ 整条导出打死**
+> 附件 `video_locator_logs(1).zip`（Windows 支持档，2026-10-10，用户截图 = 导出面板红条「无法连接后端
+> 服务…(fetch failed)」）。**先证伪截图字面**：后端 `/api/health` 每 20s 稳定响应从 18:16→19:12 没断
+> ⇒ 不是连不上。真红在 18:42:24 `POST /api/export` 抛**未处理 ValueError**：
+> `截取的素材时间范围 [start=0, end=100000] 超出了素材时长(64000)`（`exporters.py:923 write_jianying_draft`
+> → `pyJianYingDraft/video_segment.py:455`）。ASGI 未处理异常 ⇒ uvicorn 掐连接不发响应 ⇒ 前端 fetch 失败
+> ⇒ UI 弹那句**误导性文案**（素材《一口气看过瘾…攀岩女王…》，segments=657）。
+> **根因**：`video_segment.py:452` 里 `source = round(target×speed)`，`:454` 判 `source.end > material.duration`
+> 就抛。`write_jianying_draft` 三处 `max(0.1, …)` 下限把 <0.1s 的短镜头（此处素材 64ms）撑成 target=100000µs，
+> 再被「|speed-1|≤0.02 锁原速」把 source 顶到 100000µs > 64000µs ⇒ 崩。**顺带暴露**：同一锁对「素材比 target
+> 短 0.2%（重编码少一帧）」的普通 clip 也会 source=target>素材 ⇒ 潜在同类崩（本机没撞上是因为抽取 clip
+> 通常 ≥ 请求宽度）。
+> **修法**（`exporters.py`，行为保持）：抽纯函数 `_jianying_segment_speed(target_us, mat_us, orig_width, mat_dur)`
+> ——① 锁原速**仅当 `target_us ≤ mat_us`**；② 末尾硬约束 `round(target×speed) > mat_us` 时回压
+> `speed = (mat_us-1000)/target_us`。正常素材（mat≥target）逐字仍是 1.0 原速 ⇒ 集成测试 `speed==1.0` 断言不破。
+> **门禁**：后端全套 **Ran 626 tests OK (skipped=2)**（622 + 新 4）· API **128 OK**。
+> 新锁 `JianyingSegmentSpeedTest` 四条：正常锁原速 / 真机崩溃形态（100000 vs 64000）回压不越界 /
+> 边际短素材（短 0.2%）不越界 / **结构锁**：`write_jianying_draft` 必须走该 helper 且旧内联判据
+> `max(0.1, min(mat_dur` 不得复活。
+> ⚠️ **覆盖边界（如实）**：没在他那台机器上跑通真导出（要他那份 657 段工程 + 短镜头素材）⇒ 判据 =
+> 库源码 `:452/:454` 的确切算法 + 日志里 `[0,100000] vs 64000` 的确切数字 + 单测复现该算术；
+> **包内实证待下次出包**（可在 accept 加一条「极短素材导出不崩」的产物级锁）。
+> ⚠️ **未做的第二层（等用户裁决，别自己扩面）**：`/api/export` 路由只 `except ApplicationError`
+> （`results.py:155`），任何库级/磁盘级**意外异常仍会**逃到 ASGI ⇒ 前端仍显示误导性的「无法连接后端服务」。
+> 本轮只掐掉了这一个具体崩；要不要把导出错误边界统一包成结构化 400（让 UI 说人话）= 独立小决策，未动。
+> **r20 出包（2026-10-10，口令「先出包」）— 把这条修复打进包里**：构建 = `build-release.ps1` 一条链
+> （`PS_EXIT=0`；patch/CLS/ISC 资产已在位，走 sha fail-fast 断言）。**r20 = 未提交工作树构建**
+> （本批 `exporters.py`/测试/档案都没提交，git 时机由用户掌握）⇒ 「包 == 工作树」对得上，对不上任何 commit。
+> zip = `Compress-Archive win-unpacked\*` Optimal ⇒ `Video-Locator-win-x64-20261010r20.zip`
+> **981,666,831B / 7,078 条目 / `testzip()=None`**；**zip 内 backend.exe 与磁盘逐字节相等**
+> （77,474,898B，sha16 `63987715436d5e31`；对 r19 的 77,474,263B +635B ⇒ 与「r19 之后 src 只有
+> exporters 那一处改动」相容，证明确实重建进包）。
+> 包内验收（本轮按改动面跑，全绿）：`accept_packaged_bundle.py` **FAILED=0**（DirectML wall=26.1s ·
+> 精排/ISC 未回退 CPU · 隔离 spawn+booted+reaped · 12 行腿埋点刻度 `[6,9,42,44,44,44,44,48,48,48,48,48]` ·
+> **UI 路径导出 http=200**）· `accept_packaged_render.py` **FAILED=0**（R1 completed wall=57s · 64 段无交叠 ·
+> 时长 136.366 vs 136.344 · h264_amf · 渲染隔离在位）· `check_export_plan_invariants.py` **FAILED=0**
+> （4 片 × 4 通道五条不变式）。
+> ⚠️ 本轮**未重跑**的三件（改动面不涉及，如实登记）：三防（release 无令牌拒启）· Electron 启动冒烟 ·
+> 包体剪映产物探针 —— 本批只动 `exporters.py` 的写段循环，不碰 UI/主进程/安全；且**包内 accept 的导出探针
+> 不带 `format` ⇒ 走 JSON 通道、不经 `write_jianying_draft`**（见上「已知缺口」）。剪映路径的实证靠源码树
+> `WriteJianyingDraftIntegrationTest`（真 ffmpeg+pyJianYingDraft，断言 speed==1.0）+ 新单测。
+> release/ 现三档（r18/r19/r20），按「最新+上一档」应删 r18，**等口令**。
+>
+> **补锁（选项 B，2026-10-10）— 把剪映路径升到包内常设锁**：`attr_packaged_headless.py` 追加一发
+> `format=jianying` 导出（min_confidence=LOW + low_policy=backup ⇒ ≥1 clip 进 plan），
+> `accept_packaged_bundle.py` 加两条断言：`jianying_http==200` + 草稿 `draft_content.json` 含 ≥1 segment
+> （否则=plan 空、写段循环没被跑到=锁形同虚设）。对 r20 win-unpacked 重跑 bundle **FAILED=0**：
+> 实测草稿 `a1.loc.jy_draft` 1 段 `target=src=45000000µs speed=1.0` + 抽出 `og0-45.mp4` ⇒ 包内真跑通
+> write_jianying_draft 且我的重构未弄坏正常导出。**只改 `mvp/scripts` 两脚本、不进 backend.exe ⇒ r20 zip 不变、无需重出。**
+> ⚠️ 边界：syn 只出 1 条常规 clip ⇒ 此锁覆盖「剪映写段路径通」，**不专门覆盖 <0.1s 回压分支**（那条靠单测；
+> 包内要覆盖需造 <0.1s 素材、易 flaky，未做）。这两脚本改动同样**未提交**（等口令）。
+>
+> **第十三轮 — 导出对话框两处 UI 修复（用户截图：LOC-2002 提醒列表把窗口撑爆 + 输出目录选不了）**
+> 全在 `mvp/ui/src/pages/ResultsPage.vue`：① `.ex__card` 加 `max-height:88vh; overflow-y:auto`（整卡可滚，
+> 兜任何长内容）+ 提醒 `<ul>` 单独 `max-height:220px; overflow-y:auto`（一长串 LOC-2002 复用告警在框内滚，
+> 不再撑死窗口）；② 输出目录此前是 `readonly` 且只能「去设置里改」⇒ 在字段旁加「浏览…」按钮，复用
+> 现成 IPC `window.desktop.openDirectory()`（SettingsPage 同款），写进**按格式的对话框内临时覆盖**
+> `dirPick`（切格式失效、**不覆盖设置里的默认**），`activeExportDir` 优先取它 ⇒ `doExport`/render 的 `outDir` 生效。
+> 门禁：app typecheck RC=0 · desktop typecheck RC=0 · vitest **144 passed**。
+> ⚠️ **未提交、且未出包**：这是前端改动，**要重新构建（r21）才在应用里看得到**；本轮没在跑起来的 Electron 里
+> 目检（要加载一份结果批才能开导出框），判据 = 双 typecheck + vitest + 复用已验证的 openDirectory IPC。
+> ⚠️ 与前面「重叠/hub 是 H1 真复用还是 H2 误定位」那条**已结（第十四轮）**——多模态读图定性 = 见下。
+>
+> **第十四轮 — 成片"重合"定性 + B 落地（取材扩宽相对护栏 K=2.5）**
+> 用户「你自己拿多模态看吧」→ 读图定性（一手证据）：剪辑片 `tset2-ed.mp4`(69s) 是快剪解说（~1s/切、
+> 每镜头基本只用一次）；原片 3285-3323 我逐帧看 = **4 个不同镜头**（球衣人群/灌溉田/喷头/卧室），
+> 但 `scenes.npy` 把它标成**一个 38s 假镜头**（全片中位 8s、最宽 265s，检测严重漏切）。
+> ⇒ 因果：短切落进假大镜头 → 「完整镜头」扩宽把它撑成整段 38s → 多个切点撞成同一块 → 卷轴重放 =
+> 用户看到的"重合"（"顺序乱"是同因副作用）。**不是排序问题**（ordered_search 早判负关闭）、**不是去重漏裁**
+> （那些重叠非贴接、按设计归"真实复用"不动，且就算裁画面范围本身也错）。
+> **探针（跨 4 片，`work/k_sweep_probe.py`）**：现役 scene 源区间重叠 Σ=**1432.59s**（test3 一片 909s）；
+> 相对护栏 `expanded ≤ K×core` 到 **K=2.8 都仍 = core 底噪 8.00s**（那 8s 是非贴接真实复用、core 也有），
+> **K=3.0 起 test3 从 6.00 跳到 22.00**（悬崖在 2.8↔3.0）。用户拍板 **K=2.5**（留 0.5 余量，抗检测噪声）。
+> **B 落地**：`ExportConfig.material_expand_rel_cap=2.5`（<=0 关）→ `expand_material_spans` 加 `rel_cap` 参
+> （`width > core*rel_cap` 则不扩）→ `prepare_channel_plan` 透传 → `export_project` 传 xcfg 值。
+> 门禁：后端 **630 OK(skipped=2)**（+4 护栏单测）· API **128 OK** · `check_export_plan_invariants` **FAILED=0**
+> 且已把 rel_cap 接进该镜像脚本 ⇒ 实测扩宽 **2mkv 62→4 / 覆盖 531→147s、test1 44→3、test2 30→3、test3 62→3**，
+> 时间线三通道覆盖不变（134.094→134.094）、五条不变式全绿。⚠️ **A（修镜头检测漏切）另立项**（见 Next Actions），
+> B 只是绕开扩宽这个放大器，没修检测本身。本批未提交（下一步 push）。
