@@ -211,7 +211,6 @@
 > 同批顺手更正：`PLAN_SHOT_DETECTION_20261011.md` 里 B 的提交指针原写 `c873e18`（那是档案笔），
 > 已改为代码笔 `098021b`；该文档「1fps」表述正确，STATE/别处若有「0.5fps 建索引」的说法以本块口径修正为准。
 
-
 ## Completed
 
 - 历史完成项见 `.agent/archive/STATE_history_20261007.md`（Current Task 退休块续14~续61）、
@@ -533,4 +532,4 @@
 
 ## Last Updated
 
-2026-10-12 22:55
+2026-10-12 22:59
