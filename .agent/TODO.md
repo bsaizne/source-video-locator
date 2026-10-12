@@ -11,6 +11,8 @@
 > 根因 = 贴接裁开出 <0.1s 窄素材 × write 的 0.1s 目标下限越出卷轴槽位（与十二轮同族、越的是目标轴）。
 > 修 = 卷轴槽位与累加同吃下限（结构性无重叠）+ `/api/export` 意外异常落结构化 400（UI 不再误报
 > fetch failed）。门禁 670/130/不变式全绿。**顺带真机实证 derived_stale 首触重刷路径（109s）**。
+> **r22 已出**（干净 commit `36dec63`，三道包内验收全绿，zip backend.exe sha16 `f0d00f10c4123813`）；
+> 挂 GitHub release 差令牌（helper 挂死 rc=124）；release/ 四档 r22/r21/r20/r19，删 r19 等口令。
 > 明细 = STATE Current Task 顶部「补十五」块。
 
 ## P1 — Next

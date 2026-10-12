@@ -67,6 +67,13 @@
 > **⑤ 覆盖边界（如实）**：没在他那台机器复现真导出（判据=日志数字与算术相容 + 单测复现该形态）；
 > 第二层边界**只加了 /api/export 一条路由**，其它路由意外异常仍会穿 ASGI（未扩面）；
 > 窄素材被撑到 0.1s 槽 = 0.83× 慢放观感，属最保守默认（不丢画面），未做「<0.1s 直接丢」变体。
+> **⑥ r22 已出（2026-10-12 口令「立档 → 提交 → 出 r22」）**：代码笔 `a506df4` + 档案笔 `36dec63`
+> 已推 ⇒ **r22 = 干净 commit `36dec63` 构建**；包内三道验收全绿（bundle FAILED=0 · render FAILED=0 ·
+> 不变式 FAILED=0）；zip `Video-Locator-win-x64-20261012r22.zip` 981,686,020B / 7,078 条目 /
+> testzip=None / **zip 内 backend.exe 77,493,384B sha16 `f0d00f10c4123813` == 磁盘**（对 r21 +341B，
+> 与本批两处小改动相容）。release/ 现四档 r22/r21/r20/r19，按「最新+上一档」应删 r19，等口令。
+> **挂 GitHub release（mac-alpha，口令「挂r22即可」）**：上传死在 credential helper 挂死
+> （rc=124 零输出，GIT_TERMINAL_PROMPT=0 下不弹窗不重试）⇒ **zip 已在本地待传**。
 > 产物：`mvp/src/app/exporters.py` · `mvp/api/routes/results.py` · `mvp/tests/test_exporters.py` ·
 > `mvp/api/tests/test_api.py`；真机日志与解包在 `work/support_20261011b/`（不入库）。
 
@@ -520,4 +527,4 @@
 
 ## Last Updated
 
-2026-10-12 21:40
+2026-10-12 21:55
