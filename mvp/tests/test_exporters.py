@@ -438,6 +438,36 @@ class PlanJianyingAssetsTest(unittest.TestCase):
         for a, b in zip(assets, assets[1:]):
             self.assertEqual(a.placements[0]["edited_end"], b.placements[0]["edited_start"])
 
+    def test_narrow_clip_slot_floor_no_overlap(self):
+        """真机 r21（2026-10-12）：贴接裁开产出 <0.1s 窄素材，write 的 max(0.1,…) 把
+        target 撑出槽位 ⇒ 与下一条严格相交 ⇒ pyJianYingDraft SegmentOverlap 整导出打死。
+        修法 = 卷轴槽位与 write 同口径吃下限 ⇒ 结构性无重叠（pyJianYingDraft 判据：
+        overlaps = not(end<=start or other.end<=start)，贴边合法）。"""
+        plan = [
+            ExportClip("main", 0.0, 2.0, 100.0, 102.0, "HIGH", 0.9, seg_index=0),
+            ExportClip("main", 2.0, 2.084, 200.0, 200.084, "HIGH", 0.9, seg_index=1),  # 84ms 窄素材
+            ExportClip("main", 2.084, 4.0, 300.0, 301.916, "HIGH", 0.9, seg_index=2),
+        ]
+        assets = plan_jianying_assets(plan)
+        self.assertEqual(len(assets), 3)
+        prev_end_us = 0
+        for a in assets:
+            p = a.placements[0]
+            w = p["edited_end"] - p["edited_start"]
+            self.assertGreaterEqual(w, 0.1, f"槽位宽度必须 >= write 的 0.1 下限: {a.file_stem}")
+            start_us, end_us = round(p["edited_start"] * 1e6), round(p["edited_end"] * 1e6)
+            self.assertGreaterEqual(start_us, prev_end_us)   # 与上一条不相交（贴边合法）
+            prev_end_us = end_us
+
+    def test_reel_accumulates_floored_width(self):
+        """结构锁：卷轴累加必须用**下限后**的宽度（与 write_jianying_draft 的
+        ``max(0.1, …)`` 同口径）——两处各写一份必然漂移，这是本批真机崩的根因形态。"""
+        import inspect
+        src = inspect.getsource(plan_jianying_assets)
+        self.assertIn("w_used = max(0.1", src)
+        self.assertIn("t += w_used", src)
+        self.assertNotIn("t += w\n", src, "禁止回退到按真实宽度累加")
+
 
 @unittest.skipUnless(FFMPEG.exists() and FFPROBE.exists() and SYNTH.exists(),
                      "real FFmpegIO assets not present")

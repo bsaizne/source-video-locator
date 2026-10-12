@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import copy
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -155,6 +156,17 @@ def export(req: ExportRequest, ctx: AppContext = Depends(get_context)) -> dict:
     except ApplicationError as exc:
         body = public_error(exc)
         body["error"] = "export_failed"
+        return JSONResponse(status_code=400, content=body)
+    except Exception as exc:  # noqa: BLE001 - 第二层错误边界（2026-10-12 真机 r21）
+        # 旧写法只接 ApplicationError ⇒ 库级/磁盘级意外异常（真机案例：pyJianYingDraft
+        # SegmentOverlap）逃到 ASGI ⇒ uvicorn 掐连接不发响应 ⇒ 前端 fetch 失败 ⇒ UI 弹
+        # 误导性的「无法连接后端服务」。意外异常同样必须是结构化 400 + 人话文案；
+        # traceback 落支持档供售后定位。
+        logging.getLogger("api.routes.results").exception(
+            "export failed fmt=%s type=%s", fmt, type(exc).__name__)
+        body = {"code": "LOC-9999",
+                "message": f"导出失败（{type(exc).__name__}），请把日志发给支持人员",
+                "error": type(exc).__name__, "detail": str(exc)}
         return JSONResponse(status_code=400, content=body)
     # 导出即弃会话预览：清空预览缓存目录，避免自动生成的预览片段长期占用磁盘。
     if ctx.preview_service is not None:

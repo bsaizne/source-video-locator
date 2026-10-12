@@ -894,13 +894,15 @@ def plan_jianying_assets(plan: list[ExportClip], *,
         stem_owner[stem] = rng
         assets.append(JianyingAsset(file_stem=stem,
                                     orig_start=c.orig_start, orig_end=c.orig_end))
-    # 顺序卷轴：原速、首尾相接
+    # 顺序卷轴：原速、首尾相接。槽位下限与 ``write_jianying_draft`` 的 ``max(0.1, …)``
+    # **同口径**（2026-10-12 真机 SegmentOverlap：贴接裁开可产出 <0.1s 窄素材，旧写法按
+    # 真实宽度排槽，write 把 target 撑到 0.1s 即越出槽位、与下一条严格相交 ⇒ 导出整死）。
     t = 0.0
     for a in assets:
-        w = a.orig_end - a.orig_start
-        a.placements.append({"edited_start": round(t, 3), "edited_end": round(t + w, 3),
+        w_used = max(0.1, a.orig_end - a.orig_start)
+        a.placements.append({"edited_start": round(t, 3), "edited_end": round(t + w_used, 3),
                              "speed": 1.0, "kind": "main", "seg_index": 0, "sub_index": 0})
-        t += w
+        t += w_used
     return assets
 
 

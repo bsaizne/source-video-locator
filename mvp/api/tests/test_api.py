@@ -74,6 +74,9 @@ class FakeService:
                        min_confidence=None, low_policy=None, snap_scenes=None,
                        material_width=None, on_progress=None, cancel_token=None):
         self.export_calls.append((fmt, out_dir, min_confidence, low_policy, snap_scenes))
+        fail = getattr(self, "fail_export_project", None)
+        if fail is not None:
+            raise fail
         if fmt not in ("edl", "fcp7_xml", "jianying"):
             raise ApplicationError(f"invalid export format: {fmt!r}")
         base = Path(out_dir) if out_dir else Path("exports")
@@ -286,6 +289,31 @@ class ExportTest(ApiTestBase):
         self.assertTrue(str(r.json()["path"]).endswith(".loc.edl"))
         self.assertEqual(self.fake.export_calls[-1],
                          ("edl", "D:/export", "MEDIUM", "backup", True))
+
+    def test_unexpected_export_exception_returns_structured_400(self):
+        """第二层错误边界（2026-10-12 真机 r21）：意外异常（pyJianYingDraft SegmentOverlap）
+        旧写法逃到 ASGI 掐断连接 ⇒ UI 误报「无法连接后端服务 (fetch failed)」。
+        现在必须落回结构化 400，message 带真实异常名供用户复述。"""
+        self._client.post("/api/results",
+                          json={"edited_path": "D:/clip.mp4", "original_path": "D:/movie/source.mkv"})
+        self.fake.fail_export_project = ValueError(
+            "New segment overlaps with existing segment [start: 728326000, end: 730242000]")
+        r = self._client.post("/api/export", json={"output_dir": "D:/export", "format": "jianying"})
+        self.assertEqual(r.status_code, 400)
+        body = r.json()
+        self.assertEqual(body["code"], "LOC-9999")
+        self.assertEqual(body["error"], "ValueError")
+        self.assertIn("ValueError", body["message"])
+        self.assertIn("支持人员", body["message"])
+        self.assertIn("728326000", body["detail"])
+
+    def test_application_error_still_maps_export_failed_branch(self):
+        """ApplicationError 分支不被第二层吞掉（错误码/文案口径不变）。"""
+        self._client.post("/api/results",
+                          json={"edited_path": "D:/clip.mp4", "original_path": "D:/movie/source.mkv"})
+        r = self._client.post("/api/export", json={"output_dir": "D:/export", "format": "bogus"})
+        self.assertEqual(r.status_code, 400)
+        self.assertEqual(r.json()["error"], "export_failed")
 
     def test_override_updates_batch_and_preserves_auto(self):
         resp = self._client.post("/api/results",
