@@ -1,5 +1,45 @@
 # CHANGELOG
 
+## 2026-10-12（续63 补十六）— 真机红条定性反转：客户端 300s 头超时 × 分钟级同步导出（不是后端掐连接）
+
+- **触发**：用户两件口令 —— ① release/ 删 r19（选「删（验完再删）」）② 补十五 ⑤ 登记的
+  「第二层错误边界未扩面」本轮扩面。
+- **② 的前提被实测打掉（连错两次的档案断言，订正）**：补十五/第十二轮都写「意外异常逃 ASGI ⇒
+  uvicorn 不发响应 ⇒ UI fetch failed」。反证三条：(a) `mvp/api/app.py:86` **早装了**全局
+  `exception_handler(Exception)`，真机日志 `unhandled error on POST /api/export` 就是它的落盘行；
+  (b) 四臂真 uvicorn 实测（A 裸 / B +2×BaseHTTPMiddleware / C +CORS / **D 复刻生产栈**，
+  同 starlette 1.6.0 + uvicorn 0.52.4）= **6/6 收到结构化 500 JSON、服务存活、零连接失败**；
+  (c) Starlette `ServerErrorMiddleware` 源码：re-raise 前先 `await response(...)`。
+  **真因 = 客户端不等**：Node 全局 fetch（undici）默认 headersTimeout=300s，实测
+  `{message:"fetch failed", causeName:"HeadersTimeoutError", reject_after_ms:300504}`；真机两发崩的
+  导出请求实际 **374s / 783s**（`material expand` 行 → 崩溃行的 Δ），同档另有 **571s / 475s 成功导出**
+  ⇒ 草稿写完了、UI 报「连不上后端」（成功被报成失败）。
+- **修（`mvp/src`/`mvp/api` 零改动，全在 Electron 主进程）**：A=桥接层默认 transport
+  `globalThis.fetch` → `httpRequester`（**node:http**，无隐式头超时）+ `BRIDGE_REQUEST_TIMEOUT_MS=30min`
+  显式兜底（挂死仍断，不静默永久转圈）；B=**非 2xx 把错误体当 `data` 带回** —— 旧写法只给 error/detail
+  ⇒ 渲染层拿不到 `body.message/code`，包内把中文话术+LOC 码降级成英文技术串（dev 态有 data ⇒
+  **只有包内暴露**，教训 ⑧ 同族）。
+- **门禁**：UI **150 全绿**（146→150，bridge.test.ts +6，含跑真 socket 的 4 条）+ **双 typecheck 干净**；
+  端到端 `work/probe_bridge_long_request.cjs`（跑编译产物 `out/electron/backend/bridge.js`，两臂并发打
+  同一 330s 慢服务器，夹具侧关 Node 服务端 requestTimeout/headersTimeout）= **PROBE PASS**
+  （node:http 臂 `ok=true status=200 waited=330065ms` / 旧 undici 臂 `network=true waited=307099ms`）。
+- **包侧新锁 2 条**进 `accept_packaged_bundle.py`（默认走 node:http · 非 2xx 透传 data），
+  打在 **r22 现役包上首跑 FAILED=2（预期红，证锁真咬）**，其余 26 项全绿（DirectML wall=27.1s ·
+  剪映通道 http=200 · 12 行腿埋点）。⇒ 本批修复 **不在 r22 包里**，需重出 r23；预期 r23 的
+  backend.exe sha16 与 r22 逐字相同（`f0d00f10c4123813`），差异只在 `resources/app`。
+- **r19 删除（验完再删）**：回滚档 r20 先验 `testzip=None · 7,078 · 77,474,898B · sha16
+  63987715436d5e31` 与档案逐字一致；r19 自身 `testzip=None · 7,078 · 77,474,263B · sha16
+  86d2007c00cfc673` 一致 ⇒ 删，释放 ≈936MB。release/ 现三档 r22/r21/r20。
+- **覆盖边界（如实）**：>300s 证据=「编译产物+真 socket+慢夹具」而非真机真导出；undici 默认值实测在
+  Node v24.18.0，Electron 34 内嵌 Node 20.x 未单独实测；dev 态浏览器 fetch 未动；>30min 仍回
+  network:true；其它路由**不加** per-route try/except（前提已证伪），`/api/export` 第二层边界保留
+  但理由订正；本批无 Python 改动面 ⇒ 未重跑后端/API 全套。
+- **档案**：STATE 新增补十六块；**补十二块逐字迁 `archive/STATE_history_20261011.md`**（Current Task
+  保持 ≤3 块）；补十五块 ②/⑤ 内嵌「定性订正」指针；TODO P0 补十五块迁 `archive/TODO_history_20261012.md`；
+  `Known Issues` 速查新增教训 ⑳（外层可观测量判族要先卡时长 vs 客户端默认超时；「某层会掐连接」必须真 socket 真进程跑）。
+  顺手结清 TODO P1 的「第十三轮导出框 UI 修复」过期项（实测 `aacfaa9` 在 master 且为 r21 构建点祖先）。
+- 本批**未提交、未出包**（等口令）。下一批候选：导出异步化 `/api/tasks/export`（进度+可取消）。
+
 ## 2026-10-12（续63 补十五）— 真机 SegmentOverlap 崩修复 + 导出第二层错误边界 + derived_stale 真机实证
 
 - **触发**：用户递截图（导出框「无法连接后端服务 (fetch failed)」）+ `video_locator_logs(2).zip`。

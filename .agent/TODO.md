@@ -7,19 +7,28 @@
 
 ## P0 — Current
 
-> **▶ 2026-10-12（续63 补十五）— 真机 SegmentOverlap 崩修复 + 导出第二层错误边界【现读这条】**
-> 根因 = 贴接裁开出 <0.1s 窄素材 × write 的 0.1s 目标下限越出卷轴槽位（与十二轮同族、越的是目标轴）。
-> 修 = 卷轴槽位与累加同吃下限（结构性无重叠）+ `/api/export` 意外异常落结构化 400（UI 不再误报
-> fetch failed）。门禁 670/130/不变式全绿。**顺带真机实证 derived_stale 首触重刷路径（109s）**。
-> **r22 已出**（干净 commit `36dec63`，三道包内验收全绿，zip backend.exe sha16 `f0d00f10c4123813`）；
-> ✅ mac 包已更新（用户 dispatch run 38262048171 三 job 全绿，mac zip 覆盖为 916,823,896B）；Windows zip 不挂 GitHub；release/ 四档 r22/r21/r20/r19，删 r19 等口令。
-> 明细 = STATE Current Task 顶部「补十五」块。
+> **▶ 2026-10-12（续63 补十六）— 真机红条定性反转：客户端 300s 头超时，不是后端掐连接【现读这条】**
+> 「本轮扩面」的前提被打掉：全局 `exception_handler(Exception)` 一直有效（四臂真 uvicorn 实测 6/6 回
+> 结构化 500），红条真因 = Electron 侧 Node fetch（undici）默认 headersTimeout=300s × 分钟级**同步**导出
+> （真机 374s/783s 崩、571s/475s 成功却被报成失败）。修=桥接层默认 transport 改 **node:http**
+> （30min 显式兜底）+ **非 2xx 透传错误体**（包内才看得到中文话术+LOC 码）。
+> 门禁：UI **150 全绿** + 双 typecheck 干净 + 端到端 `PROBE PASS`；包侧新 2 锁打在 r22 上**预期红 FAILED=2**。
+> 另：r19 已按口令删除（验完再删，r20 回滚档先验逐字一致）⇒ release/ 现三档 r22/r21/r20。
+> ⚠️ **本批未提交、未出包**；改动只在 Electron 主进程 ⇒ **r22 包里没有**，要重出 r23 才可见。
+> 明细 = STATE Current Task 顶部「补十六」块。
 
 ## P1 — Next
 
-- [ ] **导出对话框 UI 修复（2026-10-10 第十三轮）— 代码已改、双 typecheck+vitest 绿，未提交未出包**：
-      `ResultsPage.vue` 告警列表撑爆窗口（加滚动）+ 输出目录选不了（加「浏览…」复用 openDirectory IPC）。
-      ⚠️ 前端改动要重建 r21 才在应用里可见。待口令：提交 + 是否随下次出包进 r21。
+- [ ] **r23 出包（等口令）**：本批（补十六）两处修复都在 Electron 主进程 JS 里 ⇒ 不在 backend.exe，
+      r22 包内没有。重出后 `accept_packaged_bundle.py` 的两条新包侧锁应由**红转绿**（现在打在 r22 上
+      FAILED=2 是预期红）；预期 r23 的 backend.exe sha16 与 r22 逐字相同（`f0d00f10c4123813`），
+      差异只在 `resources/app` —— 若 backend.exe 变了就说明构建面猜错了，先停下核。
+- [ ] **导出异步化（B 方案，已向用户报过、未拍板）**：`/api/tasks/export` 进现有 tasks 框架
+      （带进度 + 可取消），根治「UI 干等 6~13 分钟」。当前 A 方案只把误报修掉，不改善等待体验。
+
+- [x] ~~导出对话框 UI 修复（2026-10-10 第十三轮）~~ = ✅ **已提交并两代进包**（2026-10-12 复核）：
+      `ResultsPage.vue` 告警列表加滚动 + 输出目录「浏览…」= 代码笔 `aacfaa9`（2026-10-10 23:50，实测在 master），
+      `git merge-base --is-ancestor aacfaa9 09714ab` 通过 ⇒ 已在 **r21**，r22 同链继承。本条无遗留。
 - [x] **mac 出包链 = ✅ 真机结清（2026-10-10 续63 补十一 第十一轮，读 live CI）**：run
       `37955484860`（head `31974f2`）三 job 全绿；`macos-package` step 11 走通道 A 直链+sha256
       三份 try=1 即中 ⇒ step 15 门槛绿 ⇒ step 16 publish 绿 ⇒ release `mac-alpha` 新增

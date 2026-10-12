@@ -42,6 +42,48 @@
 
 ## Current Task
 
+> **▶ 2026-10-12（续63 补十六）— 真机红条定性反转：不是「后端掐连接」，是客户端 300s 头超时【现读这条】**
+> 口令两件：① release/ 删 r19（验完再删）② 「补十五 ⑤ 的未扩面项」本轮扩面。**② 的前提被实测打掉**，
+> 扩面改打到真因上。
+> **① 定性反转（连错两次的档案断言已订正）**：补十五/第十二轮都写「意外异常逃 ASGI ⇒ uvicorn 不发响应
+> ⇒ UI fetch failed」。三条反证：(a) `mvp/api/app.py:86` **早装了**全局 `exception_handler(Exception)`，
+> 真机日志那行 `unhandled error on POST /api/export` 就是它的落盘行；(b) 四臂真 uvicorn 实测
+> （A 裸 / B +2×BaseHTTPMiddleware / C +CORS / **D 复刻生产栈**，同 starlette 1.6.0 + uvicorn 0.52.4）
+> = **6/6 客户端收到结构化 500 JSON、服务存活、零连接失败**；(c) Starlette `ServerErrorMiddleware`
+> 源码在 re-raise 前先 `await response(...)`。**真因 = 客户端不等**：Electron 主进程用 Node 全局 fetch
+> （undici）默认 headersTimeout=300s，探针实测 `{message:"fetch failed", causeName:"HeadersTimeoutError",
+> reject_after_ms:300504}`；而真机那两发崩的导出请求实际跑了 **374s / 783s**（从 locator_service 的
+> `material expand` 行到崩溃行卡 Δ），同档另有 **571s / 475s 的成功导出** ⇒ 草稿已写完、UI 报「连不上后端」。
+> **② 修（全在 Electron 主进程，`mvp/src`/`mvp/api` 零改动）**：A=桥接层默认 transport
+> `globalThis.fetch` → **`httpRequester`（node:http，无隐式头超时）**，显式兜底
+> `BRIDGE_REQUEST_TIMEOUT_MS=30min`（取值=实测最坏 783s 留 ~2× 余量；挂死仍会断，不静默永久转圈）；
+> B=**非 2xx 把错误体当 `data` 带回**——旧写法只给 error/detail ⇒ 渲染层读不到 `body.message/code`，
+> 包内把后端写好的中文话术+LOC 码降级成英文技术串（dev 态走 fetchTransport 有 data ⇒ **只有包内暴露**）。
+> **③ 门禁**：UI **150 项全绿**（146→150，bridge.test.ts +6：node:http 真 socket 往返/查询串转发/
+> 默认 transport 结构锁/显式超时断连→network:true/服务端断连→network:true/非 JSON 兜底/非 2xx 透传）
+> + **双 typecheck 干净**（app + desktop）。包侧新锁 2 条进 `accept_packaged_bundle.py`，
+> 打在 **r22 现役包上首跑 = FAILED=2（预期红，证锁真咬）**，其余 26 项全绿（DirectML wall=27.1s、
+> 剪映通道 http=200、12 行腿埋点齐）。端到端 `work/probe_bridge_long_request.cjs`（跑**编译产物**
+> `out/electron/backend/bridge.js`，两臂并发打同一 330s 慢服务器）= **PROBE PASS**：
+> node:http 臂 `ok=true status=200 waited=330065ms`，旧 undici 臂 `network=true waited=307099ms`。
+> **④ r19 已删**（口令「删（验完再删）」）：先验回滚档 r20（testzip=None · 7,078 条目 · backend.exe
+> 77,474,898B · sha16 `63987715436d5e31`）**与档案逐字一致**，再验 r19 自身（testzip=None · 7,078 条目 ·
+> 77,474,263B · sha16 `86d2007c00cfc673`）一致 ⇒ 删（释放 ≈936MB）。release/ 现**三档 r22/r21/r20**。
+> **⑤ 覆盖边界（如实）**：改动不进 `backend.exe` ⇒ **r22 zip 不含本批修复**，要重出（r23）才在应用里
+> 可见；预期 r23 的 backend.exe sha16 与 r22 **逐字相同**（`f0d00f10c4123813`），差异只在 `resources/app`。
+> 超过 300s 的证据来自「编译产物 + 真 socket + 330s 慢**夹具**」，**不是真机真导出**；夹具侧显式关了 Node
+> 服务端 `requestTimeout/headersTimeout`（真后端 uvicorn 无此限制——真机 571s/475s 都回过响应）。
+> undici 默认值实测在 **Node v24.18.0**，Electron 34 内嵌 Node 20.x 的同值未单独实测（同族 300s，登记为边界）。
+> dev 态浏览器 fetch 路径未动（分发不走它）。导出 >30min 仍会被切断回 network:true（取「有界等待」）。
+> **其它路由不加 per-route try/except**（前提已证伪，全局 handler 继续作 500）；`/api/export` 的第二层
+> 边界**保留**（<300s 的意外异常仍给 400+人话），但其档案理由以本块为准。本批未重跑后端/API 全套（无 Python 改动面）。
+> **⑥ 未结**：本批**未提交、未出包**（等口令）；**B 方案=导出异步化**（`/api/tasks/export` 进现有 tasks
+> 框架，带进度+可取消，根治「UI 干等 6 分钟」）已向用户报过、未拍板未开工。
+> 产物：`mvp/ui/electron/backend/bridge.ts` · `mvp/ui/electron/backend/tests/bridge.test.ts` ·
+> `mvp/scripts/accept_packaged_bundle.py`；探针/日志在 `work/`（不入库）：`probe_global_handler.py` ·
+> `probe_node_fetch_timeout.js` · `probe_bridge_long_request.cjs` · `bridge_long_request.log` ·
+> `node_fetch_timeout.log` · `accept_r22_bridge.log` · `r19_id.log`/`r20_id.log`。
+
 > **▶ 2026-10-12（续63 补十五）— 真机 SegmentOverlap 崩修复 + 导出第二层错误边界 + derived_stale 真机实证【现读这条】**
 > 用户递来截图（导出框红条「无法连接后端服务 (fetch failed)」）+ `video_locator_logs(2).zip`。
 > **① 版本定性**：日志 19:54 `rebuild index: derived table version changed (…scn1 → …scn2)` +
@@ -67,6 +109,11 @@
 > **⑤ 覆盖边界（如实）**：没在他那台机器复现真导出（判据=日志数字与算术相容 + 单测复现该形态）；
 > 第二层边界**只加了 /api/export 一条路由**，其它路由意外异常仍会穿 ASGI（未扩面）；
 > 窄素材被撑到 0.1s 槽 = 0.83× 慢放观感，属最保守默认（不丢画面），未做「<0.1s 直接丢」变体。
+> ✅ **定性订正（续63 补十六 实测）**：本块 ②「意外异常逃 ASGI ⇒ 掐连接」与 ⑤「其它路由仍会穿 ASGI」
+> **均不成立** —— `app.py:86` 的全局 `exception_handler(Exception)` 一直在跑并发结构化 500
+> （四臂真 uvicorn 实测 6/6 收到 500）；红条真因 = Electron 侧 Node fetch 的 undici 默认
+> **headersTimeout=300s** 先放弃，而那发导出实际跑了 374s/783s。判据与修法见顶部「补十六」块与
+> `Known Issues` 教训 ⑳。
 > **⑥ r22 已出（2026-10-12 口令「立档 → 提交 → 出 r22」）**：代码笔 `a506df4` + 档案笔 `36dec63`
 > 已推 ⇒ **r22 = 干净 commit `36dec63` 构建**；包内三道验收全绿（bundle FAILED=0 · render FAILED=0 ·
 > 不变式 FAILED=0）；zip `Video-Locator-win-x64-20261012r22.zip` 981,686,020B / 7,078 条目 /
@@ -157,60 +204,6 @@
 > `test_scene_recall.py`(+scn2)；尺子 `mvp/scripts/shot_detect/{boundary_gt_v1.json,windows_v1.json,eval_shot_detector.py}`；
 > 发现文档 `mvp/docs/FINDINGS_SHOT_DETECTION_A1_20261011.md`。验收日志与双臂读数在 `work/v2_accept/`（不入库）。
 
-> **▶ 2026-10-11（续63 补十二）— A1 离线扫参 + 边界尺子 + A2 预演（镜头检测治本线第一步）【现读这条】**
-> 口令「3」= 开 A 第一步（立项文档 §8：A1 离线扫参 + §5.1 边界 GT，都不动 runtime、不重建索引）。
-> **本批 `mvp/src` 零改动**（只新增 `mvp/scripts/shot_detect/` 尺子与 harness + `mvp/docs/` 发现文档）。
-> 明细 = `mvp/docs/FINDINGS_SHOT_DETECTION_A1_20261011.md`；复现 =
-> `PYTHONPATH=mvp/src;mvp python mvp/scripts/shot_detect/eval_shot_detector.py --mode ablation|arms|ceiling|holdout|region`。
-> **① 尺子先建起来**（没有它「检测变好」无法证伪）：4 片分层抽 44 个 12s 窗（seed 20261011，
-> 含 test2 已知漏切区定向 4 窗）= 540s（全片 31124s 的 **1.7%**），4fps 接触表（192×108 逐格带绝对秒）**
-> 逐格目检** ⇒ **150 条边界 / 125 条 conf=high**，入库 `mvp/scripts/shot_detect/boundary_gt_v1.json`。
-> 探索期由 4 个子代理按同一协议分片标注，主代理**亲自抽读三端极值**（test1_00 被标 0 边界=单镜头长拍 /
-> test2_00 被标 18 边界=闪黑蒙太奇 / test3_08 被标 10 边界=快切）逐张复核通过后才采信。
-> ⚠️ 口径修正：现役索引是 **1fps**（`dt=1.000`，`feature_version=...@1_l2`，立项文档写的 0.5fps 是错的）
-> ⇒ 检测器边界粒度 1s，**主容差只能 ±1.0s**；±0.5s 只对像素通道公平，两档并列报数。
-> **② 现役 scenes.npy 的成绩 = P 0.707 / R 0.232 / F1 0.349**（±1.0s，conf=high）⇒ **只找回 23% 真边界**。
-> 定向区铁证：test2 3285-3333 这 48s，目检 **21 个边界（平均镜头 2.2s）**，现役 scenes 给的是 **2 段**
-> （3285→3323 宽 38s + 3323→3370 宽 47s）。
-> **③ 分腿消融（本批最有用的读数）**：`z_thresh` 1.5→关 单腿 R 0.232→**0.504**；`min_shot_s` 3.0→1.0
-> 单腿只 +0.008；`cut_abs` 单腿 +0.000；但 **ms1.0 + z 关 合起来 R=0.664** ⇒ 两腿**强交互**
-> （z 先把候选杀光，最短镜头腿就无从下手）⇒ **单旋钮消融会互相掩蔽，必须成对验**（教训 ⑰）。
-> 机理：局部 z-score 拿「自身邻域均值」作基线，快切段邻域本身就全是切 ⇒ 真切的 z 只有 0.5~1.2，
-> 被 1.5 系统性否掉（现役参数下 **79~94% 真边界邻域 z<1.5**）；且 test2 平均镜头 2.2s < `min_shot_s=3.0`
-> ⇒ 该常量在这类片上是**结构性摧毁**（把真镜头并成假镜头）。
-> **④ 天花板（哪些是阈值救不了的）**：真边界邻域内 CLS 距离中位 0.70~0.88（`<0.15` 占 0~1%）
-> ⇒ 不是「CLS 看不见」，是**看见了但没有可分离的尖峰位置**。「候选集可达召回」（存在局部极大=任何阈值的前提）
-> 2mkv 0.762 / test3 0.806 / test1 1.0(n=3 不外推) / **test2 只有 0.557** ⇒ **快切片 44% 的真边界
-> 在 1fps CLS 序列上连局部极大都没有**，调参到不了。调参后的 CLS 实得 R 已贴这个顶（test2 0.53）。
-> **⑤ 留出窗对照（防「扫参扫到噪声上」）**：每片按时间奇偶分半，只在选参半（22 窗）选 TOP5 再到留出半验
-> ⇒ 现役 F1 0.341→留出 0.359，调参臂 0.727→留出 **0.653**、0.723→**0.660** ⇒ **增益在未见窗上复现，不是过拟合**。
-> ⚠️ 只做了「窗」的二分，**没做「片」的二分** ⇒ 参数跨片泛化未独立验（登记在未证面）。
-> **⑥ A2 预演：把赌注做成数据**（160×90 / 10fps 解码，相邻帧 32-bin 灰度直方图 L1 与 mean-abs-diff 各半，
-> 局部极大 + NMS 0.4s）：同尺同窗 **P 0.706 / R 0.864 / F1 0.777**（±1.0s；±0.5s 也几乎不掉 0.693/0.848/0.763，
-> 因为像素通道粒度 0.1s）；定向区 48s 切出 **19 个边界 vs 目检 21**，逐条对齐。
-> ⚠️ **朴素并集不能用**：CLS∪像素 R 冲到 0.944 但 **P 塌到 0.461** ⇒ A2 的融合规则必须是
-> 「像素定候选位置 + CLS 作第二证据 + NMS + min_shot」，不是 OR。
-> **⑦ 成本（决定 A2 可不可兑现）**：300s 片段整段解码实测 17~18s，**与输出 300 帧还是 3000 帧几乎无关**
-> （1fps 全分辨率 18.4s / 1fps 缩放 16.9s / 10fps 缩放 17.6s）⇒ 成本主体=**解码本身**，直方图是零头；
-> 现役建索引已在为全片解码付钱 ⇒ A2 边际 ≈ 再一遍解码 ≈ **+5min/5000s 片**（相对现役 22~31min），
-> 且像素解码纯 CPU、可与 DML/MPS 推理并发 ⇒ 墙钟增量可近零。⚠️ 该数来自探针单进程，**不是生产索引路径**，
-> A2 实现时要同脚本双臂实测。
-> **⑧ 待用户拍板（本批只回答「能不能救 / 值不值得投」，未动 runtime）**：
-> (a) **A2 开码**（推荐）：索引期加像素边界通道 + 融合，派生版本位 `scn1→scn2` bump（只重算场景表/事件表、
->     **不重抽 CLS 特征**），验收 = 本尺子 F1 显著 >0.78 + 三指标不降 + **导出实得**并列口径 +
->     `check_export_plan_invariants` + 成片多模态复验；
-> (b) **A1 调参批**（小改动但属 runtime）：关 z + ms1.0 + cut .30~.40 ⇒ R 0.23→0.63，代价 =
->     **全片边界数 2671→5288~5910（翻倍）**，下游边界吸附/取材扩宽/事件表全受影响，须跑后端全套 + 三指标；
-> (c) **A3 当第三方尺子**（只评测、不进 runtime、不加产品依赖）：核「目检尺子对像素通道偏乐观」的偏置量。
-> B 护栏（K=2.5）**保留**，A 修好后仍是多一道保险。
-> **⑨ 未证面（如实）**：尺子 1.7% 抽样、test1 仅 3 条高置信 ⇒ 不外推；目检与像素同源（都看像素变化）
-> ⇒ 像素 R 0.864 是**偏乐观上界**；精度在两半窗间抖动大（现役 P 0.882 vs 0.583）⇒ **P 差 <0.1 不可读**；
-> 本批**未测**「场景表变好后三指标与成片是否变好」= 那是 A2 的验收，不是本批的结论。
-> 本批产物：`mvp/scripts/shot_detect/{boundary_gt_v1.json,windows_v1.json,eval_shot_detector.py}` +
-> `mvp/docs/FINDINGS_SHOT_DETECTION_A1_20261011.md`（**未提交**）；草稿脚本与接触表在 `work/shot_gt/`（不入库）。
-> 同批顺手更正：`PLAN_SHOT_DETECTION_20261011.md` 里 B 的提交指针原写 `c873e18`（那是档案笔），
-> 已改为代码笔 `098021b`；该文档「1fps」表述正确，STATE/别处若有「0.5fps 建索引」的说法以本块口径修正为准。
-
 ## Completed
 
 - 历史完成项见 `.agent/archive/STATE_history_20261007.md`（Current Task 退休块续14~续61）、
@@ -224,6 +217,13 @@
 
 ## Current Problem
 
+- ✅ **「导出框红条·无法连接后端服务」结案（2026-10-12 续63 补十六）= 客户端 300s 头超时，不是后端掐连接**：
+  全局 `exception_handler(Exception)` 一直有效（四臂真 uvicorn 实测 6/6 回结构化 500），真因是
+  Electron 主进程 Node fetch（undici）默认 headersTimeout=300s × 分钟级**同步**导出
+  （真机实测 374s/783s 崩、**571s/475s 成功却被报成失败**）。修=桥接层默认 transport 改 node:http
+  （30min 显式兜底）+ 非 2xx 透传错误体；端到端 `PROBE PASS`（node:http 臂 330065ms 拿到 200，
+  旧 undici 臂 307099ms 抛 fetch failed）。UI 150 项 + 双 typecheck 绿；包侧新 2 锁打在 r22 上**预期红 FAILED=2**。
+  ⚠️ **改动只在 Electron 主进程 ⇒ r22 zip 不含本批修复，需重出 r23**；导出异步化（进度/可取消）= 未拍板的下一批候选。
 - ✅ **镜头检测治本线 A2 已落地并通过验收（2026-10-11 续63 补十三）— scn2 = 像素通道 + CLS 证据 + 持续性门**：
   生产落盘表在同尺上 **P/R/F1 = 0.732/0.832/0.779**（全窗）/ 0.787/0.814/0.800（内区），scn1 是 0.707/0.232/0.349；
   四片生产回归（同脚本双臂）= **严格 130→135、导出实得（仅主 span）112→131（+19）**，
@@ -484,6 +484,18 @@
   本轮越的是**目标时间轴**（同一 0.1 下限把 target 撑出 <0.1s 的卷轴槽位 ⇒ 与下一条严格相交
   SegmentOverlap）。修一处下限缺陷 ≠ 其余轴界内（教训 ⑧ 的「枚举同型调用点」在本族再次兑现）；
   下限必须**同时进槽位排布与写入判据**（两处各写一份必然漂移），并给「累加用下限后宽度」上结构锁。
+  ⑳ **UI 的「网络级失败」话术只对应客户端放弃，别反推成「后端掐连接」——先卡请求时长 vs 客户端默认超时**
+  （2026-10-12 补十六，订正补十五/第十二轮的定性）：真机红条「无法连接后端服务 (fetch failed)」被连写
+  两次成「意外异常逃 ASGI ⇒ uvicorn 不发响应」。实测三条都反着来：① `app.py` 早装了全局
+  `exception_handler(Exception)`，真机日志里 `unhandled error on POST /api/export` 就是它的落盘行；
+  ② 四臂真 uvicorn（同 starlette 1.6.0/uvicorn 0.52.4，含复刻生产「2×BaseHTTPMiddleware+CORS」栈）
+  **6/6 收到结构化 500 JSON、服务存活**；Starlette 源码原文「We always continue to raise the exception」
+  的前提是**先把响应发出去**。**真因 = 客户端 300s 自己走人**：Node 全局 fetch（undici）默认
+  headersTimeout=300s，实测 `{"message":"fetch failed","causeName":"HeadersTimeoutError","reject_after_ms":300504}`，
+  而那两次导出请求实际跑了 **374s / 783s**（同档还有 **571s / 475s 的成功导出** ⇒ 草稿写完了、UI 报连不上）。
+  ⇒ 纪律：**「客户端看到 network 级失败」是外层可观测量，成因有两族（服务端没回 vs 客户端不等）**，
+  判族要先拿「请求实际时长」与「客户端默认超时」对表（日志里用发起侧首条 INFO 到崩溃/完成行的 Δ 就能卡）；
+  以及**凡是「某层会掐连接」的断言，用真 socket 真进程跑一遍**，别拿框架文档印象当结论。
 - **mac 包会多带 ≈88MB 死资产**（续36）：`PatchReranker._try_onnx` 只认 DmlExecutionProvider，
   macOS/MPS 侧本就走 torch；`extraResources` 是整目录复制，H3 正式化时需按平台裁剪。
 
@@ -532,4 +544,4 @@
 
 ## Last Updated
 
-2026-10-12 22:59
+2026-10-12 23:43
