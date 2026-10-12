@@ -75,7 +75,9 @@ def main() -> int:
               'require("node:http")' in btxt and "fetchImpl = globalThis.fetch" not in btxt,
               str(bridge_js))
         check("桥接层非 2xx 把错误体透传成 data（UI 才拿得到 message/code）",
-              re.search(r"if \(!res\.ok\) \{\s*\n\s*return \{[\s\S]{0,300}?data: bodyData,", btxt)
+              # 编译后 `if (!res.ok) {` 与 `return {` 之间夹着源注释行，所以只能按「短距离内
+              # 出现 data: bodyData」判，不能要求两行相邻（第一版就是这么写歪的）。
+              re.search(r"if \(!res\.ok\) \{[\s\S]{0,700}?data: bodyData,", btxt)
               is not None, "")
     else:
         check("桥接层 JS 在位", False, str(bridge_js))
