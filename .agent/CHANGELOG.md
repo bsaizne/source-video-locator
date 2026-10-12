@@ -56,9 +56,25 @@
 - ⚠️ **锁自身的一次假红**：包侧「非 2xx 透传 data」首版正则要求 `if (!res.ok) {` 与 `return {` 相邻，
   而编译产物中间夹着源注释行 ⇒ 打在正确实现上仍判 FAIL。已改「短距离内出现 `data: bodyData`」并重跑至
   28/0。**教训：正则型包侧锁要按编译产物的真实排版写，不能按源码排版写。**
-- **遗留**：① mac 包同带此缺陷（同一份 `bridge.ts`），要经 mac CI dispatch 才更新——属 2026-10-06 裁决
-  的搁置项，由用户定；② 导出异步化（`/api/tasks/export`，进度+可取消）未拍板未开工；
-  ③ release/ 现四档 r23/r22/r21/r20，删 r20 等口令。
+- **收口三件（口令「1.删r20，2.动，动完之后就走ci更新mac平台」，2026-10-13 00:2x–00:3x）**：
+  ① **r20 已删** —— 删前按规矩验回滚档 r21（`testzip=None` · 7,078 条目 · backend.exe 77,493,043B ·
+  sha16 `fa3c394567cc17d2` 与档案逐字一致；r20 自身本批早先亦验过）⇒ **release/ 三档 r23 现役 + r22 + r21**。
+  ② **已 push `1a05aba..4fe0d96`（4 笔）**：`8fbd02c`(代码) · `a84119d`(档案=r23 构建点) ·
+  `555a00d`(验收脚本锁修正) · `4fe0d96`(出包结清档案)。
+  ③ **mac 已 dispatch**：`h3-macos-mps.yml` ref=master ⇒ HTTP **204**，run **38277827813**，
+  head_sha `4fe0d96a5`（含桥接层修复）。凭证走本机 `git credential-manager get`（`git credential fill`
+  这次返回空，非该项目可用写法）；令牌**不入命令行/日志/不回显**，状态回读改用公开 API（不带凭证）。
+- **口径钉死（用户问「push 是不是就走工作流」）= 不是**：`h3-macos-mps.yml` 是
+  `workflow_dispatch` 专用（push 不触发，当初为省 macOS 分钟而设），**push 只是前置**
+  ——dispatch 取默认分支 head，没推上去的提交构建不到 ⇒ 「更 mac 包」须单独说 dispatch。
+- **自动换包机制读 workflow 本体验明**（非回忆）：`macos-package` `needs: mvp-tests-macos`(:103)
+  ⇒ gate `Accept packaged mac bundle (gate publish)`(:278) ⇒ `Publish ... rolling tag mac-alpha`(:281)
+  执行 `gh release upload mac-alpha "$Z" --clobber`(:288) ⇒ **门槛绿即同名资产就地覆盖、无人工步骤**；
+  **门槛红则 publish 整步不跑、mac-alpha 留旧包**（历史「两轮红第三轮绿」那几轮没换包即此因）。
+  用户明确表示 mac zip 一侧**不用我确认** ⇒ 本批不追读该 run（watcher 已停，日志留 `work/watch_mac_run.log`）。
+- **档案瘦身**：STATE `Current Task` 保持 3 块（补十二已逐字迁 `archive/STATE_history_20261011.md`）；
+  TODO 从 114 行回到 **72 行**（P1 里 49 行已结清/已被取代条目逐字迁 `archive/TODO_history_20261013.md`，
+  脚本 `work/trim_todo_p1.py` 带锚点断言 + 回读逐字核验；开放项 4 条一律留在 P1/P2/Blocked）。
 
 ## 2026-10-12（续63 补十五）— 真机 SegmentOverlap 崩修复 + 导出第二层错误边界 + derived_stale 真机实证
 

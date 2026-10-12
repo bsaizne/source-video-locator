@@ -96,9 +96,25 @@
 > `git diff 36dec63..a84119d -- mvp/src mvp/api` **为空**（本批没动 Python 运行面）。⇒ 正确口径是
 > 「同尺寸 + 差异只在归档长度/时间戳字段」，**不是**「逐字相同」；`zip 内 == 磁盘构建`
 > （matches_disk_build=True）这条仍然成立且是有效闸。
-> ⚠️ **mac 侧未跟新**：同一份 `bridge.ts` 缺陷在 mac 包里同样存在，本批修复要经 mac CI dispatch 才到用户手上
-> （mac 出包按 2026-10-06 裁决属搁置项，是否随本批更新由用户定，我不自行提议）。
-> release/ 现**四档 r23/r22/r21/r20**，按「最新+上一档」应删 r20，等口令。
+> ~~⚠️ mac 侧未跟新：同一份 `bridge.ts` 缺陷在 mac 包里同样存在，要经 mac CI dispatch 才到用户手上~~
+> → **已随本批 dispatch（见 ⑦）**：mac 包与 Windows 共用同一份 `bridge.ts`，改 JS/跨平台代码后
+> **必须主动交代「mac 要另走一发 dispatch」**，否则会默默留下「Win 已修、mac 仍崩」的裂口。
+> **⑦ 收口三件（2026-10-13 00:2x–00:3x，口令「1.删r20，2.动，动完之后就走ci更新mac平台」）**：
+> ① **r20 已删**——按规矩先验回滚档 r21（`testzip=None` · 7,078 条目 · backend.exe 77,493,043B ·
+> sha16 `fa3c394567cc17d2` **与档案逐字一致**）；r20 自身本批早先也验过（`63987715436d5e31` 一致）。
+> ⇒ release/ 现**三档 = r23 现役 + r22 + r21**（本块 ⑥ 原写「四档、删 r20 等口令」已执行，口径以此处为准）。
+> ② **已 push `1a05aba..4fe0d96`（4 笔）**（含代码笔 `8fbd02c` 与 r23 构建点 `a84119d`）。
+> ③ **mac 已 dispatch**：`h3-macos-mps.yml`（ref=master）HTTP **204** ⇒ run **38277827813**，
+> head_sha `4fe0d96a5`（= 最新 master，故构建面含桥接层修复）。**话术口径钉一次**：
+> **push ≠ 走工作流**——该 workflow 是 `workflow_dispatch` 专用（push 不触发，为省 macOS 分钟），
+> push 只是**前置**（dispatch 取默认分支 head）。要「更 mac 包」得单独说 dispatch。
+> **自动换包机制**（读 `.github/workflows/h3-macos-mps.yml` 本体，非回忆）：`macos-package`
+> `needs: mvp-tests-macos`(:103) ⇒ 「Accept packaged mac bundle (gate publish)」(:278) ⇒
+> 「Publish to GitHub Releases (rolling tag mac-alpha)」(:281) 对已存在 tag 执行
+> `gh release upload mac-alpha "$Z" --clobber`(:288) ⇒ **门槛绿就同名资产就地覆盖，无需人工步骤**；
+> **门槛红则 publish 整步不跑，mac-alpha 留旧包**（= 历史「两轮红第三轮绿」那几轮没换包的原因）。
+> 收口读数（run 三 job 结论 + `mac-alpha` 资产字节数/`updated_at` 对旧值 916,823,896B @
+> 2026-10-12T14:45:51Z）另笔登记；用户 00:3x 明确「mac zip 不用我确认」，此项**不再自行追读**。
 > **未结**：**B 方案=导出异步化**（`/api/tasks/export` 进现有 tasks 框架，带进度+可取消，根治
 > 「UI 干等 6~13 分钟」）已向用户报过、未拍板未开工。
 > 产物：`mvp/ui/electron/backend/bridge.ts` · `mvp/ui/electron/backend/tests/bridge.test.ts` ·
@@ -342,12 +358,13 @@
   上一档 r22（`Video-Locator-win-x64-20261012r22.zip`，干净 commit `36dec63`，backend.exe 77,493,384B
   sha16 `f0d00f10c4123813`）；更早 r21（`09714ab`，含 A2 scn2 + 剪映导出崩修复 + 第十三轮导出框 UI 修复）、
   r20（未提交工作树构建，backend.exe 77,474,898B sha16 `63987715436d5e31`）。
-  **分发包现四档 = r23 现役 + r22 + r21 + r20**（2026-10-12 出 r22；**r19 已按口令删除（2026-10-12，
-  删前双验：回滚档 r20 与 r19 自身均 `testzip=None` / 7,078 条目 / sha16 与档案逐字一致）**，释放 ≈936MB；
-  更早 r18 于 2026-10-11 删、r17 于 2026-10-10 删、r15/r16 于 2026-10-09 删）。
-  ⇒ 按「最新+上一档」应删 **r20**，等口令。
-  补九/补十/补十一 已按口令提交并 push（`ba5bedd` + `382d3ac` + `d78e13a` + `3349063` + `b6a4a25`
-  + 其后的 workflow 修复笔 + r19 相关笔，HEAD = checkpoint `31974f2`）；**第十二轮 exporters 修复未提交**。
+  **分发包现三档 = r23 现役 + r22 + r21**（2026-10-12 出 r22、2026-10-13 出 r23；**r19 已删（2026-10-12，
+  删前双验：回滚档 r20 与 r19 自身均 `testzip=None` / 7,078 条目 / sha16 与档案逐字一致）**；
+  **r20 已删（2026-10-13，同样先验回滚档 r21 = `fa3c394567cc17d2` 逐字一致）**；更早 r18 于 2026-10-11 删、
+  r17 于 2026-10-10 删、r15/r16 于 2026-10-09 删）。⇒ 维持「三档 = 最新 + 上一档 + 一档历史」的节奏，
+  下次出 r24 时按同规矩删 r21。
+  ~~补九/补十/补十一 ... **第十二轮 exporters 修复未提交**~~ = 该句**已过期**（第十二轮~补十六
+  全部代码笔+档案笔均已提交并 push；截至 2026-10-13 00:3x，origin/master = `4fe0d96`）。
   => 腿边界埋点与支持档降噪**已在包内支持档实测生效**（Windows 见 Current Task 补十 块；
   **mac 侧同一条链也已在 mac 测试日志里实测**：12 行 `locate leg=` 顺序/区间正确）。
 - ~~两处新 UI 缺浏览器目检~~ = 已目检（续63 补三）并**按用户裁决删除显示**（续63 补四）；
@@ -575,4 +592,4 @@
 
 ## Last Updated
 
-2026-10-13 00:21
+2026-10-13 00:38
