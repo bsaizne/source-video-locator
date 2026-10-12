@@ -13,16 +13,26 @@
 > （真机 374s/783s 崩、571s/475s 成功却被报成失败）。修=桥接层默认 transport 改 **node:http**
 > （30min 显式兜底）+ **非 2xx 透传错误体**（包内才看得到中文话术+LOC 码）。
 > 门禁：UI **150 全绿** + 双 typecheck 干净 + 端到端 `PROBE PASS`；包侧新 2 锁打在 r22 上**预期红 FAILED=2**。
-> 另：r19 已按口令删除（验完再删，r20 回滚档先验逐字一致）⇒ release/ 现三档 r22/r21/r20。
-> ⚠️ **本批未提交、未出包**；改动只在 Electron 主进程 ⇒ **r22 包里没有**，要重出 r23 才可见。
-> 明细 = STATE Current Task 顶部「补十六」块。
+> 另：r19 已按口令删除（验完再删，r20 回滚档先验逐字一致）。**已提交并出 r23**
+> （代码笔 `8fbd02c` + 档案笔 `a84119d`，r23 = 干净 commit `a84119d` 构建，包内四道全绿，
+> zip 内 bridge.js == 磁盘逐字节相同）⇒ release/ 现**四档 r23/r22/r21/r20**，删 r20 等口令。
+> 明细 = STATE Current Task 顶部「补十六」块（含「backend.exe 逐字相同」这条预期被实测推翻的订正）。
 
 ## P1 — Next
 
-- [ ] **r23 出包（等口令）**：本批（补十六）两处修复都在 Electron 主进程 JS 里 ⇒ 不在 backend.exe，
-      r22 包内没有。重出后 `accept_packaged_bundle.py` 的两条新包侧锁应由**红转绿**（现在打在 r22 上
-      FAILED=2 是预期红）；预期 r23 的 backend.exe sha16 与 r22 逐字相同（`f0d00f10c4123813`），
-      差异只在 `resources/app` —— 若 backend.exe 变了就说明构建面猜错了，先停下核。
+- [x] ~~r23 出包（等口令）~~ = ✅ **已出并四道全绿（2026-10-13 00:1x）**：
+      `Video-Locator-win-x64-20261012r23.zip` 981,687,209B / 7,078 条目 / testzip=None /
+      zip 内 backend.exe 77,493,384B sha16 `537bcca18760de77` == 磁盘（matches_disk_build=True）；
+      **zip 内 `bridge.js` 与磁盘逐字节相同**（8,882B，含 node:http + httpRequester + data 透传）。
+      bundle **28 PASS/0 FAIL**（两条新桥接锁由 r22 上的预期红转绿）· render **8 PASS/FAILED=0**
+      （R1 wall=60s · 64 段无交叠 · h264_amf · 隔离在位）· 不变式 **FAILED=0** · 冒烟 AFTER_KILL=0。
+      ⚠️ 订正：本条原写「预期 backend.exe sha16 与 r22 **逐字相同**」**被实测推翻** —— 实为同尺寸、
+      仅 9 字节差（3 段各 3 字节，两处同值=归档长度字段）⇒ PyInstaller 非确定性构建；
+      `git diff 36dec63..a84119d -- mvp/src mvp/api` 为空佐证没动 Python 运行面。
+- [ ] **待口令：release/ 四档删 r20**（按「最新+上一档」；删前照例 `zip_identity.py` 双验 r21 可读
+      且 sha16 与档案逐字一致，预计释放 ≈940MB）。
+- [ ] **mac 包仍带同一缺陷**：`bridge.ts` 这份改动要经 mac CI dispatch 才进 mac 包
+      （mac 出包属 2026-10-06 裁决的搁置项，是否随本批更新由用户定）。
 - [ ] **导出异步化（B 方案，已向用户报过、未拍板）**：`/api/tasks/export` 进现有 tasks 框架
       （带进度 + 可取消），根治「UI 干等 6~13 分钟」。当前 A 方案只把误报修掉，不改善等待体验。
 

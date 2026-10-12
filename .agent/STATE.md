@@ -69,20 +69,44 @@
 > **④ r19 已删**（口令「删（验完再删）」）：先验回滚档 r20（testzip=None · 7,078 条目 · backend.exe
 > 77,474,898B · sha16 `63987715436d5e31`）**与档案逐字一致**，再验 r19 自身（testzip=None · 7,078 条目 ·
 > 77,474,263B · sha16 `86d2007c00cfc673`）一致 ⇒ 删（释放 ≈936MB）。release/ 现**三档 r22/r21/r20**。
-> **⑤ 覆盖边界（如实）**：改动不进 `backend.exe` ⇒ **r22 zip 不含本批修复**，要重出（r23）才在应用里
-> 可见；预期 r23 的 backend.exe sha16 与 r22 **逐字相同**（`f0d00f10c4123813`），差异只在 `resources/app`。
+> **⑤ 覆盖边界（如实）**：改动不进 `backend.exe` ⇒ **r22 zip 不含本批修复**，需重出（r23 = 见 ⑥）。
 > 超过 300s 的证据来自「编译产物 + 真 socket + 330s 慢**夹具**」，**不是真机真导出**；夹具侧显式关了 Node
 > 服务端 `requestTimeout/headersTimeout`（真后端 uvicorn 无此限制——真机 571s/475s 都回过响应）。
-> undici 默认值实测在 **Node v24.18.0**，Electron 34 内嵌 Node 20.x 的同值未单独实测（同族 300s，登记为边界）。
+> ~~undici 默认值实测在 Node v24.18.0，Electron 34 内嵌 Node 20.x 的同值未单独实测（同族 300s，登记为边界）~~
+> → **已在 Electron 内实测关闭**（`work/probe_electron_fetch_default.cjs`，Electron **34.5.8 / Node 20.19.1**）：
+> global fetch 臂 **306,602ms** 抛 `fetch failed`(cause `HeadersTimeoutError`)、node:http 臂
+> **330,006ms 真拿到 200** ⇒ `PROBE PASS`，定性在产品实际运行环境里同样成立。
 > dev 态浏览器 fetch 路径未动（分发不走它）。导出 >30min 仍会被切断回 network:true（取「有界等待」）。
 > **其它路由不加 per-route try/except**（前提已证伪，全局 handler 继续作 500）；`/api/export` 的第二层
 > 边界**保留**（<300s 的意外异常仍给 400+人话），但其档案理由以本块为准。本批未重跑后端/API 全套（无 Python 改动面）。
-> **⑥ 未结**：本批**未提交、未出包**（等口令）；**B 方案=导出异步化**（`/api/tasks/export` 进现有 tasks
-> 框架，带进度+可取消，根治「UI 干等 6 分钟」）已向用户报过、未拍板未开工。
+> **⑥ r23 已出（2026-10-13 00:1x，口令「先提交再打r23」）**：代码笔 `8fbd02c` + 档案笔 `a84119d`
+> ⇒ **r23 = 干净 commit `a84119d` 构建**（构建时工作树干净）。`build-release.ps1` 四步 PS_EXIT=0。
+> 包内四道全绿：**bundle 28 PASS / 0 FAIL**（含两条新桥接层锁——它们在 r22 包上**首跑预期红 FAILED=2**，
+> 现在转绿）· **render 8 PASS / FAILED=0**（R1 completed wall=60s · 64 段无交叠 · 136.366 vs 136.344s ·
+> h264_amf · 隔离子进程在位）· **导出计划不变式 FAILED=0**（4 片 × 4 通道）· **启动冒烟**
+> Electron 4 + backend 1 / 30s 存活 / AFTER_KILL=0。
+> zip `Video-Locator-win-x64-20261012r23.zip` = **981,687,209B / 7,078 条目 / testzip=None / flat**
+> （对 r22 +1,189B，与「只改一份主进程 JS」相容）；**zip 内 bridge.js 与磁盘逐字节相同**（8,882B，
+> 含 `require("node:http")` + `fetchImpl = httpRequester` + `data: bodyData`）= 修复确实在分发包里，
+> 不只是在 win-unpacked 里。
+> ⚠️ **一处预登记预期被推翻并订正**：本块原写「预期 r23 的 backend.exe sha16 与 r22 逐字相同」——
+> 实测**不等**（r23 `537bcca18760de77` vs r22 `f0d00f10c4123813`，**同尺寸 77,493,384B**）。字节级 diff
+> = **仅 9 字节、3 段各 3 字节**（偏移 264 / 344 / 253492，其中 264 与 253492 两处同值 ⇒ 归档长度/偏移类字段），
+> 形态符合 PyInstaller「.pyc 内嵌构建时间戳 ⇒ 压缩后位移」的**非确定性构建**；佐证 =
+> `git diff 36dec63..a84119d -- mvp/src mvp/api` **为空**（本批没动 Python 运行面）。⇒ 正确口径是
+> 「同尺寸 + 差异只在归档长度/时间戳字段」，**不是**「逐字相同」；`zip 内 == 磁盘构建`
+> （matches_disk_build=True）这条仍然成立且是有效闸。
+> ⚠️ **mac 侧未跟新**：同一份 `bridge.ts` 缺陷在 mac 包里同样存在，本批修复要经 mac CI dispatch 才到用户手上
+> （mac 出包按 2026-10-06 裁决属搁置项，是否随本批更新由用户定，我不自行提议）。
+> release/ 现**四档 r23/r22/r21/r20**，按「最新+上一档」应删 r20，等口令。
+> **未结**：**B 方案=导出异步化**（`/api/tasks/export` 进现有 tasks 框架，带进度+可取消，根治
+> 「UI 干等 6~13 分钟」）已向用户报过、未拍板未开工。
 > 产物：`mvp/ui/electron/backend/bridge.ts` · `mvp/ui/electron/backend/tests/bridge.test.ts` ·
 > `mvp/scripts/accept_packaged_bundle.py`；探针/日志在 `work/`（不入库）：`probe_global_handler.py` ·
-> `probe_node_fetch_timeout.js` · `probe_bridge_long_request.cjs` · `bridge_long_request.log` ·
-> `node_fetch_timeout.log` · `accept_r22_bridge.log` · `r19_id.log`/`r20_id.log`。
+> `probe_node_fetch_timeout.js` · `probe_bridge_long_request.cjs` · `probe_electron_fetch_default.cjs` ·
+> `bridge_long_request.log` · `electron_fetch_timeout.log` · `node_fetch_timeout.log` ·
+> `accept_{bundle,render}_r23.log` · `invariants_r23.log` · `startup_r23.log` · `r23_id.log` ·
+> `backend_diff.txt` · `r19_id.log`/`r20_id.log`。
 
 > **▶ 2026-10-12（续63 补十五）— 真机 SegmentOverlap 崩修复 + 导出第二层错误边界 + derived_stale 真机实证【现读这条】**
 > 用户递来截图（导出框红条「无法连接后端服务 (fetch failed)」）+ `video_locator_logs(2).zip`。
@@ -223,7 +247,10 @@
   （真机实测 374s/783s 崩、**571s/475s 成功却被报成失败**）。修=桥接层默认 transport 改 node:http
   （30min 显式兜底）+ 非 2xx 透传错误体；端到端 `PROBE PASS`（node:http 臂 330065ms 拿到 200，
   旧 undici 臂 307099ms 抛 fetch failed）。UI 150 项 + 双 typecheck 绿；包侧新 2 锁打在 r22 上**预期红 FAILED=2**。
-  ⚠️ **改动只在 Electron 主进程 ⇒ r22 zip 不含本批修复，需重出 r23**；导出异步化（进度/可取消）= 未拍板的下一批候选。
+  ✅ **已出包 r23（2026-10-13 00:1x，干净 commit `a84119d`）**：包内 bundle 28/0 · render 8/0 · 不变式 0 ·
+  冒烟 AFTER_KILL=0；zip 内 bridge.js 与磁盘逐字节相同（= 修复确在分发包里）。
+  ⚠️ 两条遗留：① mac 包同样有此缺陷，要经 mac CI dispatch 才更新（属搁置项，由用户定）
+  ② 导出异步化（进度/可取消）= 未拍板的下一批候选。
 - ✅ **镜头检测治本线 A2 已落地并通过验收（2026-10-11 续63 补十三）— scn2 = 像素通道 + CLS 证据 + 持续性门**：
   生产落盘表在同尺上 **P/R/F1 = 0.732/0.832/0.779**（全窗）/ 0.787/0.814/0.800（内区），scn1 是 0.707/0.232/0.349；
   四片生产回归（同脚本双臂）= **严格 130→135、导出实得（仅主 span）112→131（+19）**，
@@ -310,14 +337,15 @@
   （脚本「同名先删再传」⇒ 三份删了重传），又 kill 掉大文件那一发 ⇒ ISC `.data` 在服务器上缺了≈25 分钟。
   ⇒ 教训：**长上传的进度判据 = 服务端 asset 列表，不是本机 `tasklist` 里 curl 的驻留内存**。
   公开性事实（他已选定，不再重提）：`mac-alpha` 是公开 prerelease ⇒ 权重随公开包一同公开，ISC 为 NC 许可。
-- Windows 现役包 = **r21**（`Video-Locator-win-x64-20261011r21.zip`，**干净 commit `09714ab` 构建**，
-  含 A2 scn2 + 剪映导出崩修复 + 第十三轮导出框 UI 修复；身份与三道验收读数见上一条）。
-  上一档 r20（`Video-Locator-win-x64-20261010r20.zip`，未提交工作树构建，zip 内 backend.exe
-  77,474,898B sha16 `63987715436d5e31`）。
-  **分发包现三档 = r21 现役 + r20 + r19**（2026-10-11 出 r21；**r18 已按口令删除（2026-10-11）**，
-  删前 `zip_identity.py` 验 r19 可读 `testzip=None` / 7,078 条目 / backend.exe sha16
-  `86d2007c00cfc673` 与档案逐字一致，释放 ≈940MB；更早 r17 已于 2026-10-10 删除，
-  r15/r16 于 2026-10-09 删除）。
+- Windows 现役包 = **r23**（`Video-Locator-win-x64-20261012r23.zip`，**干净 commit `a84119d` 构建**，
+  含 Electron 桥接层 300s 头超时修复 + 非 2xx 错误体透传；身份与四道包内验收读数见 Current Task 补十六 ⑥）。
+  上一档 r22（`Video-Locator-win-x64-20261012r22.zip`，干净 commit `36dec63`，backend.exe 77,493,384B
+  sha16 `f0d00f10c4123813`）；更早 r21（`09714ab`，含 A2 scn2 + 剪映导出崩修复 + 第十三轮导出框 UI 修复）、
+  r20（未提交工作树构建，backend.exe 77,474,898B sha16 `63987715436d5e31`）。
+  **分发包现四档 = r23 现役 + r22 + r21 + r20**（2026-10-12 出 r22；**r19 已按口令删除（2026-10-12，
+  删前双验：回滚档 r20 与 r19 自身均 `testzip=None` / 7,078 条目 / sha16 与档案逐字一致）**，释放 ≈936MB；
+  更早 r18 于 2026-10-11 删、r17 于 2026-10-10 删、r15/r16 于 2026-10-09 删）。
+  ⇒ 按「最新+上一档」应删 **r20**，等口令。
   补九/补十/补十一 已按口令提交并 push（`ba5bedd` + `382d3ac` + `d78e13a` + `3349063` + `b6a4a25`
   + 其后的 workflow 修复笔 + r19 相关笔，HEAD = checkpoint `31974f2`）；**第十二轮 exporters 修复未提交**。
   => 腿边界埋点与支持档降噪**已在包内支持档实测生效**（Windows 见 Current Task 补十 块；
@@ -496,6 +524,9 @@
   ⇒ 纪律：**「客户端看到 network 级失败」是外层可观测量，成因有两族（服务端没回 vs 客户端不等）**，
   判族要先拿「请求实际时长」与「客户端默认超时」对表（日志里用发起侧首条 INFO 到崩溃/完成行的 Δ 就能卡）；
   以及**凡是「某层会掐连接」的断言，用真 socket 真进程跑一遍**，别拿框架文档印象当结论。
+  同批两条附学：**包侧正则锁要按编译产物的真实排版写**（按源码排版写的「相邻两行」型正则会被注释行打死，
+  本批就这么假红了一次）；**PyInstaller 产物不是字节可复现的**（同树重打：同尺寸、仅 9 字节差在归档
+  长度/偏移字段）⇒ 别把「没动 Python ⇒ sha 逐字相同」当闸，有效闸是「zip 内 == 磁盘构建」+ `git diff 路径面为空`。
 - **mac 包会多带 ≈88MB 死资产**（续36）：`PatchReranker._try_onnx` 只认 DmlExecutionProvider，
   macOS/MPS 侧本就走 torch；`extraResources` 是整目录复制，H3 正式化时需按平台裁剪。
 
@@ -544,4 +575,4 @@
 
 ## Last Updated
 
-2026-10-12 23:43
+2026-10-13 00:21

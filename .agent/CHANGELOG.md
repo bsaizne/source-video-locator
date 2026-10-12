@@ -38,7 +38,27 @@
   保持 ≤3 块）；补十五块 ②/⑤ 内嵌「定性订正」指针；TODO P0 补十五块迁 `archive/TODO_history_20261012.md`；
   `Known Issues` 速查新增教训 ⑳（外层可观测量判族要先卡时长 vs 客户端默认超时；「某层会掐连接」必须真 socket 真进程跑）。
   顺手结清 TODO P1 的「第十三轮导出框 UI 修复」过期项（实测 `aacfaa9` 在 master 且为 r21 构建点祖先）。
-- 本批**未提交、未出包**（等口令）。下一批候选：导出异步化 `/api/tasks/export`（进度+可取消）。
+- **提交与出 r23（口令「先提交再打r23」，2026-10-13 00:1x）**：代码笔 `8fbd02c` + 档案笔 `a84119d`
+  ⇒ **r23 = 干净 commit `a84119d` 构建**（构建时工作树干净）。`build-release.ps1` 四步 PS_EXIT=0。
+  包内四道全绿：bundle **28 PASS/0 FAIL**（两条新桥接锁由 r22 上的预期红**转绿**）· render
+  **8 PASS/FAILED=0**（R1 completed wall=60s · 64 段无交叠 · 136.366 vs 136.344s · h264_amf · 隔离在位）·
+  导出计划不变式 **FAILED=0** · 启动冒烟 Electron 4 + backend 1 / AFTER_KILL=0。
+  zip `Video-Locator-win-x64-20261012r23.zip` = **981,687,209B / 7,078 条目 / testzip=None / flat**
+  （对 r22 +1,189B）；**zip 内 bridge.js 与磁盘逐字节相同**（8,882B）= 修复确在分发包里，不只是 win-unpacked。
+- ⚠️ **一条预登记预期被实测推翻并订正**：原写「预期 r23 的 backend.exe sha16 与 r22 逐字相同」——实测
+  **不等**（`537bcca18760de77` vs `f0d00f10c4123813`，**同尺寸 77,493,384B**）；字节 diff = **仅 9 字节、
+  3 段各 3 字节**（偏移 264/344/253492，两处同值 ⇒ 归档长度/偏移字段），形态 = PyInstaller 非确定性构建
+  （.pyc 内嵌时间戳推动压缩位移）；佐证 `git diff 36dec63..a84119d -- mvp/src mvp/api` **为空**。
+  ⇒ 正确口径「同尺寸 + 差异只在归档长度/时间戳字段」，`zip 内 == 磁盘构建` 仍是有效闸。
+- ✅ **Electron 内实测关闭一条覆盖边界**（`work/probe_electron_fetch_default.cjs`，Electron **34.5.8 /
+  Node 20.19.1**）：global fetch 臂 306,602ms 抛 `fetch failed`(`HeadersTimeoutError`)、node:http 臂
+  330,006ms 真拿到 200 ⇒ `PROBE PASS`，定性在产品实际运行环境成立（原先只在 CLI Node 24 上测过）。
+- ⚠️ **锁自身的一次假红**：包侧「非 2xx 透传 data」首版正则要求 `if (!res.ok) {` 与 `return {` 相邻，
+  而编译产物中间夹着源注释行 ⇒ 打在正确实现上仍判 FAIL。已改「短距离内出现 `data: bodyData`」并重跑至
+  28/0。**教训：正则型包侧锁要按编译产物的真实排版写，不能按源码排版写。**
+- **遗留**：① mac 包同带此缺陷（同一份 `bridge.ts`），要经 mac CI dispatch 才更新——属 2026-10-06 裁决
+  的搁置项，由用户定；② 导出异步化（`/api/tasks/export`，进度+可取消）未拍板未开工；
+  ③ release/ 现四档 r23/r22/r21/r20，删 r20 等口令。
 
 ## 2026-10-12（续63 补十五）— 真机 SegmentOverlap 崩修复 + 导出第二层错误边界 + derived_stale 真机实证
 
