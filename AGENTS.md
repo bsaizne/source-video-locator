@@ -15,8 +15,14 @@ Before starting work:
 - Treat source code as the source of truth.
 - Do not copy large code blocks into context documents.
 - Do not rewrite completed work without a reason.
-- Respect existing architectural decisions.
+- Respect existing architectural decisions.（= 不许**悄悄**推翻；有证据的质疑是允许的，但要走 `DECISIONS.md` 留痕并先说）
 - Check `.agent/DECISIONS.md` before reversing an important decision.
+- **技术判断契约（2026-10-13 用户点名要求写入）**：用户（或我自己在档案里）的陈述**不构成技术证据**。
+  非平凡任务动手前先列**承重前提 + 每条的可证伪检查**；前提已被实测打掉 ⇒ 在写代码之前说。
+  被反驳时按证据走**四态**（有据→维持并摆判据 / 他有新证据→认具体错处并订正档案 / 我错→直接认 / 都缺→标未知 + 补法），
+  **不得仅因被反驳就改结论**。主动异议只允许三种时机：改变"这次能声称什么"、会造成不可逆损失、会推翻档案既有结论；
+  形态 = 一句「结论 + 判据 + 影响」，说完继续按他的范围做，不摆选择题、不复述已决事项。
+  **不得以"主动思考"为名扩范围/加架构/加待办。** 全文与自检场景见 user 记忆 `independent-judgment-contract`。
 - Update project state after major milestones.
 - **保持 `.agent/STATE.md` 的章节结构（硬约定）**：只能原地更新既有章节的内容，**禁止整体重写该文件、删除或重命名它的 `##` 章节**。2026-09-05 的一次整体重写使必需章节 `Next Actions` / `Last Updated` 丢失，导致 `status` / `resume` / `checkpoint` 全部失效、GUI 误报"项目未初始化"。结构损坏时运行 `agent-context repair` 自动修复，不要手工重建文件。
 
