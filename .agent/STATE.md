@@ -123,6 +123,29 @@
 > `mvp/scripts/{attr_packaged_headless,accept_packaged_bundle}.py`；探针/日志在 `work/`（不入库）：
 > `probe_export_task_e2e.cjs` · `pkg_attr_probe_r23_syn.log` · `accept_bundle_r23_exporttask.log` ·
 > `backend_suite_r24_{b1,b2}.log`。
+> **r24 已出（2026-10-14 00:0x，第 2 条）**：三笔已提交并推（`de930dc` 代码 / `dc15f86` 规则 /
+> `811932e` 档案），构建时**工作树干净** ⇒ **r24 = 干净 commit `811932e` 构建**。
+> `build-release.ps1` 四步走完（`work/build_r24.log`：[1/4] vite → [2/4] electron 主进程 →
+> [3/4] PyInstaller `Build complete!` → [4/4] electron-builder，末尾出包成功行）。
+> **包内四道全绿**：bundle **33 PASS / FAILED=0** —— 上一批在 r23 上预期红的 **4 条新锁全部转绿**
+> （渲染层产物锁命中 `index--VHmdytl.js`、通道 `http=200`、任务 `completed`、草稿 ≥1 segment），
+> 且「进度单调」这条这轮采到 ≥2 帧 ⇒ 由 N/A 变成真判 · render **FAILED=0**（R1 completed wall=60s）·
+> 导出计划不变式 **FAILED=0**（4 片 × 4 通道）· 启动冒烟 **FAILED=0**（30s Electron 4 + backend 1，
+> `AFTER_KILL=0`）。zip `Video-Locator-win-x64-20261013r24.zip` = **981,692,188B / 7,078 条目 /
+> testzip=None / flat**（对 r23 +4,979B）；`zip 内 backend.exe 77,496,832B sha16=cf9c6ce003a47c66`
+> **matches_disk_build=True**；`zip 内 bridge.js 8,882B sha16=7d3e0427e3d3a4db == 磁盘`。
+> ⚠️ **一条我自己写错的核验当场订正**：先按「backend.exe 明文里搜路由串」判，得 `False` —— 那是
+> **无效判据**（PyInstaller 把 .py 存成压缩 PYZ，明文搜不到是必然）。有效判据 = 行为（探针打的正是
+> win-unpacked 里那个 backend.exe，回 `http=200 status=completed`）+ `matches_disk_build` +
+> 渲染层 bundle 扫串。补做**代次区分核**：r24 的 13 个 dist/assets js 命中 1 个，
+> **r23 同样 13 个命中 0 个** ⇒ 那条锁能区分代次，不是恒绿。
+> **mac 未更（如实登记）**：`git credential fill`（helper=manager）两次非交互**返回空** ⇒ 令牌需重登；
+> 不触发登录弹窗、不重试第三次。⇒ **mac-alpha 上仍是 r23 那一代 UI、没有导出任务通道**；
+> 要更 mac 需他在 Actions 点 `h3-macos-mps.yml`（head=master=`811932e`）或先重登一次 GCM。
+> **三档保留待口令**：release/ 现四档 r24/r23/r22/r21；按规矩删 r21，**等口令**。
+> 回滚档先验可读 = r22 `testzip=None / 7,078 条目 / backend.exe 77,493,384B sha16 f0d00f10c4123813`
+> 与档案逐字一致。
+
 
 
 > **▶ 2026-10-12（续63 补十六）— 真机红条定性反转：不是「后端掐连接」，是客户端 300s 头超时【现读这条】**
@@ -266,7 +289,8 @@
 
 ## Current Problem
 
-- ✅ **导出「UI 干等 6~13 分钟」已修到任务通道（2026-10-13 续63 补十七）— `POST /api/tasks/export` 带进度与可取消，后端全套 670 / API 150 / UI 161 全绿，端到端跑编译产物 `PROBE PASS`（真跨进程 pickle 批）。⚠️ 未提交、未出包 ⇒ 收益不在用户手上，进包要 r24，且 mac 需另 dispatch。**
+- ✅ **导出「UI 干等 6~13 分钟」已修到任务通道（2026-10-13 续63 补十七）— `POST /api/tasks/export` 带进度与可取消，后端全套 670 / API 150 / UI 161 全绿，端到端跑编译产物 `PROBE PASS`（真跨进程 pickle 批）。**已提交并进包 r24**（干净 commit `811932e`，包内四道全绿）；
+  ⚠️ mac 侧未更（取不到令牌 ⇒ mac-alpha 仍是 r23 那一代，见 Current Task 补十七）。**
 - ✅ **「导出框红条·无法连接后端服务」结案（2026-10-12 续63 补十六）= 客户端 300s 头超时，不是后端掐连接**：
   全局 `exception_handler(Exception)` 一直有效（四臂真 uvicorn 实测 6/6 回结构化 500），真因是
   Electron 主进程 Node fetch（undici）默认 headersTimeout=300s × 分钟级**同步**导出
@@ -363,12 +387,14 @@
   （脚本「同名先删再传」⇒ 三份删了重传），又 kill 掉大文件那一发 ⇒ ISC `.data` 在服务器上缺了≈25 分钟。
   ⇒ 教训：**长上传的进度判据 = 服务端 asset 列表，不是本机 `tasklist` 里 curl 的驻留内存**。
   公开性事实（他已选定，不再重提）：`mac-alpha` 是公开 prerelease ⇒ 权重随公开包一同公开，ISC 为 NC 许可。
-- Windows 现役包 = **r23**（`Video-Locator-win-x64-20261012r23.zip`，**干净 commit `a84119d` 构建**，
+- Windows 现役包 = **r24**（`Video-Locator-win-x64-20261013r24.zip`，**干净 commit `811932e` 构建**，
+  含导出任务通道 + 取消残留可见；包内 bundle 33/0 · render 0 · 不变式 0 · 冒烟 0，身份读数见 Current Task 补十七）。
+  上一档 r23（`Video-Locator-win-x64-20261012r23.zip`，**干净 commit `a84119d` 构建**，
   含 Electron 桥接层 300s 头超时修复 + 非 2xx 错误体透传；身份与四道包内验收读数见 Current Task 补十六 ⑥）。
   上一档 r22（`Video-Locator-win-x64-20261012r22.zip`，干净 commit `36dec63`，backend.exe 77,493,384B
   sha16 `f0d00f10c4123813`）；更早 r21（`09714ab`，含 A2 scn2 + 剪映导出崩修复 + 第十三轮导出框 UI 修复）、
   r20（未提交工作树构建，backend.exe 77,474,898B sha16 `63987715436d5e31`）。
-  **分发包现三档 = r23 现役 + r22 + r21**（2026-10-12 出 r22、2026-10-13 出 r23；**r19 已删（2026-10-12，
+  **分发包现四档 = r24 现役 + r23 + r22 + r21**（r21 待删口令；回滚档 r22 已先验 `f0d00f10c4123813` 逐字一致）（2026-10-12 出 r22、2026-10-13 出 r23；**r19 已删（2026-10-12，
   删前双验：回滚档 r20 与 r19 自身均 `testzip=None` / 7,078 条目 / sha16 与档案逐字一致）**；
   **r20 已删（2026-10-13，同样先验回滚档 r21 = `fa3c394567cc17d2` 逐字一致）**；更早 r18 于 2026-10-11 删、
   r17 于 2026-10-10 删、r15/r16 于 2026-10-09 删）。⇒ 维持「三档 = 最新 + 上一档 + 一档历史」的节奏，
@@ -602,4 +628,4 @@
 
 ## Last Updated
 
-2026-10-13 22:56
+2026-10-14 00:15

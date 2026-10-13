@@ -49,6 +49,17 @@
   而那是重跑可复用的转码缓存（`clip_path.exists()` 跳过重抽），删=下次多几分钟重转。
   UI 取消后显示「已转好的素材留在 <目录>，重新导出同一批会直接复用」
   （`useExportTask` 加 `cancelled`/`outDir` + 页面提示；vitest 150→162）。
+- **r24 出包（第 2 条）**：三笔 `de930dc`/`dc15f86`/`811932e` 已推，构建时工作树干净 ⇒
+  **r24 = 干净 commit `811932e`**。四道包内门禁全绿：bundle **33 PASS / FAILED=0**（r23 上预期红的 4 条新锁
+  全转绿；「进度单调」这轮采到 ≥2 帧 ⇒ 由 N/A 变真判）· render **FAILED=0**（R1 wall=60s）·
+  不变式 **FAILED=0** · 冒烟 **FAILED=0**（`AFTER_KILL=0`）。zip = 981,692,188B / 7,078 条目 /
+  testzip=None / flat；`backend.exe 77,496,832B sha16=cf9c6ce003a47c66` **matches_disk_build=True**；
+  `bridge.js` zip 内 == 磁盘（8,882B / `7d3e0427e3d3a4db`）。代次区分核：r24 的 13 个 dist/assets js
+  命中 1、**r23 同 13 个命中 0** ⇒ 那条锁不是恒绿。
+  ⚠️ 一条无效判据当场订正：按 backend.exe **明文搜路由串** = False 是必然（PyInstaller 存压缩 PYZ），
+  有效判据 = 行为 + `matches_disk_build` + bundle 扫串。
+  ⚠️ **mac 未更**：`git credential fill`（helper=manager）两次非交互返回空 ⇒ 不弹窗、不重试第三次；
+  mac-alpha 仍是 r23 那一代。release/ 现四档 r24/r23/r22/r21，删 r21 等口令（r22 已先验逐字一致）。
 - **档案**：STATE `Current Task` 补十七置顶，退休块「补十三」逐字迁 `archive/STATE_history_20261013.md`；
   TODO P0 换成补十七、「导出异步化」P1 结清，退休 P0 块「补十六」逐字迁 `archive/TODO_history_20261013.md`。
 
