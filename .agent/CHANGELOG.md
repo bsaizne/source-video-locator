@@ -60,6 +60,14 @@
   有效判据 = 行为 + `matches_disk_build` + bundle 扫串。
   ⚠️ **mac 未更**：`git credential fill`（helper=manager）两次非交互返回空 ⇒ 不弹窗、不重试第三次；
   mac-alpha 仍是 r23 那一代。release/ 现四档 r24/r23/r22/r21，删 r21 等口令（r22 已先验逐字一致）。
+- **收尾三件（2026-10-14 口令）**：① **r21 已删** —— 删前当场重测（非复用上轮缓存）：回滚档 r22
+  `testzip=None / 7,078 条目 / backend.exe 77,493,384B sha16 f0d00f10c4123813` 与待删档 r21 自身
+  （77,493,043B / `fa3c394567cc17d2`）均与档案逐字一致 ⇒ 才删，释放 ≈936MB
+  ⇒ **release/ 三档 r24/r23/r22**；② **mac 由他自己 dispatch**（我这边 `credential fill` 两次非交互
+  返回空 ⇒ 不弹窗、不重试第三次）：run `38429952068`，head=`c789670`（最新 master，含本批全部改动），
+  `in_progress`；换包基线已取 = `Video-Locator-mac-arm64.zip` 916,828,395B @
+  `updated_at 2026-10-12T16:56:33Z` ⇒ 事后按「字节数/时间戳变化」判包是否真换，不拿 run 绿当结论；
+  ③ 探针草稿清理：draftA 他自己删、draftB 我删（11MB），日志留 `work/long_export_probe/`。
 - **档案**：STATE `Current Task` 补十七置顶，退休块「补十三」逐字迁 `archive/STATE_history_20261013.md`；
   TODO P0 换成补十七、「导出异步化」P1 结清，退休 P0 块「补十六」逐字迁 `archive/TODO_history_20261013.md`。
 

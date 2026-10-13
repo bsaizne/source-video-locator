@@ -24,8 +24,11 @@
 > 其余 28 项照绿（DirectML wall=27.1s · 剪映 http=200 · reaped exitcode=0 · 12 行腿埋点）。
 > **已出包 r24**（干净 commit `811932e`，包内四道全绿：bundle 33/0 · render 0 · 不变式 0 · 冒烟 0；
 > zip 981,692,188B / backend.exe sha16 `cf9c6ce003a47c66` == 磁盘；r24 bundle 命中 1 / r23 命中 0）。
-> **未结两项**：① **mac 未更** —— `credential fill` 两次非交互返回空（要重登 GCM），不弹窗不重试，
-> 需他自己 dispatch 或先重登；② **r21 待删**（三档规矩，等口令，r22 已验可作回滚档）。
+> ① **r21 已删**（2026-10-14 口令；删前双验逐字一致）⇒ release/ 三档 r24/r23/r22；
+> ② **mac 由他 dispatch**：run `38429952068`（head `c789670`，in_progress）；换包基线已取
+> （`Video-Locator-mac-arm64.zip` 916,828,395B @ 2026-10-12T16:56:33Z）⇒ 事后按「字节数/updated_at
+> 变化」判「包真换了」，不看 run 绿就下结论。探针草稿已清（draftA 他删 / draftB 我删），
+> 日志留 `work/long_export_probe/`。
 > 真素材长导出已实测（test2 批 66.7s/86 clip：首帧 0.0、81 条逐 clip 帧、收尾帧可见、取消 0.36s 终止）；
 > 成本归因更正 = 真机与本机逐 clip 成本一致（0.70~0.84s），墙钟差全在 clip 条数（取材扩宽 620 条）。
 > 取消残留已裁决 = 不自动删（缓存可复用），UI 显示「素材留在 <目录>，重跑直接复用」，vitest 162。
