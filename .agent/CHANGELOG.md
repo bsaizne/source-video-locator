@@ -1,5 +1,58 @@
 # CHANGELOG
 
+## 2026-10-13（续63 补十七）— B 方案导出异步化：`POST /api/tasks/export` 带进度与可取消，UI 切任务通道
+
+- **触发**：用户口令「开始 B 方案导出异步化」（上一条给出的六步顺序，第 1~4 步本批做完；
+  出包 r24 与 mac dispatch 等口令）。
+- **动手前核四条承重前提**（每条带可证伪检查，写进 `mvp/docs/PLAN_EXPORT_ASYNC_20261013.md`）：
+  P1 后端 hook 早已在位（`locator_service.py:1590-1593` / `:1610-1616` 收 `on_progress`+`cancel_token`，
+  剪映腿 `:1731` 逐 clip 取消 + `:1742` 逐 clip 进度）⇒ **`mvp/src` 零改动**；
+  P2 `_STAGE_RANGES[EXPORT]=(98,1.5)` 是 analyze 收尾口径，复用会让导出任务一提交就 98% ⇒ 按
+  `task.kind` 分派；P3 隔离 payload 白名单 ⇒ 补字段 + 往返锁；P4 同步 `/api/export` 不删。
+- **改动面**：`api/tasks/{models,manager,worker,isolated}.py` + `api/{schemas,routes/tasks}.py` +
+  UI 六件（`ServiceAPI`/Http/Mock/`types.ts`/`index.ts` + 新 `useExportTask` + `ResultsPage`）。
+  `run_render_worker` → `run_batch_task_worker`（render/export 共用终态处理，不抄第二份）；
+  两条通道请求体收成 `exportRequestBody()` 一个构造点；`warnings` 由**产出它的进程**带进信封
+  （隔离子进程与父进程是两个 service 实例，父进程读自己那份永远空）。
+- **新发现并接线（既有缺陷，非本批引入）**：`ProgressDebouncer.flush()` 有实现、有单测，
+  **却没有任何 worker 调用** ⇒ 任务收尾那一帧（导出「已导出 xxx」/渲染最后一段）被防抖扣住后
+  永不露出；已在 `run_worker` 与 `run_batch_task_worker` 两处 `mark_completed` 前补 flush。
+- **门禁**：后端 **Ran 670 tests OK (skipped=2)**（改前后各一轮）· API **Ran 150 OK**（130→150，
+  新 `test_export_task.py` 20 项含「首帧 <98 且单调且末帧 99」与 analyze 老口径回归锁）·
+  UI vitest **161 passed**（150→161，新 `exportTask.test.ts` 11 项含**同源锁**）· 双 typecheck rc=0
+  （逐字取码；`npm run ... | tail` 会把 rc 洗成假 0，本批就差点读到一个假绿）。
+- **端到端跑编译产物**：`work/probe_export_task_e2e.cjs` = `out/electron/backend/bridge.js` →
+  真 uvicorn（随机端口 + 会话令牌 + release 通道）→ `/api/results/load`（69 条真基线批）→
+  `POST /api/tasks/export` → `completed progress=100` · 产物落盘非空 ·
+  支持档 `isolated child started/booted pid=20828` = `export_batch` 过了**真跨进程 pickle** ⇒ `PROBE PASS`。
+- **包侧四条新硬断言打在现役 r23 上首跑 = `FAILED=4 / PASS=28`（预期红 = 锁真咬）**：1 条**渲染层产物锁**
+  （`dist/assets/*.js` 必须含 `/api/tasks/export`，r23 的 13 个资产 0 命中）+ 3 条后端通道锁
+  （路由 `http=405` / 任务 completed / 草稿 ≥1 segment），
+  其余 28 项照绿（DirectML wall=27.1s · 剪映 http=200 · 隔离 `reaped exitcode=0` · 12 行腿埋点）。
+  进度单调判据写成「采到 ≥2 帧才判」⇒ 本轮 syn 太快判 **N/A 不判通过**。
+- **两处我自己的失误留痕**：① 包内探针首跑用了脚本默认 case=`test2`（23 分钟真素材，而 accept 读
+  `headless_syn.summary.json`）⇒ 停掉、确认无残留 `backend.exe` 后用 `syn` 重跑；
+  ② 新 print 里的 `⇒` 在 GBK 控制台 `UnicodeEncodeError`，把 accept 打崩在汇总行之前
+  （教训 ⑮ 同族再犯）⇒ 除改掉我那两处，顺手把既有两条同型 latent（`export_http`/`jianying_http`
+  缺字段分支的 info 行）一起改成 GBK 安全串——那正是拿旧包跑验收最会走到的分支。
+- **覆盖边界（如实）**：>300s 的**真机长导出**没在本机实测（syn 秒级）；剪映逐 clip 进度只到事件层，
+  包内要 r24 才测得到；UI 的同步 `exportResults` 方法保留但页面已无调用方；**未提交、未出包** ⇒
+  收益还不在用户手上，且跨平台 JS/TS 改动 ⇒ 需 r24 + mac 另 dispatch。
+- **真素材长导出实测（第 1 条）**：`wall=66.7s` · 84 帧 · 83 个不同进度值 · 81 条逐 clip 进度 ·
+  首帧 0.0（R1 真跑确认）· 末帧 100 · 收尾「已导出」帧可见（flush 生效）· 82 clips/110.1MB/segments=86 ·
+  `warnings=4` 跨进程带回 · `isolated child booted`（真 pickle）。取消腿：cancel→terminated **0.36s**、
+  读到终态 ≈1.0s，残留 5 clips/11.1MB 且 `draft_content.json` 未写，后端零未处理异常。
+- **成本归因更正（我口述错过一次）**：「真机单 clip 慢 7.4×」= **分母用错**（64 段是渲染段数，
+  导出是 `clips=681`）。正数：真机 0.84s / 0.70s vs 本机 0.78s ⇒ **逐 clip 成本一致、无性能异常**；
+  墙钟差全来自 clip 条数（真机取材扩宽 620 条），即「代价主体=取材扩宽」再确认 ⇒ 杠杆在 `material_width`。
+- **取消残留裁决（第 3 条）= 不自动删，改可见 + 复用提示**：≈1.3MB/clip ⇒ 真机取消留 ≈0.9GB，
+  而那是重跑可复用的转码缓存（`clip_path.exists()` 跳过重抽），删=下次多几分钟重转。
+  UI 取消后显示「已转好的素材留在 <目录>，重新导出同一批会直接复用」
+  （`useExportTask` 加 `cancelled`/`outDir` + 页面提示；vitest 150→162）。
+- **档案**：STATE `Current Task` 补十七置顶，退休块「补十三」逐字迁 `archive/STATE_history_20261013.md`；
+  TODO P0 换成补十七、「导出异步化」P1 结清，退休 P0 块「补十六」逐字迁 `archive/TODO_history_20261013.md`。
+
+
 ## 2026-10-12（续63 补十六）— 真机红条定性反转：客户端 300s 头超时 × 分钟级同步导出（不是后端掐连接）
 
 - **触发**：用户两件口令 —— ① release/ 删 r19（选「删（验完再删）」）② 补十五 ⑤ 登记的
@@ -2983,5 +3036,7 @@ STATE `Current Task` 顶部新增补八块并把补七的开放项②标为闭�
 - None.
 
 ### Notes
+
+- Created `checkpoint-2026-10-13-214843.md` checkpoint (1 modified/untracked file(s)).
 
 - Created `checkpoint-2026-10-13-0040.md` checkpoint (1 modified/untracked file(s)).

@@ -8,20 +8,26 @@
 
 ## P0 — Current
 
-> **▶ 2026-10-12（续63 补十六）— 真机红条定性反转：客户端 300s 头超时，不是后端掐连接【现读这条】**
-> 「本轮扩面」的前提被打掉：全局 `exception_handler(Exception)` 一直有效（四臂真 uvicorn 实测 6/6 回
-> 结构化 500），红条真因 = Electron 侧 Node fetch（undici）默认 headersTimeout=300s × 分钟级**同步**导出
-> （真机 374s/783s 崩、571s/475s 成功却被报成失败）。修=桥接层默认 transport 改 **node:http**
-> （30min 显式兜底）+ **非 2xx 透传错误体**（包内才看得到中文话术+LOC 码）。
-> 门禁：UI **150 全绿** + 双 typecheck 干净 + 端到端 `PROBE PASS`；包侧新 2 锁打在 r22 上**预期红 FAILED=2**。
-> 另：r19 已按口令删除（验完再删，r20 回滚档先验逐字一致）。**已提交并出 r23**
-> （代码笔 `8fbd02c` + 档案笔 `a84119d`，r23 = 干净 commit `a84119d` 构建，包内四道全绿，
-> zip 内 bridge.js == 磁盘逐字节相同）。
-> **收口三件（2026-10-13 口令「删r20 / 动 / 走ci更mac」）**：r20 已删（先验回滚档 r21 =
-> `fa3c394567cc17d2` 逐字一致）⇒ **release/ 三档 r23 现役 + r22 + r21**；已 push
-> `1a05aba..4fe0d96`（4 笔）；mac 已 dispatch `h3-macos-mps.yml` = run **38277827813**
-> （head `4fe0d96a5`，HTTP 204）——**push ≠ 走工作流**（该 workflow 是 dispatch-only，push 只是前置）。
-> 明细 = STATE Current Task 顶部「补十六」块 ⑥⑦（含「backend.exe 逐字相同」这条预期被实测推翻的订正）。
+> **▶ 2026-10-13（续63 补十七）— B 方案导出异步化：/api/tasks/export 带进度与可取消【现读这条】**
+> 后端 hook 本就在位（`export_project`/`export_results` 收 `on_progress`+`cancel_token`）⇒
+> **`mvp/src` 零改动**，只接任务层 + UI：`TaskKind.EXPORT` · `submit_export`（提交时锁批，
+> 防排队期间新定位换批）· `POST /api/tasks/export` · 进度按 `task.kind` 分派
+> （analyze 收尾的 98→99.5 老口径逐字不变）· UI `useExportTask` + `ResultsPage` 切通道（进度行+取消）。
+> 两条通道请求体收成一个构造点；`warnings` 随信封回传（隔离子进程与父进程是两个 service 实例）。
+> 顺带接了 `ProgressDebouncer.flush()`：有实现有单测却**没有任何 worker 调用** ⇒ 收尾帧永不露出。
+> 门禁：后端 **Ran 670 OK (skipped=2)** · API **Ran 150 OK**（130→150，+20）·
+> UI vitest **161 passed**（150→161，+11）· 双 typecheck rc=0（逐字取码；`| tail` 会把 rc 洗成假 0）。
+> 端到端 `work/probe_export_task_e2e.cjs` = 编译产物 `bridge.js` → 真 uvicorn（随机端口+令牌+release）
+> → 完成 `progress=100` + 产物落盘 + `isolated child booted`（批过了真跨进程 pickle）⇒ **PROBE PASS**。
+> 包侧 4 条新锁打在现役 **r23** 上首跑 = **FAILED=4 / PASS=28（预期红 = 锁真咬：含 1 条渲染层产物锁 +
+> 3 条后端通道锁；r23 没这条路由 ⇒ 405）**，
+> 其余 28 项照绿（DirectML wall=27.1s · 剪映 http=200 · reaped exitcode=0 · 12 行腿埋点）。
+> **未结**：未提交、未出包 ⇒ 分发包里还没有；进包 = **r24**，且这是跨平台 JS/TS 改动 ⇒ **mac 另 dispatch**。
+> 真素材长导出已实测（test2 批 66.7s/86 clip：首帧 0.0、81 条逐 clip 帧、收尾帧可见、取消 0.36s 终止）；
+> 成本归因更正 = 真机与本机逐 clip 成本一致（0.70~0.84s），墙钟差全在 clip 条数（取材扩宽 620 条）。
+> 取消残留已裁决 = 不自动删（缓存可复用），UI 显示「素材留在 <目录>，重跑直接复用」，vitest 162。
+> 仍存边界：**>300s 档**没在本机复现（本机最重素材只 66.7s）；包侧进度单调判据「采到 ≥2 帧才判」，syn 轮 N/A。
+> 明细 = STATE Current Task 顶部「补十七」块 + 方案文档 `mvp/docs/PLAN_EXPORT_ASYNC_20261013.md`。
 
 ## P1 — Next
 
@@ -41,8 +47,9 @@
       `38277827813`（ref=master，head `4fe0d96a5`，HTTP 204）。机制已读 workflow 本体验明：门槛绿 ⇒
       `gh release upload mac-alpha --clobber` **自动就地覆盖**，无需人工；门槛红 ⇒ publish 不跑、留旧包。
       用户明确「mac zip 不用你确认」⇒ **不再自行追读该 run**（watcher 日志留 `work/watch_mac_run.log`）。
-- [ ] **导出异步化（B 方案，已向用户报过、未拍板）**：`/api/tasks/export` 进现有 tasks 框架
-      （带进度 + 可取消），根治「UI 干等 6~13 分钟」。当前 A 方案只把误报修掉，不改善等待体验。
+- [x] ~~导出异步化（B 方案）~~ = ✅ **已落地（2026-10-13 续63 补十七）**：
+      `POST /api/tasks/export` 进现有 tasks 框架（进度 0→99 + 可取消），UI 已切任务通道；
+      同步 `/api/export` 保留未删。⚠️ 未提交、未出包 ⇒ 用户手上还没有；进包 = r24（mac 另 dispatch）。
 
 - [x] ~~导出对话框 UI 修复（2026-10-10 第十三轮）~~ = ✅ **已提交并两代进包**（2026-10-12 复核）：
       `ResultsPage.vue` 告警列表加滚动 + 输出目录「浏览…」= 代码笔 `aacfaa9`（2026-10-10 23:50，实测在 master），

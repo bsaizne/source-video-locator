@@ -53,3 +53,20 @@
       路径未立项）；**blob 序通道打开**（blob 序=源码书写序，进度 pct 互证；tracker 阶段词表
       「特征→候选→召回→定位」与 V2 流程注册序已产出）。
       明细 `competitor_cutmatch/FINDINGS_OPCODE_CHANNEL_20261007.md`。
+
+> 2026-10-13（续63 补十七）追加：P0 退休块「补十六」**逐字**迁入。
+
+> **▶ 2026-10-12（续63 补十六）— 真机红条定性反转：客户端 300s 头超时，不是后端掐连接【现读这条】**
+> 「本轮扩面」的前提被打掉：全局 `exception_handler(Exception)` 一直有效（四臂真 uvicorn 实测 6/6 回
+> 结构化 500），红条真因 = Electron 侧 Node fetch（undici）默认 headersTimeout=300s × 分钟级**同步**导出
+> （真机 374s/783s 崩、571s/475s 成功却被报成失败）。修=桥接层默认 transport 改 **node:http**
+> （30min 显式兜底）+ **非 2xx 透传错误体**（包内才看得到中文话术+LOC 码）。
+> 门禁：UI **150 全绿** + 双 typecheck 干净 + 端到端 `PROBE PASS`；包侧新 2 锁打在 r22 上**预期红 FAILED=2**。
+> 另：r19 已按口令删除（验完再删，r20 回滚档先验逐字一致）。**已提交并出 r23**
+> （代码笔 `8fbd02c` + 档案笔 `a84119d`，r23 = 干净 commit `a84119d` 构建，包内四道全绿，
+> zip 内 bridge.js == 磁盘逐字节相同）。
+> **收口三件（2026-10-13 口令「删r20 / 动 / 走ci更mac」）**：r20 已删（先验回滚档 r21 =
+> `fa3c394567cc17d2` 逐字一致）⇒ **release/ 三档 r23 现役 + r22 + r21**；已 push
+> `1a05aba..4fe0d96`（4 笔）；mac 已 dispatch `h3-macos-mps.yml` = run **38277827813**
+> （head `4fe0d96a5`，HTTP 204）——**push ≠ 走工作流**（该 workflow 是 dispatch-only，push 只是前置）。
+> 明细 = STATE Current Task 顶部「补十六」块 ⑥⑦（含「backend.exe 逐字相同」这条预期被实测推翻的订正）。
