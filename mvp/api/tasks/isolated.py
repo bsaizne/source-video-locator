@@ -55,7 +55,9 @@ def _payload_of(task) -> dict:
             "original_paths": list(task.original_paths),
             "refine": task.refine,
             "render_params": dict(task.render_params),
-            "render_batch": task.render_batch}
+            "render_batch": task.render_batch,
+            "export_params": dict(task.export_params),
+            "export_batch": task.export_batch}
 
 
 def _task_from_payload(payload: dict):
@@ -66,7 +68,9 @@ def _task_from_payload(payload: dict):
                 original_paths=list(payload["original_paths"]),
                 refine=payload["refine"],
                 render_params=dict(payload["render_params"]),
-                render_batch=payload.get("render_batch"))
+                render_batch=payload.get("render_batch"),
+                export_params=dict(payload.get("export_params") or {}),
+                export_batch=payload.get("export_batch"))
     # 父子日志同 task_id（售后归因：一条任务跨两个进程的日志要能串起来）
     if payload.get("task_id"):
         task.task_id = payload["task_id"]
@@ -109,7 +113,9 @@ def _child_main(payload: dict, q) -> None:
 
         def on_progress(ev) -> None:
             from .worker import map_progress_stage
-            stage, pct = map_progress_stage(ev)
+            # 必须带 task.kind：kind=export 时同一批 EXPORT 事件要吃 0→99 全区间，
+            # 不带就退回 analyze 的 98→99.5 ⇒ 包内（隔离是生产默认路径）进度假高。
+            stage, pct = map_progress_stage(ev, task.kind)
             q.put({"type": "progress", "stage": stage.value,
                    "pct": pct, "message": getattr(ev, "message", "") or ""})
 
@@ -159,12 +165,14 @@ def _adopt_parent_batch(service, task, payload, log) -> None:
     ``locate`` 写的是子进程那份 service，父进程这份永远是 None ⇒ 用户跑完一次长分析
     点导出就拿到 ``no results batch``（2026-10-09 真机：22 分钟分析完成后导出/渲染双双失败）。
     render 任务的批是提交时锁定的（``task.render_batch``），不需要回登记。
+    export 任务（2026-10-13 B 方案）同理：批是提交时锁定的，且它的 result 是
+    ``{"kind":"export","path":...}`` 而非 ResultBatch —— 误当结果批还原会白白抛一次异常。
     回登记失败只影响后续导出，不该改任务终态 ⇒ 只记日志。
     """
     from .models import TaskKind
-    if task.kind is TaskKind.RENDER or not isinstance(payload, dict):
+    if task.kind in (TaskKind.RENDER, TaskKind.EXPORT) or not isinstance(payload, dict):
         return
-    if payload.get("kind") == "render":
+    if payload.get("kind") in ("render", "export"):
         return
     try:
         from domain.models import ResultBatch

@@ -70,6 +70,36 @@ class TaskManager:
                                      isolated=self._isolated))
         return task
 
+    def submit_export(self, batch, *, fmt: str = "json", out_dir: str | None = None,
+                      min_confidence: str | None = None, low_policy: str | None = None,
+                      snap_scenes: bool | None = None,
+                      material_width: str | None = None) -> Task:
+        """创建导出任务（2026-10-13 B 方案）。与 :meth:`submit_render` 同口径：**提交时
+        锁定结果批**，排队期间的新定位不会改变导出目标。
+
+        参数集合与同步 ``POST /api/export`` 逐字一致（``fmt`` / 置信门槛 / 吸附 / 素材宽度），
+        两条通道只是"同步等"与"任务里等"的差别。
+        """
+        task = Task(kind=TaskKind.EXPORT,
+                    edited_path=str(getattr(batch, "edited_video", "") or ""),
+                    original_path=str(getattr(batch, "original_video", "") or ""),
+                    export_batch=batch,
+                    export_params={"fmt": fmt,
+                                   "out_dir": out_dir or "",
+                                   "min_confidence": min_confidence,
+                                   "low_policy": low_policy,
+                                   "snap_scenes": snap_scenes,
+                                   "material_width": material_width})
+        with self._lock:
+            self._tasks[task.task_id] = task
+        self._log("task submitted (export) task_id=%s fmt=%s original=%s edited=%s",
+                  task.task_id, fmt, task.original_path, task.edited_path)
+        # isolated 必须与 submit_analyze/submit_render 同源传递（漏传 ⇒ 永远在线程内跑，
+        # 见 submit_render 上方 2026-10-07 r15 实测教训）。
+        self._run(lambda: run_worker(task, self._service, log=self._log,
+                                     isolated=self._isolated))
+        return task
+
     def get(self, task_id: str) -> Task | None:
         with self._lock:
             return self._tasks.get(task_id)

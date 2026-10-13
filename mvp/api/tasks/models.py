@@ -42,10 +42,13 @@ class TaskStage(str, Enum):
 
 class TaskKind(str, Enum):
     """任务种类。``analyze`` = 定位（默认，历史行为）；``render`` = 成片渲染
-    （2026-09-29 续30，竞品 video_renderer 移植；不进定位链路，独立任务）。"""
+    （2026-09-29 续30，竞品 video_renderer 移植；不进定位链路，独立任务）；
+    ``export`` = 工程/结果导出（2026-10-13 B 方案：分钟级同步 ``POST /api/export``
+    的真机实测 374s/783s ⇒ UI 只能干等，改走任务通道拿进度与取消）。"""
 
     ANALYZE = "analyze"
     RENDER = "render"
+    EXPORT = "export"
 
 
 @dataclass
@@ -65,9 +68,13 @@ class Task:
     refine: bool | None = None
     # 渲染任务参数（out_dir / 置信门槛 / 吸附），由 routes.tasks 传入、worker 消费。
     render_params: dict = field(default_factory=dict)
+    # 导出任务参数（fmt / out_dir / 门槛 / 吸附 / 素材宽度），2026-10-13 B 方案。
+    export_params: dict = field(default_factory=dict)
     # 渲染任务的目标结果批（内存对象，不参与序列化；worker 用它渲染，
     # 避免"提交后到执行前又有新 locate → 渲染错批"的竞态）。
     render_batch: object | None = field(default=None, repr=False, compare=False)
+    # 导出任务的目标结果批（同上口径：提交时锁定，排队期间新定位不改导出目标）。
+    export_batch: object | None = field(default=None, repr=False, compare=False)
     status: TaskStatus = TaskStatus.PENDING
     stage: TaskStage = TaskStage.IDLE
     # 0-100，一位小数（2026-10-02 续40 UX：进度条要能看出逐段推进）

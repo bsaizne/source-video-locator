@@ -32,6 +32,18 @@ export interface RenderOpts {
   snapScenes?: boolean
 }
 
+// 工程/结果导出请求（POST /api/tasks/export，2026-10-13 B 方案）。
+// 字段集合与同步 exportResults 的 opts 一致（少 filename/cancelToken：任务通道的
+// 取消走 /api/tasks/{id}/cancel，不由前端中断请求）。
+export interface ExportOpts {
+  outDir?: string
+  format?: ExportFormat
+  minConfidence?: 'HIGH' | 'MEDIUM' | 'LOW'
+  lowPolicy?: 'exclude' | 'backup'
+  snapScenes?: boolean
+  materialWidth?: 'scene' | 'core'
+}
+
 // The single seam between the UI and the backend. Every concrete adapter
 // (Mock for standalone dev, Http for the real Python service — see
 // HttpServiceAdapter) implements this interface; pages depend only on it.
@@ -110,6 +122,12 @@ export interface ServiceAPI {
   // ---- 成片渲染任务（2026-09-29 续30，竞品 video_renderer 移植） ----
   // 渲染会话当前结果批为单个成片；进度/取消与定位任务同通道（GET /api/tasks/{id}）。
   startRenderTask(opts?: RenderOpts): Promise<{ task_id: string }>
+
+  // ---- 工程/结果导出任务（2026-10-13 B 方案） ----
+  // 真机实测分钟级导出（374s/783s）在同步 /api/export 里 UI 只能干等 ⇒ 走任务通道，
+  // 进度与取消同 /api/tasks/analyze 通道（GET /api/tasks/{id} 轮询）。
+  // 结果在 task.result = { kind:'export', format, path, warnings }。
+  startExportTask(opts?: ExportOpts): Promise<{ task_id: string }>
 
   // ---- progress + cancellation ----
   onProgress(listener: (event: ProgressEventJson) => void): () => void

@@ -46,6 +46,21 @@ class ExportRequest(BaseModel):
     material_width: str | None = None   # scene=所在完整镜头(默认) / core=仅核心定位窗口
 
 
+class ExportTaskRequest(BaseModel):
+    """导出任务请求（2026-10-13 B 方案：分钟级导出走任务通道，带进度与取消）。
+
+    结果批取自会话当前批（与同步 ``/api/export`` 同口径），不在请求体里传。
+    参数集合与 :class:`ExportRequest` 逐字一致 —— 两条通道只差"同步等"与"任务里等"。
+    """
+
+    output_dir: str = ""
+    format: str = "json"
+    min_confidence: str | None = None
+    low_policy: str | None = None
+    snap_scenes: bool | None = None
+    material_width: str | None = None   # scene=所在完整镜头(默认) / core=仅核心定位窗口
+
+
 class AnalyzeTaskRequest(BaseModel):
     edited_path: str = ""
     original_path: str = ""

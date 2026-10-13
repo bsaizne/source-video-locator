@@ -218,7 +218,7 @@ export interface ProgressEventJson {
 // ---- Async task lifecycle (mvp/api/tasks + /ws/progress) ----
 // Mirrors mvp/api/tasks/models.py Task + the WS frame shapes.
 export type TaskStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
-export type TaskKind = 'analyze' | 'render'
+export type TaskKind = 'analyze' | 'render' | 'export'
 export type TaskStage =
   | 'idle'
   | 'indexing'
@@ -247,6 +247,16 @@ export interface RenderMovieJson {
   clip_ranges?: Array<[number, number]>
 }
 
+/** 导出任务的 task.result（POST /api/tasks/export 完成态，2026-10-13 B 方案）。
+ *  `warnings` = 后端导出前守卫产出的对外告警（LOC-2001 碎片 / LOC-2002 重复认领），
+ *  由**产出它的那个 service** 带进信封（隔离子进程与父进程不同实例，父进程读不到）。 */
+export interface ExportResultJson {
+  kind?: 'export'
+  format: string
+  path: string
+  warnings?: string[]
+}
+
 export interface TaskJson {
   task_id: string
   /** analyze=定位（默认）；render=成片渲染。缺省按 analyze 处理（旧后端兼容）。 */
@@ -258,7 +268,7 @@ export interface TaskJson {
   /** ③ 心跳（2026-10-07）：最近一次状态变更时刻，轮询方据此区分「在动」与「卡死」。 */
   last_event_at: string | null
   finished_at: string | null
-  result: ResultBatchJson | RenderMovieJson | null
+  result: ResultBatchJson | RenderMovieJson | ExportResultJson | null
   error: string | null
   cancel_requested: boolean
   /** Human-readable current step, e.g. "分析剪辑画面 50/200 帧"（面向用户话术，续40）. */

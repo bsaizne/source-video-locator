@@ -82,6 +82,16 @@ def main() -> int:
     else:
         check("桥接层 JS 在位", False, str(bridge_js))
 
+    # **UI 侧导出通道产物锁**（2026-10-13 B 方案）：判据打在**打包进分发包的渲染层产物**上，
+    # 不是源码树（教训 ⑧：源码树全绿 + 计划层全绿都没抓到包内缺陷）。r23 的 dist 里没有
+    # `/api/tasks/export` 这个串 ⇒ 打在 r23 上预期红；r24 起来必须绿。
+    dist = RES / "app" / "dist" / "assets"
+    js_files = sorted(dist.glob("*.js")) if dist.exists() else []
+    hits = [f.name for f in js_files
+            if "/api/tasks/export" in f.read_text(encoding="utf-8", errors="replace")]
+    check("分发包渲染层调 /api/tasks/export（导出已切任务通道）",
+          bool(hits), "assets=%d 命中=%s" % (len(js_files), ",".join(hits[:3]) or "无"))
+
     manifest = PATCH_DIR / "asset.json"
     check("patch 资产清单在位", manifest.exists(), str(manifest))
     graph = PATCH_DIR / "dinov2_cls_patch.onnx"
@@ -140,7 +150,7 @@ def main() -> int:
         # 2026-10-09 用户真机 22 分钟分析后导出失败，就是这条没人锁过（探针自己先 load = 假绿）。
         ex_http = summary.get("export_http")
         if ex_http is None:
-            print("[info] 探针产物无 export_http 字段（早于本次改动）⇒ 该面未实测，别当已验收")
+            print("[info] 探针产物无 export_http 字段（早于本次改动）= 该面未实测，别当已验收")
         else:
             check("分析后直接导出（UI 路径，不先 load）", ex_http == 200,
                   "http=%s path=%s" % (ex_http, summary.get("export_path")))
@@ -150,7 +160,7 @@ def main() -> int:
         # （否则 = plan 空、写段循环没被跑到 = 锁形同虚设）。
         jy_http = summary.get("jianying_http")
         if jy_http is None:
-            print("[info] 探针产物无 jianying_http 字段（早于本次改动）⇒ 剪映通道未实测，别当已验收")
+            print("[info] 探针产物无 jianying_http 字段（早于本次改动）= 剪映通道未实测，别当已验收")
         else:
             check("剪映通道导出（真跑 write_jianying_draft）", jy_http == 200,
                   "http=%s path=%s" % (jy_http, summary.get("jianying_path")))
@@ -166,6 +176,39 @@ def main() -> int:
                         n_seg = "读失败:%s" % exc
             check("剪映草稿含 ≥1 segment（写段循环被真正执行）",
                   isinstance(n_seg, int) and n_seg >= 1, "segments=%s" % n_seg)
+        # **导出任务通道包内锁**（2026-10-13 B 方案）：UI 的导出入口已切
+        # POST /api/tasks/export ⇒ 包内后端必须认这个路由并轮询到 completed。
+        # 打在 r23 包上**首跑应为红**（r23 后端没有这条路由 ⇒ 实测 http=405：路径被
+        # `/api/tasks/{task_id}` 的 GET 规则吃掉），那是"锁真咬"的证据，不是脚本缺陷 ——
+        # 别看到红就改断言，先核包是哪一代。
+        te_http = summary.get("task_export_http")
+        if te_http is None:
+            print("[info] 探针产物无 task_export_http 字段（早于本次改动）= 任务通道未实测，别当已验收")
+        else:
+            check("导出任务通道可用（UI 现役入口 /api/tasks/export）",
+                  te_http == 200, "http=%s" % te_http)
+            check("导出任务跑到 completed",
+                  summary.get("task_export_status") == "completed",
+                  "status=%s" % summary.get("task_export_status"))
+            tp = summary.get("task_export_path")
+            n_seg_t = None
+            if tp:
+                dc_t = Path(tp) / "draft_content.json"
+                if dc_t.exists():
+                    try:
+                        content_t = json.loads(dc_t.read_text(encoding="utf-8"))
+                        n_seg_t = sum(len(t.get("segments", [])) for t in content_t.get("tracks", []))
+                    except Exception as exc:  # noqa: BLE001
+                        n_seg_t = "读失败:%s" % exc
+            check("导出任务产物是含 ≥1 segment 的剪映草稿",
+                  isinstance(n_seg_t, int) and n_seg_t >= 1, "segments=%s path=%s" % (n_seg_t, tp))
+            # 进度读数只在采到 ≥2 帧时判单调（采不到 = 导出快于轮询间隔，不判 N/A 也不判通过）
+            prog = summary.get("task_progress_samples") or []
+            if len(prog) >= 2:
+                check("导出任务进度单调不回跳", prog == sorted(prog), "samples=%s" % prog[-5:])
+            else:
+                print("[info] 导出任务进度只采到 %d 帧 = 单调性判 N/A（导出快于轮询间隔）"
+                      % len(prog), flush=True)
         # 打包态任务级进程隔离（六项立项 ④，2026-10-07 续62 补六；r14 及以前没有此项 ⇒ 红）：
         # PyInstaller 下 spawn 子进程必须起得来（入口 freeze_support 已接），
         # 证据 = 包内后端 stdout 的隔离启动行。起不来会静默回落线程内执行，

@@ -2,8 +2,8 @@
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useResultsStore } from '@/stores/results'
-import { useService } from '@/services'
 import { useRenderMovie } from '@/composables/useRenderMovie'
+import { useExportTask } from '@/composables/useExportTask'
 import { formatOriginal } from '@/utils/format'
 import { reasonText } from '@/utils/reasons'
 import ResultTable from '@/components/ResultTable.vue'
@@ -16,13 +16,21 @@ import BaseSelect from '@/components/ui/BaseSelect.vue'
 
 const router = useRouter()
 const results = useResultsStore()
-const service = useService()
 
-const exporting = ref(false)
-const exportedPath = ref<string | null>(null)
-const exportError = ref<string | null>(null)
-// /api/export 的对外告警（如 LOC-2001 碎片告警）：后端只产出不裁剪，这里如实展示。
-const exportWarnings = ref<string[]>([])
+// 导出走**异步任务通道**（2026-10-13 B 方案）：真机分钟级导出在同步 /api/export 里
+// UI 只能干等、不能取消 ⇒ 进度/取消与渲染任务同形态（轮询 GET /api/tasks/{id}）。
+const {
+  running: exporting,
+  progress: exportProgress,
+  message: exportMessage,
+  exportedPath,
+  warnings: exportWarnings,
+  error: exportError,
+  cancelled: exportCancelled,
+  outDir: exportOutDir,
+  start: startExport,
+  cancel: cancelExport,
+} = useExportTask()
 const showExport = ref(false)
 // 反馈 ⑨ + 2026-10-01 用户拍板：置信门槛默认「全部」（低置信也作为主片段导出）；
 // 格式默认剪映草稿。
@@ -163,28 +171,16 @@ function onSelect(id: string): void {
 
 async function doExport(): Promise<void> {
   if (!results.batch) return
-  exporting.value = true
-  exportedPath.value = null
-  exportError.value = null
-  exportWarnings.value = []
-  try {
-    const res = await service.exportResults(results.batch, {
-      outDir: activeExportDir.value,
-      format: exportFormat.value,
-      minConfidence: minConfidence.value,
-      lowPolicy: lowPolicy.value,
-      snapScenes: snapScenes.value === 'on',
-      materialWidth: materialWidth.value,
-    })
-    exportedPath.value = res.path
-    exportWarnings.value = res.warnings ?? []
-    // 有告警 → 对话框保持打开，用户确认过内容才收；无告警 → 维持旧行为直接关。
-    if (!exportWarnings.value.length) showExport.value = false
-  } catch (e) {
-    exportError.value = e instanceof Error ? e.message : String(e)
-  } finally {
-    exporting.value = false
-  }
+  const ok = await startExport({
+    outDir: activeExportDir.value,
+    format: exportFormat.value,
+    minConfidence: minConfidence.value,
+    lowPolicy: lowPolicy.value,
+    snapScenes: snapScenes.value === 'on',
+    materialWidth: materialWidth.value,
+  })
+  // 有告警 → 对话框保持打开，用户确认过内容才收；无告警 → 维持旧行为直接关。
+  if (ok && !exportWarnings.value.length) showExport.value = false
 }
 
 const FORMAT_LABEL: Record<string, string> = {
@@ -412,6 +408,12 @@ const renderSummary = computed(() => {
           </ul>
         </p>
         <p v-if="exportError" class="rd__notice rd__notice--err">{{ exportError }}</p>
+        <!-- 取消后如实交代残留（不自动删：已转好的 clip 是下次重跑的缓存，真机量级约 0.9GB/681 段，
+             删掉的代价是下次多花几分钟重转；后端按 clip 文件已存在则跳过取材，复用是既有的）。 -->
+        <p v-if="exportCancelled" class="rd__notice">
+          已取消。{{ exportOutDir ? `已转好的素材留在 ${exportOutDir}` : '已转好的素材留在导出目录' }}，
+          重新导出同一批会直接复用、不会重转。
+        </p>
 
         <!-- 成片渲染（2026-09-29 续30）：与工程文件同源的另一条交付通道 -->
         <div class="ex__render">
@@ -438,9 +440,13 @@ const renderSummary = computed(() => {
           <p v-if="renderError" class="rd__notice rd__notice--err">{{ renderError }}</p>
         </div>
 
+        <p v-if="exporting" class="rd__note">
+          {{ exportProgress }}% · {{ exportMessage || '准备导出…' }}
+        </p>
         <div class="rd__form" style="justify-content: flex-end">
+          <BaseButton v-if="exporting" variant="danger" @click="cancelExport">取消</BaseButton>
           <BaseButton @click="showExport = false">{{ exportWarnings.length ? '知道了' : '取消' }}</BaseButton>
-          <BaseButton variant="primary" :loading="exporting" :disabled="!hasResults" @click="doExport">导出</BaseButton>
+          <BaseButton variant="primary" :loading="exporting" :disabled="!hasResults || exporting" @click="doExport">导出</BaseButton>
         </div>
       </div>
     </div>

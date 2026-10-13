@@ -370,6 +370,44 @@ def main() -> int:
             except urllib.error.HTTPError as e:
                 jianying_http, jianying_path, jy_body = e.code, None, None
             print("[export jianying] http=%s path=%s" % (jianying_http, jianying_path), flush=True)
+            # **导出任务通道包内锁**（2026-10-13 B 方案）：UI 的导出入口已从同步 /api/export
+            # 切到 POST /api/tasks/export（分钟级导出要进度 + 可取消）。这条锁核的是
+            # 「包里的后端认这个路由，并且轮询到 completed、草稿真落盘」。
+            # 与上面同步通道那条**并存**（同步路由保留 = 向后兼容，不删）。
+            # ⚠️ 不在这里断言「首帧进度 <98」：合成素材的导出比 1s 轮询间隔还快时，
+            #    第一次读到的就是终态 100 —— 阈值超出测量精度会假红（本仓教训 ⑱/⑳ 同族）。
+            #    R1（进度区间按 kind 分派）由 `mvp/api/tests/test_export_task.py` 确定性锁。
+            jy_task_out = OUT / "jianying_task"
+            jy_task_out.mkdir(parents=True, exist_ok=True)
+            task_export_http = task_export_status = task_export_path = None
+            task_progress_seen: list[float] = []
+            try:
+                tb = http(base, token, "POST", "/api/tasks/export",
+                          {"output_dir": str(jy_task_out), "format": "jianying",
+                           "min_confidence": "LOW", "low_policy": "backup"}, timeout=60.0)
+                task_export_http = 200
+                tid = (tb or {}).get("task_id")
+                deadline = time.time() + 900.0
+                st: dict = {}
+                while time.time() < deadline:
+                    st = http(base, token, "GET", "/api/tasks/%s" % tid, timeout=30.0) or {}
+                    task_export_status = st.get("status")
+                    if isinstance(st.get("progress"), (int, float)) and \
+                            task_export_status == "running":
+                        task_progress_seen.append(float(st["progress"]))
+                    if task_export_status in ("completed", "failed", "cancelled"):
+                        break
+                    time.sleep(1.0)
+                task_export_path = ((st or {}).get("result") or {}).get("path")
+            except urllib.error.HTTPError as e:
+                task_export_http, task_export_path = e.code, None
+                print("[export task] HTTPError code=%s" % e.code, flush=True)
+            except Exception as e:  # noqa: BLE001 — 探针侧异常也要如实成数
+                task_export_status = "probe_error:%s" % type(e).__name__
+                print("[export task] probe error %s: %s" % (type(e).__name__, e), flush=True)
+            print("[export task] http=%s status=%s path=%s progress=%s" % (
+                task_export_http, task_export_status, task_export_path,
+                task_progress_seen[-3:]), flush=True)
             summary = {
                 "arm": "packaged_headless" if mode == "packaged" else "venv_http_headless",
                 "case": case,
@@ -391,6 +429,11 @@ def main() -> int:
                 "export_path": export_path,
                 "jianying_http": jianying_http,      # 剪映通道：真的跑 write_jianying_draft
                 "jianying_path": jianying_path,
+                # 导出任务通道（2026-10-13 B 方案，UI 现役入口）
+                "task_export_http": task_export_http,
+                "task_export_status": task_export_status,
+                "task_export_path": task_export_path,
+                "task_progress_samples": task_progress_seen,
                 "task_status": status.get("status"),
                 "task_error": status.get("error"),
                 "phases": phases,

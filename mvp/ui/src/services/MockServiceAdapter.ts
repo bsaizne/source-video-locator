@@ -34,7 +34,7 @@ import type {
   TaskJson,
   TaskStage,
 } from './types'
-import type { BuildOpts, RenderOpts, ServiceAPI } from './ServiceAPI'
+import type { BuildOpts, ExportOpts, RenderOpts, ServiceAPI } from './ServiceAPI'
 
 type Listener = (event: ProgressEventJson) => void
 
@@ -63,6 +63,16 @@ function mockExportWarnings(): string[] | undefined {
     'LOC-2001 导出清单中有 2 个不足 0.15 秒的极短片段，导入剪辑软件后可能表现为闪烁或无效素材；建议在这些位置改用完整镜头边界。',
     'LOC-2002 第 3、7 段都指向原片同一区间 120.0-125.0s，导出工程里会出现重复素材；若是刻意的画面复用可忽略，否则建议在剪辑软件中合并为一条。',
   ]
+}
+
+const MOCK_EXPORT_DIR = 'C:/Users/Public/Videos/VideoLocator/exports'
+
+/** 导出产物路径的唯一构造点（同步 exportResults 与 Mock 导出任务共用一份规则）。 */
+function mockExportPath(dir: string, name: string, fmt: string): string {
+  const suffix = fmt === 'jianying' ? 'loc.jy_draft'
+    : fmt === 'edl' ? 'loc.edl'
+      : fmt === 'fcp7_xml' ? 'loc.xml' : 'results.json'
+  return `${dir}/${name}.${suffix}`
 }
 
 export class MockServiceAdapter implements ServiceAPI {
@@ -216,12 +226,8 @@ export class MockServiceAdapter implements ServiceAPI {
     await sleep(280, null)
     this.emit({ stage: 'EXPORT', current: 1, total: 1, message: 'export complete' })
     const name = opts?.filename ?? 'results'
-    const dir = opts?.outDir ?? 'C:/Users/Public/Videos/VideoLocator/exports'
-    const fmt = opts?.format ?? 'json'
-    const path = fmt === 'jianying' ? `${dir}/${name}.loc.jy_draft`
-      : fmt === 'edl' ? `${dir}/${name}.loc.edl`
-      : fmt === 'fcp7_xml' ? `${dir}/${name}.loc.xml`
-      : `${dir}/${name}.results.json`
+    const dir = opts?.outDir ?? MOCK_EXPORT_DIR
+    const path = mockExportPath(dir, name, opts?.format ?? 'json')
     return { path, warnings: mockExportWarnings() }
   }
 
@@ -331,6 +337,36 @@ export class MockServiceAdapter implements ServiceAPI {
       error: null,
       cancel_requested: false,
       message: '最终视频生成成功',
+    }
+    this._mockTask = task
+    return { task_id: task.task_id }
+  }
+
+  // 工程/结果导出任务（Mock，2026-10-13 B 方案）：与后端同 kind='export' 形态，
+  // 第一次轮询即完成。warnings 与同步 exportResults 走同一个 localStorage 开关
+  // （默认 undefined = 不造假告警；开关置 '1' 才给 LOC-2001/2002 样例），
+  // 否则 dev 态切到任务通道后，告警列表会恒空（与 Http 态行为不一致）。
+  async startExportTask(opts?: ExportOpts): Promise<{ task_id: string }> {
+    const fmt = opts?.format ?? 'json'
+    const path = mockExportPath(opts?.outDir ?? MOCK_EXPORT_DIR, 'results', fmt)
+    const task: TaskJson = {
+      task_id: 'mock-export-0001',
+      kind: 'export',
+      status: 'completed',
+      stage: 'finished',
+      progress: 100,
+      created_at: new Date().toISOString(),
+      last_event_at: new Date().toISOString(),
+      finished_at: new Date().toISOString(),
+      result: {
+        kind: 'export',
+        format: fmt,
+        path,
+        warnings: mockExportWarnings(),
+      },
+      error: null,
+      cancel_requested: false,
+      message: `已导出 ${path.split('/').pop() ?? ''}`,
     }
     this._mockTask = task
     return { task_id: task.task_id }

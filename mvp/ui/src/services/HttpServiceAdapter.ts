@@ -36,12 +36,27 @@ import type {
   TaskEvent,
   TaskJson,
 } from './types'
-import type { BuildOpts, RenderOpts, ServiceAPI } from './ServiceAPI'
+import type { BuildOpts, ExportOpts, RenderOpts, ServiceAPI } from './ServiceAPI'
 
 type Listener = (event: ProgressEventJson) => void
 
 const DEFAULT_BASE = 'http://127.0.0.1:8765'
 const SESSION_QUERY = 'svl_session'
+
+/** 导出请求体的**唯一**构造点（同步 /api/export 与任务 /api/tasks/export 共用）。
+ *  缺省门槛 = LOW（2026-10-01 拍板「默认全部导出」，与 ResultsPage 初始值一致；
+ *  取代 Phase 22 反馈⑨「默认不含低置信」口径）。两条通道若各写一份字段，
+ *  改其一必漏另一（本仓教训：下限/参数两处各写一份必然漂移）。 */
+function exportRequestBody(opts?: ExportOpts): Record<string, unknown> {
+  return {
+    output_dir: opts?.outDir ?? '',
+    format: opts?.format ?? 'json',
+    min_confidence: opts?.minConfidence ?? 'LOW',
+    low_policy: opts?.lowPolicy ?? 'exclude',
+    snap_scenes: opts?.snapScenes ?? true,
+    material_width: opts?.materialWidth ?? 'scene',
+  }
+}
 
 /** Electron 主进程把后端实际端口与会话令牌挂在页面 URL query 上（T1-3 本机门禁）。
  *  浏览器 dev（Vite + 手工 uvicorn）没有这两个参数：端口回退 env/默认、令牌为空 = 门禁关闭。
@@ -259,35 +274,17 @@ export class HttpServiceAdapter implements ServiceAPI {
 
   async exportResults(
     _batch: ResultBatchJson,
-    opts?: {
-      outDir?: string
-      filename?: string
-      format?: 'json' | 'edl' | 'fcp7_xml' | 'jianying'
-      minConfidence?: 'HIGH' | 'MEDIUM' | 'LOW'
-      lowPolicy?: 'exclude' | 'backup'
-      snapScenes?: boolean
-      materialWidth?: 'scene' | 'core'
-      cancelToken?: CancelToken
-    },
+    opts?: ExportOpts & { filename?: string; cancelToken?: CancelToken },
   ): Promise<{ path: string; warnings?: string[] }> {
     // The bridge's /api/export exports its own session's latest results batch
-    // (set by the preceding /api/results or the async task). format/置信门槛/
-    // 输出目录随请求转发。缺省门槛 = LOW（2026-10-01 拍板「默认全部导出」，与
-    // ResultsPage 的初始值一致；取代 Phase 22 反馈⑨「默认不含低置信」口径）。
+    // (set by the preceding /api/results or the async task).
     // warnings：后端导出前守卫产出的对外告警（如 LOC-2001 碎片告警），透传给 UI 展示。
     void _batch
     void opts?.filename
     void opts?.cancelToken
     return this.request<{ path: string; warnings?: string[] }>('/api/export', {
       method: 'POST',
-      body: JSON.stringify({
-        output_dir: opts?.outDir ?? '',
-        format: opts?.format ?? 'json',
-        min_confidence: opts?.minConfidence ?? 'LOW',
-        low_policy: opts?.lowPolicy ?? 'exclude',
-        snap_scenes: opts?.snapScenes ?? true,
-        material_width: opts?.materialWidth ?? 'scene',
-      }),
+      body: JSON.stringify(exportRequestBody(opts)),
     })
   }
 
@@ -383,6 +380,15 @@ export class HttpServiceAdapter implements ServiceAPI {
         low_policy: opts?.lowPolicy ?? null,
         snap_scenes: opts?.snapScenes ?? null,
       }),
+    })
+  }
+
+  async startExportTask(opts?: ExportOpts): Promise<{ task_id: string }> {
+    // 与同步 /api/export 的 body 逐字同字段（同一构造函数，两处各写一份必然漂移）。
+    // 结果批由后端取会话批，不在请求体里传。
+    return this.request<{ task_id: string }>('/api/tasks/export', {
+      method: 'POST',
+      body: JSON.stringify(exportRequestBody(opts)),
     })
   }
 

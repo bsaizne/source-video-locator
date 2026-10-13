@@ -3,6 +3,8 @@
 - ``POST /api/tasks/analyze``：创建任务并后台调度 → ``{task_id}``。
 - ``POST /api/tasks/render``：渲染**提交时锁定的会话结果批**为单个成片 → ``{task_id}``
   （2026-09-29 续30，竞品 ``exporting.rendering.video_renderer`` 移植）。
+- ``POST /api/tasks/export``：导出**提交时锁定的会话结果批**（工程/结果文件）→ ``{task_id}``
+  （2026-10-13 B 方案；与同步 ``/api/export`` 同参数同判据，多的是进度与取消）。
 - ``GET  /api/tasks/{task_id}``：查询任务状态（status/stage/progress/result/error）。
 - ``POST /api/tasks/{task_id}/cancel``：请求取消 → ``{status: "cancel_requested"}``。
 - ``WS   /ws/progress/{task_id}``：本阶段未实现（仅占位回复 not implemented）。
@@ -13,7 +15,7 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 
 from ..dependencies import AppContext, get_context
-from ..schemas import AnalyzeTaskRequest, RenderTaskRequest
+from ..schemas import AnalyzeTaskRequest, ExportTaskRequest, RenderTaskRequest
 
 router = APIRouter()
 
@@ -70,6 +72,39 @@ def create_render_task(req: RenderTaskRequest, ctx: AppContext = Depends(get_con
     task = tm.submit_render(batch, out_dir=req.output_dir or None,
                             min_confidence=req.min_confidence,
                             low_policy=req.low_policy, snap_scenes=req.snap_scenes)
+    return {"task_id": task.task_id}
+
+
+@router.post("/api/tasks/export")
+def create_export_task(req: ExportTaskRequest, ctx: AppContext = Depends(get_context)) -> dict:
+    """把会话结果批导出为工程/结果文件（异步任务通道，2026-10-13 B 方案）。
+
+    与同步 ``POST /api/export`` **参数与判据逐字一致**（结果批口径、格式、门槛、吸附、
+    素材宽度），差别只在：真机实测分钟级导出（374s/783s）在同步通道里 UI 只能干等、
+    不能取消 ⇒ 走任务通道拿进度（0→99 全区间）与取消。同步路由保留不删（向后兼容 +
+    包侧既有 ``jianying_http`` 锁依赖它）。
+
+    结果在 ``task.result`` = ``{"kind":"export","format","path","warnings"}``；
+    ``warnings`` 由**产出它的那个 service** 带上（隔离子进程与父进程不同实例）。
+    """
+    batch = ctx.current_batch or ctx.service.last_result_batch()
+    if batch is None:
+        return JSONResponse(
+            status_code=400,
+            content={"error": "no_results",
+                     "detail": "no results batch; call /api/results first"},
+        )
+    tm = _task_manager(ctx)
+    if tm is None:
+        return JSONResponse(
+            status_code=500,
+            content={"error": "no_task_manager", "detail": "task manager not configured"},
+        )
+    task = tm.submit_export(batch, fmt=(req.format or "json").lower(),
+                            out_dir=req.output_dir or None,
+                            min_confidence=req.min_confidence,
+                            low_policy=req.low_policy, snap_scenes=req.snap_scenes,
+                            material_width=req.material_width)
     return {"task_id": task.task_id}
 
 

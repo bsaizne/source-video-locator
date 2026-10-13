@@ -47,6 +47,11 @@ _STAGE_RANGES: dict[ProgressStage, tuple[TaskStage, int, int]] = {
     ProgressStage.RENDER_MOVIE: (TaskStage.EXPORTING, 0, 99),
 }
 
+# 导出任务（kind=export，2026-10-13 B 方案）独占整条进度区间：与 RENDER_MOVIE 同理——
+# 任务本身就是导出，不能用 _STAGE_RANGES 里给 analyze 收尾留的 1.5 个点。
+_EXPORT_TASK_BASE = 0.0
+_EXPORT_TASK_SPAN = 99.0
+
 # 子阶段切片（2026-10-06 修「92% 卡死」）：REFINE 的 6 个点原先被修复链/拆分/精排/ISC
 # **共用同一条 0→1 ramp**，而修复链只发一条 current=0 的事件 ⇒ 实测整段几分钟停在 92.1，
 # 真正耗时的逐段精排又被单调钳制挡住。⇒ 按 phase 切成互不重叠的小段，各自推进且不回退。
@@ -65,7 +70,7 @@ _PHASE_RANGES: dict[tuple[ProgressStage, str], tuple[TaskStage, float, float]] =
 }
 
 
-def map_progress_stage(ev: ProgressEvent) -> tuple[TaskStage, float]:
+def map_progress_stage(ev: ProgressEvent, kind: TaskKind | None = None) -> tuple[TaskStage, float]:
     """把一个 service 进度事件映射为 (TaskStage, 0-100 百分比，一位小数)。
 
     事件带 current/total 时在阶段区间内插值：逐帧阶段（索引/特征提取，
@@ -74,7 +79,19 @@ def map_progress_stage(ev: ProgressEvent) -> tuple[TaskStage, float]:
     无 total 的阶段事件取区间起点。带 ``phase`` 的事件改走 :data:`_PHASE_RANGES`
     的子区间，且 current 一律按**已完成数**解释（``current/total``）。
     一位小数（2026-10-02 续40 UX）：逐段阶段在短区间内整数百分比会长时间不动。
+
+    ``kind``（2026-10-13 B 方案）：同一 ``ProgressStage.EXPORT`` 事件在**两种任务**里含义
+    不同——analyze 的导出只是收尾（98→99.5），而 kind=export 的整条任务就是导出，
+    必须独占 0→99。不传 kind（默认 None）= 老口径逐字不变（``test_tasks.py`` 的
+    「EXPORT → (EXPORTING, 98)」既有锁不被改变）。
     """
+    if kind is TaskKind.EXPORT and ev.stage is ProgressStage.EXPORT:
+        if ev.total and ev.total > 0:
+            # 导出腿（locator_service 剪映通道）发的 current = **已完成数**（i+1），
+            # 与 RENDER_MOVIE 同口径，不再 +1（否则末段会提前顶到区间右端）。
+            frac = min(1.0, max(0.0, ev.current / ev.total))
+            return TaskStage.EXPORTING, round(_EXPORT_TASK_BASE + _EXPORT_TASK_SPAN * frac, 1)
+        return TaskStage.EXPORTING, float(_EXPORT_TASK_BASE)
     keyed = (ev.stage, ev.phase)
     if ev.phase and keyed in _PHASE_RANGES:
         stage, base, span = _PHASE_RANGES[keyed]
@@ -95,12 +112,12 @@ def map_progress_stage(ev: ProgressEvent) -> tuple[TaskStage, float]:
     return stage, float(base)
 
 
-class _NoRenderBatch(Exception):
-    """render 任务缺结果批的内部信号（对外话术 = 原样文案）。"""
+class _NoTaskBatch(Exception):
+    """批任务（render / export）缺结果批的内部信号（对外话术 = 原样文案）。"""
 
 
 def execute_task(task: Task, service, *, on_progress) -> dict:
-    """任务主体（merge→locate / render），返回 result dict；**不碰 task 状态**。
+    """任务主体（merge→locate / render / export），返回 result dict；**不碰 task 状态**。
 
     父进程线程内路径与子进程隔离路径（``isolated._child_main``）共用。取消由
     service 以 ApplicationError 穿透（子进程路径由父进程 terminate 收口）。
@@ -112,7 +129,7 @@ def execute_task(task: Task, service, *, on_progress) -> dict:
         if batch is None:
             batch = getattr(service, "last_result_batch", lambda: None)()
         if batch is None:
-            raise _NoRenderBatch("没有可渲染的结果批（请先完成一次分析）")
+            raise _NoTaskBatch("没有可渲染的结果批（请先完成一次分析）")
         params = dict(task.render_params or {})
         info = service.render_movie(
             batch,
@@ -123,6 +140,29 @@ def execute_task(task: Task, service, *, on_progress) -> dict:
             on_progress=on_progress,
             cancel_token=task.token)
         return {"kind": "render", **info}
+    if task.kind is TaskKind.EXPORT:
+        batch = task.export_batch
+        if batch is None:
+            batch = getattr(service, "last_result_batch", lambda: None)()
+        if batch is None:
+            raise _NoTaskBatch("没有可导出的结果批（请先完成一次分析）")
+        p = dict(task.export_params or {})
+        fmt = (p.get("fmt") or "json").lower()
+        out_dir = p.get("out_dir") or None
+        if fmt == "json":
+            # 与同步路由同口径：json 通道只落结果文件，不吃置信门槛/吸附参数。
+            path = service.export_results(batch, out_dir=out_dir,
+                                          on_progress=on_progress, cancel_token=task.token)
+        else:
+            path = service.export_project(
+                batch, fmt=fmt, out_dir=out_dir,
+                min_confidence=p.get("min_confidence"), low_policy=p.get("low_policy"),
+                snap_scenes=p.get("snap_scenes"), material_width=p.get("material_width"),
+                on_progress=on_progress, cancel_token=task.token)
+        # warnings 必须在**产出它的进程**里取（隔离子进程的 service 与父进程不同实例，
+        # 父进程读自己那份永远是空 ⇒ 包内看不到 LOC-2001 碎片告警）。
+        return {"kind": "export", "format": fmt, "path": str(path),
+                "warnings": list(getattr(service, "last_export_warnings", []) or [])}
     # 多原片输入（2026-09-29 video.concat 移植）：≥2 段先物理合并为单文件，
     # 产物回写 task.original_path，下游 locate/结果/导出维持单原片口径。
     original = task.original_path
@@ -150,8 +190,8 @@ def run_worker(task: Task, service, *, log: LogFn | None = None,
 
     ``isolated=True``（④ 任务级进程隔离，2026-10-07 立项）：任务在独立子进程执行
     （硬崩只损失本任务）；spawn 不可用或 ``SVL_TASKS_IN_THREAD=1`` 时回落本线程。"""
-    if task.kind is TaskKind.RENDER:
-        run_render_worker(task, service, log=log, isolated=isolated)
+    if task.kind in (TaskKind.RENDER, TaskKind.EXPORT):
+        run_batch_task_worker(task, service, log=log, isolated=isolated)
         return
     if isolated and isolation_enabled():
         from .isolated import run_worker_isolated
@@ -166,7 +206,7 @@ def run_worker(task: Task, service, *, log: LogFn | None = None,
 
     def on_progress(ev: ProgressEvent) -> None:
         nonlocal last_pct
-        stage, pct = map_progress_stage(ev)
+        stage, pct = map_progress_stage(ev, task.kind)
         # 单调钳制：检索/定位/置信事件交错、阶段边界事件缺 total 时百分比不回跳。
         pct = max(pct, last_pct)
         last_pct = pct
@@ -192,17 +232,24 @@ def run_worker(task: Task, service, *, log: LogFn | None = None,
         log("task %s failed [%s] %s: %s\n%s", task.task_id, pub["code"],
             type(exc).__name__, exc, traceback.format_exc())
     else:
+        # 补发被防抖扣住的最后一帧（否则终态前的那条 message 永远不露出，
+        # 例如导出收尾的「已导出 xxx」/ 渲染最后一段）。flush 早于 mark_completed，
+        # 百分比仍由 mark_completed 收到 100（不回退：held 帧的 pct < 100）。
+        for st, p, msg in deb.flush():
+            task.update_progress(st, p, message=msg)
         task.mark_completed(result)
         log("task %s completed", task.task_id)
 
 
-def run_render_worker(task: Task, service, *, log: LogFn | None = None,
-                      isolated: bool = False) -> None:
-    """后台线程入口（``kind=render``）：渲染成片并更新任务状态。永不抛出。
+def run_batch_task_worker(task: Task, service, *, log: LogFn | None = None,
+                          isolated: bool = False) -> None:
+    """后台线程入口（``kind=render`` / ``kind=export``）：跑一个锁定结果批的任务并更新状态。
 
-    渲染目标是**提交时**锁定的结果批（``task.render_batch``），不读会话"最新批"——
-    否则用户在渲染排队期间又跑了一次定位就会渲染错批（竞态）。缺失则回退 service
-    最近一次 locate 的结果批（与 ``/api/export`` 同口径）。
+    永不抛出。目标批是**提交时**锁定的（``task.render_batch`` / ``task.export_batch``），
+    不读会话"最新批"——否则用户在任务排队期间又跑了一次定位就会渲染/导出错批（竞态）。
+    缺失则回退 service 最近一次 locate 的结果批（与 ``/api/export`` 同口径）。
+    两种 kind 共用本函数：主体差异全在 :func:`execute_task` 内按 kind 分派，
+    这里只统一「进度映射 + 防抖 + 终态转换 + 隔离」四件事（抄第二份必然漂移）。
     """
     if isolated and isolation_enabled():
         from .isolated import run_worker_isolated
@@ -210,13 +257,14 @@ def run_render_worker(task: Task, service, *, log: LogFn | None = None,
             return
     if log is None:
         log = lambda *a, **k: None  # noqa: E731
+    label = task.kind.value
     task.mark_running()
     last_pct = 0
     deb = ProgressDebouncer()   # ③ 防抖（同 analyze；渲染帧率低，防抖是保险）
 
     def on_progress(ev: ProgressEvent) -> None:
         nonlocal last_pct
-        stage, pct = map_progress_stage(ev)
+        stage, pct = map_progress_stage(ev, task.kind)
         pct = max(pct, last_pct)
         last_pct = pct
         for st, p, msg in deb.submit(stage, pct, message=ev.message or ""):
@@ -224,28 +272,34 @@ def run_render_worker(task: Task, service, *, log: LogFn | None = None,
 
     try:
         info = execute_task(task, service, on_progress=on_progress)
-    except _NoRenderBatch as exc:
+    except _NoTaskBatch as exc:
         task.mark_failed(str(exc))
-        log("task %s failed: no batch to render", task.task_id)
+        log("task %s failed: no batch for %s", task.task_id, label)
         return
     except ApplicationError as exc:
         if task.token.is_cancelled():
             task.mark_cancelled()
-            log("task %s cancelled (render)", task.task_id)
+            log("task %s cancelled (%s)", task.task_id, label)
         else:
             pub = public_error(exc)
             task.mark_failed(f"{pub['message']}（{pub['code']}）")
-            log("task %s render failed [%s] %s: %s", task.task_id, pub["code"],
+            log("task %s %s failed [%s] %s: %s", task.task_id, label, pub["code"],
                 type(exc).__name__, exc)
-    except Exception as exc:  # noqa: BLE001 — MediaError 等渲染层错误也转 failed
+    except Exception as exc:  # noqa: BLE001 — MediaError 等渲染/导出层错误也转 failed
         if task.token.is_cancelled():
             task.mark_cancelled()
-            log("task %s cancelled (render)", task.task_id)
+            log("task %s cancelled (%s)", task.task_id, label)
         else:
             pub = public_error(exc)
             task.mark_failed(f"{pub['message']}（{pub['code']}）")
-            log("task %s render failed [%s] %s: %s\n%s", task.task_id, pub["code"],
+            # 堆栈必须留痕（同 analyze 腿纪律：打包态只有一行异常串时无从归因）
+            log("task %s %s failed [%s] %s: %s\n%s", task.task_id, label, pub["code"],
                 type(exc).__name__, exc, traceback.format_exc())
     else:
+        # 收尾补发被防抖扣住的最后一帧（同 run_worker 口径）：导出腿的真收尾是
+        # 「已导出 xxx」（current=total ⇒ 与前一帧间隔未到 ⇒ 被 held），不 flush 就永不露出。
+        for st, p, msg in deb.flush():
+            task.update_progress(st, p, message=msg)
         task.mark_completed(info)
-        log("task %s render completed: %s", task.task_id, info.get("movie_path"))
+        log("task %s %s completed: %s", task.task_id, label,
+            info.get("movie_path") or info.get("path"))
