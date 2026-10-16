@@ -1,6 +1,5 @@
 # source-video-locator
 
-桌面端（Windows / macOS）视频片段定位工具的工作区。
 
 ## 当前状态
 
