@@ -3443,3 +3443,76 @@ STATE `Current Task` 顶部新增补八块并把补七的开放项②标为闭�
 `edge_offsets.py`（判废留证）+ `apply_docs.py`（本批立档脚本，带锚点断言）。
 档案：STATE `Current Task` 换块（补二十入、补十七逐字迁 `archive/STATE_history_20261018.md`）、
 TODO P0 换块（补十九迁 `archive/TODO_history_20261018.md`）、`Current Problem` 与 `Next Actions` 第 11 条 ② 同步订正。
+
+## 2026-10-18（续63 补廿一）— source_merge 音频布局归一：全 unknown 硬失败 + 混合形态「顺序决定产物」
+
+口令：「先处理 source_merge 声道布局批次」。改产品代码（一处模块 + 一个测试文件），**未出包**。
+
+### 归因（改前双臂）
+
+档案（`HANDOFF_20261017_r25_closeout.md` §5 第 2 条）只写了"同形源失败更早、硬失败非静默坏产物"。
+实测是**两族**，第二族比第一族更坏：
+
+1. **硬失败（确证档案那条）**：所有输入都是「6 声道 + 容器未写 `channel_layout`」时，每条编码器尝试
+   都在**滤镜图协商阶段**失败，stderr 原文
+   `Cannot select channel layout for the link between filters auto_aresample_0 and Parsed_concat_8`
+   （n=2 → `_8`、n=3 → `_12`、n=7 → `_28`，三档全复现）⇒ 最终 `MediaError`。
+   但 `merge()` 的失败路径**有** `tmp.unlink` + `_valid_output` 拦 ⇒ **不会留坏缓存**（档案这条说对了）。
+2. **静默改写（档案没记，本轮新查）**：混合形态**不报错**，但**产物声道结构 = 第一路的布局**——
+   实测 `[5.1, stereo] → 6/5.1`、`[stereo, 5.1] → 2/stereo`、`[6ch/unknown, stereo] → 2/stereo`
+   ⇒ 用户多段原片合并后的声道数由**输入顺序**决定，且**零留痕**。
+
+**触发面不是人造源**：`C:\Users\Bsaizne\Downloads\clips\clips\og*.mp4`（用户从本产品导出的素材）
+**35 个文件逐个探过 = `channels=6 / channel_layout=unknown`**；成因链 = 源布局 `5.1(side)`/hexagonal
+编进 MP4 后布局信息丢失（与 `e79d4ee` 那条同族）。对照：10-07 那批 og 是 `6/5.1`（写明布局）。
+
+### 修法（`mvp/src/media/ffmpeg/source_merge.py`）
+
+- 新增纯函数 `declared_layout` / `named_layout` / **`resolve_audio_layouts`**，返回
+  「每路要依次施加的布局链 + 留痕说明」：
+  1. 各路布局都写明且全等 ⇒ **全空链**（ffmpeg 命令**逐字不变**，零语义风险）；
+  2. 有路未写布局但可按声道数补名（`CHANNEL_COUNT_LAYOUT`：1/2/6/8 → mono/stereo/5.1/7.1）
+     且补名后全等 ⇒ **只给未写的路补名**（声道数不变）；
+  3. 补名后仍不一致，或存在表外声道数（如 7）⇒ 统一到**声道数最多**的可解析布局（否则退 `stereo`），
+     未写布局的路**先补名再归一**（补名后 ffmpeg 才拿到正确的上/下混系数）。
+- `_transcode_args` 按链给每路前置 `aformat=channel_layouts=…`；链为空的路保持现役直连。
+- `plan.reason` 现在会打一条 `source merge plan: …` 日志：此前 `reason` 既不回传也不打日志，
+  连原有的「音频有无不一致，降级纯视频」也一直隐身。
+- 实测支撑「先补名再归一」这一步：`5.1 → stereo` 是**真下混**（六条单音 200/350/500/650/800/950 Hz
+  在产物两声道里都在，`spectral_semantics.py`），而**未补名**的 unknown 输入交给 ffmpeg 猜会走盲折叠。
+
+### 验收
+
+- **同脚本双臂**（`attribute_pre3.py`，`pre_fix_report3.json` / `post_fix_report3.json`）：
+  `allunknown2/3/7` 由 `RAISE` → **`OK` 且产物 `6/5.1`**；`real_unk_pair`（真 og 派生、`-c:a copy` 换视频签名）
+  同样转绿；`unk_then_st` 与 `st_then_unk` 产物布局**相同**（顺序不再决定）；基线 `stereo_base` 仍 `2/stereo`。
+- **新锁 13 项**：纯函数 6（含"都可解析且全等 ⇒ 空链"这条边界）+ `_transcode_args` 结构 3
+  （空链 ⇒ `[v0][0:a:0][v1][1:a:0]concat…` 逐字保持、两步链、无声轨腿不变）+ 真 ffmpeg E2E 4
+  （夹具真的是 unknown / 两路 unknown 合出 6/5.1 + **日志留痕锁** / 两种顺序产物相同 / 全等输入不加链）。
+- **门禁**（逐条取 rc）：后端全套 **Ran 688 OK (skipped=2)**（改前 675，+13）· API **Ran 150 OK** ·
+  导出计划不变式 **FAILED=0**。
+- **预期红**：把 `source_merge.py` 退回 HEAD 版跑新测试文件 ⇒ `ImportError: cannot import name
+  'resolve_audio_layouts'`（`pre_fix_red.log`）；行为级红由 `pre_fix_report3.json` 承载。
+
+### 探针自身的两处缺陷（判废留证，别再引用）
+
+- `attribute_pre2.py`：合成源用 `pan=6 channels|…` 造"无名 6 声道" ⇒ aac 编码器**直接拒收**（正是
+  `extract_clip` 那条同族报错），产物**没有音轨** ⇒ 矩阵全空跑；且目录名带 `:` `/` 触发 WinError 123。
+  v3 改走「真 og `-c:a copy` 换视频签名」与 `pan=5.1(side)` 两条正路。
+- `measure_collapse.py` 的余弦相似度法：输入/输出未做时间对齐（AAC priming + fps 重采样），
+  cos≈0 **不能当证据**；改用上面对**单音频率做谱检**才得出"真下混"的结论。
+- 逐声道 RMS 第一版解析 ffprobe csv 时把 `channels` 位取错（返回单值），已在 v3/E2E 里改按字段取。
+
+### 本批不做、只登记（两条）
+
+1. `available_hevc_encoders()` 只看 `ffmpeg -encoders` 列表、不看能否真开 ⇒ 本机每次合并**白跑
+   nvenc + qsv 两回**（各一次完整滤镜图初始化，stderr 分别 `Cannot load nvcuda.dll` /
+   `Error creating a MFX session: -9`）。属性能与日志噪声面，需单独判据（探测成本 vs 白跑成本）。
+2. **copy 腿**的音频签名 = `(codec, sample_rate, channels)`，**不含布局** ⇒ `6ch/unknown` 与 `6ch/5.1`
+   判为"可流复制"，产物布局同样由第一段决定。本批只改转码腿；动签名会收紧 copy 命中率（更多输入被
+   拖进转码），需单独回归。
+
+### 交付状态
+
+代码笔未提交前：**未推、未出包** ⇒ 现役包仍是 r25（不含本修复）；纯后端 Python ⇒
+**mac 包要另走 dispatch 才带上**（下次出 mac 包时一并，本批不单独 dispatch）。
