@@ -240,6 +240,24 @@ class SourceLocatorServiceTest(unittest.TestCase):
         self.assertIsInstance(batch.results[0].confidence.level, ConfidenceLevel)
 
 
+class ClipPresentTest(unittest.TestCase):
+    """0 字节残留不得被当成「素材已抽好」（2026-10-17 修掉的静默坏草稿入口）。
+
+    旧判据 = 裸 `exists()`：抽取失败会留下 0 字节目标文件（ffmpeg -y 先建文件后报错，
+    实测 preset 无效时 SIZE=0）⇒ 第二次导出跳过重抽，把坏素材写进草稿且不报错。
+    判据只此一份（`app.exporters.clip_present`），剪映腿与草稿写入端共用。
+    """
+
+    def test_zero_byte_leftover_is_not_reusable(self):
+        from app.exporters import clip_present
+        d = Path(tempfile.mkdtemp())
+        p = d / "clip.mp4"
+        self.assertFalse(clip_present(p), "不存在的素材不应判为可复用")
+        p.write_bytes(b"")
+        self.assertFalse(clip_present(p), "0 字节残留不得判为已抽好")
+        p.write_bytes(b"\x00" * 64)
+        self.assertTrue(clip_present(p), "非空素材仍应判为可复用（现役缓存行为不变）")
+
 class RefineModeTest(unittest.TestCase):
     """快/精双模式（2026-10-02）：``locate(refine=...)`` 逐任务覆盖后处理旋钮。
 

@@ -8,6 +8,7 @@ random-access, frame-precision clip) acceptance is covered by
 """
 from __future__ import annotations
 
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -164,6 +165,93 @@ class FFmpegIOTest(unittest.TestCase):
     def test_invalid_clip_range_raises(self):
         with self.assertRaises(MediaError):
             self.io.extract_clip(SYNTH, 3.0, 1.0, Path(tempfile.mkdtemp()) / "x.mp4")
+
+    # ------------------------------------------------------------------ #
+    # 「N 声道 + 未指定布局」声轨（2026-10-17 实测缺陷）
+    # ------------------------------------------------------------------ #
+    def _make_unknown_layout_source(self, out: Path) -> Path:
+        """造一份「6 声道 + 未指定布局」的源 = 真缺陷的触发形态（本产品自产 clip 即此形）。
+
+        机制：布局 5.1(side) 在 AAC/MP4 侧无法表达 ⇒ aac 编码**成功**、但写出的文件
+        布局信息丢失（ffprobe: channels=6 / channel_layout=unknown）⇒ 再编码直接被拒。
+        注意不能用 channel_layout=5.1（那份会保留布局，复现不出来）。
+        """
+        subprocess.run(
+            [str(FFMPEG), "-v", "error", "-y",
+             "-f", "lavfi", "-i", "testsrc2=duration=2:size=320x240:rate=10",
+             "-f", "lavfi", "-i", "anullsrc=channel_layout=5.1(side):sample_rate=48000",
+             "-t", "2", "-map", "0:v:0", "-map", "1:a:0",
+             "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
+             "-c:a", "aac", "-shortest", str(out)],
+            capture_output=True, check=True)
+        return out
+
+    @staticmethod
+    def _audio_stream(path: Path) -> tuple[int, str]:
+        r = subprocess.run([str(FFPROBE), "-v", "error", "-select_streams", "a",
+                            "-show_entries", "stream=channels,channel_layout",
+                            "-of", "csv=p=0", str(path)], capture_output=True)
+        parts = (r.stdout.decode().strip().split(",") + [""])[:2]
+        return int(parts[0]), parts[1]
+
+    def test_extract_clip_falls_back_on_unknown_channel_layout(self):
+        """判据真咬：源确实是「现役首跑参数必失败」的形态 ⇒ extract_clip 仍须出片且可再抽。
+
+        首跑参数逐字不变（-c:a aac），失败后按 48k/stereo 重试一次。
+        """
+        tmp = Path(tempfile.mkdtemp())
+        src = self._make_unknown_layout_source(tmp / "src_51side.mp4")
+        self.assertEqual(self._audio_stream(src), (6, "unknown"))   # 触发形态成立
+
+        first_arm = [str(FFMPEG), "-v", "error", "-y", "-ss", "0", "-i", str(src),
+                     "-t", "1", "-map", "0:v:0", "-map", "0:a:0?",
+                     "-c:v", "libx264", "-preset", "ultrafast", "-crf", "20",
+                     "-pix_fmt", "yuv420p", "-avoid_negative_ts", "make_zero",
+                     "-c:a", "aac", str(tmp / "first_arm.mp4")]
+        r = subprocess.run(first_arm, capture_output=True)
+        self.assertNotEqual(r.returncode, 0, "首跑本应被 aac 拒绝；源没造对 ⇒ 这条锁是空锁")
+        self.assertIn(b"channel layout", r.stderr)
+
+        out = tmp / "clip.mp4"
+        self.io.extract_clip(src, 0.0, 1.0, out)
+        self.assertGreater(out.stat().st_size, 0)
+        self.assertGreater(self.io.metadata(out).duration, 0.5)
+        self.assertEqual(self._audio_stream(out)[0], 2)             # 回退臂 = 立体声
+
+        # 二次抽取（「自家产物当源」的现役坑）：修好后必须也能过
+        again = tmp / "clip2.mp4"
+        self.io.extract_clip(out, 0.0, 0.5, again)
+        self.assertGreater(again.stat().st_size, 0)
+
+    def test_failed_extract_leaves_no_partial_file(self):
+        """失败不留 0 字节半成品（调用方按存在性判「已抽好」，残留会被静默复用）。
+
+        用**无效 preset** 造失败：实测 ffmpeg 会先建出 0 字节目标文件（SIZE=0）。
+        """
+        tmp = Path(tempfile.mkdtemp())
+        out = tmp / "partial.mp4"
+        with self.assertRaises(MediaError):
+            self.io.extract_clip(SYNTH, 1.0, 2.0, out, preset="bogus_preset_zzz")
+        self.assertFalse(out.exists(), "失败残留的 0 字节文件会让下次导出静默复用")
+        FFmpegIO._discard_partial(out)          # 目标不存在时也必须安全（幂等）
+
+    def test_first_arm_audio_args_unchanged(self):
+        """结构锁：可用源的首跑参数逐字不变（-ac 2 只出现在失败后的重试臂）。"""
+        import media.ffmpeg.ffmpeg_io as ffio
+        from unittest.mock import patch
+        captured: list[list[str]] = []
+
+        def fake_check_run(args, **kw):   # noqa: ANN001
+            captured.append(list(args))
+            return ""
+
+        out = Path(tempfile.mkdtemp()) / "c.mp4"
+        with patch.object(ffio, "check_run", side_effect=fake_check_run):
+            self.io.extract_clip(SYNTH, 1.0, 3.0, out)
+        self.assertEqual(len(captured), 1)                       # 首跑成功 ⇒ 不退避
+        self.assertEqual(captured[0][-3:], ["-c:a", "aac", str(out)])
+        self.assertNotIn("-ac", captured[0])
+        self.assertFalse(out.exists())                           # 桩没真跑 ffmpeg
 
     def test_hash_file(self):
         h = self.io.hash_file(SYNTH)

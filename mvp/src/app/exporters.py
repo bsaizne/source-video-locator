@@ -849,6 +849,21 @@ def expand_material_spans(plan: list[ExportClip], scenes, *,
     return changed
 
 
+def clip_present(path: str | Path) -> bool:
+    """素材是否**已抽好并可复用** = 文件存在且非空。
+
+    2026-10-17 实测修正：抽取失败会留下 0 字节目标文件（ffmpeg -y 先建文件再报错），
+    裸 `exists()` 判据会把它当成「已抽好」——剪映腿**不再重抽**（静默把坏素材写进草稿，
+    与「媒体格式不支持/时间线空白」同族），草稿写入端还会拿 0 字节素材去算时长。
+    判据只写这一份（教训 ⑲：同型调用点两处各写一份必然漂移），两个调用点共用。
+    """
+    try:
+        p = Path(path)
+        return p.exists() and p.stat().st_size > 0
+    except OSError:
+        return False
+
+
 def plan_jianying_assets(plan: list[ExportClip], *,
                          drop_adjacent_duplicates: bool = True) -> list[JianyingAsset]:
     """纯函数：只取 main/low 主定位，**全部 1.0 原速**首尾相接排成一条素材卷轴，
@@ -941,7 +956,7 @@ def write_jianying_draft(script, assets: list[JianyingAsset], draft_dir: Path) -
         return track_refs[name]
 
     for asset in assets:
-        if asset.clip_path is None or not asset.clip_path.exists():
+        if asset.clip_path is None or not clip_present(asset.clip_path):
             continue
         mat = dj.VideoMaterial(str(asset.clip_path))
         mat_us = int(mat.duration)          # 素材真实时长（微秒）= 越界判据的分母

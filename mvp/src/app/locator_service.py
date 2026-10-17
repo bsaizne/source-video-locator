@@ -67,8 +67,9 @@ from media.ffmpeg import FFmpegIO, MediaError
 from media.ffmpeg.source_merge import SourceVideoMerger
 from media.ffmpeg.timeline_render import TimelineMovieRenderer
 
-from .exporters import (EXPORT_FORMATS, ExportClip, create_jianying_draft_dir,
-                        plan_jianying_assets, prepare_channel_plan,
+from .exporters import (EXPORT_FORMATS, ExportClip, clip_present,
+                        create_jianying_draft_dir, plan_jianying_assets,
+                        prepare_channel_plan,
                         render_edl, render_fcp7_xml, seconds_to_frames,
                         write_jianying_draft)
 from .models import CancellationToken, ProgressEvent, ProgressStage
@@ -1730,7 +1731,7 @@ class SourceLocatorService:
             for i, asset in enumerate(assets):
                 self._check_cancel(cancel_token)
                 clip_path = clips_dir / f"{asset.file_stem}.mp4"
-                if not clip_path.exists():
+                if not clip_present(clip_path):
                     self.ffmpeg.extract_clip(orig_path, asset.orig_start,
                                              asset.orig_end, clip_path,
                                              preset="veryfast", crf=20)

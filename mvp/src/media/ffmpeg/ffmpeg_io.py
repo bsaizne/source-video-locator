@@ -538,6 +538,19 @@ class FFmpegIO:
     # ------------------------------------------------------------------ #
     # Clip extraction
     # ------------------------------------------------------------------ #
+    @staticmethod
+    def _discard_partial(out_path: Path) -> None:
+        """删掉失败留下的半成品（ffmpeg -y 会先建出 0 字节文件）。
+
+        调用方（剪映腿 `if not clip_path.exists()`）按存在性判「素材已抽好」，
+        残留的 0 字节文件会让**第二次导出静默跳过**抽取、把坏素材写进草稿。
+        """
+        try:
+            if out_path.exists():
+                out_path.unlink()
+        except OSError:  # 清理失败不该掩盖真正的抽取错误
+            pass
+
     def extract_clip(self, path: str | Path, start: float, end: float,
                      out_path: str | Path, *, codec: str = _DEFAULT_CODEC,
                      preset: str = _DEFAULT_PRESET, crf: int = _DEFAULT_CRF,
@@ -567,20 +580,40 @@ class FFmpegIO:
             )
 
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        args = [str(self.ffmpeg), *BASE_ARGS]
+        # 音轨口径（2026-10-17 实测缺陷，见 .agent/CHANGELOG.md）：
+        # 源声轨若是「N 声道 + **未指定布局**」的容器，原生 aac 编码器直接拒收
+        # （实测 `Unsupported channel layout "6 channels"`，ffmpeg rc=-22，产物 0 字节），
+        # 抽素材/预览整条腿当场失败。这类源不是人造的：**源片布局 5.1(side)/hexagonal
+        # 经本函数编码进 MP4 后布局信息就丢了** ⇒ 本产品自己抽出的 clip 天然是这种源
+        # （复现：把 og*.mp4 当源再抽一次）。首跑参数**逐字不变**，仅在失败时按
+        # 48k/stereo 重试一次（`-ac 2` 让编码器拿到明确布局；同源同区间实测 rc=0）。
+        head = [str(self.ffmpeg), *BASE_ARGS]
         if overwrite:
-            args += ["-y"]
-        args += ["-ss", f"{start:.6f}", "-i", str(path), "-t", f"{end - start:.6f}",
+            head += ["-y"]
+        head += ["-ss", f"{start:.6f}", "-i", str(path), "-t", f"{end - start:.6f}",
                  "-map", "0:v:0"]
         if include_audio:
-            args += ["-map", "0:a:0?"]          # audio optional (source may lack it)
-        args += ["-c:v", codec, "-preset", preset, "-crf", str(crf),
+            head += ["-map", "0:a:0?"]          # audio optional (source may lack it)
+        head += ["-c:v", codec, "-preset", preset, "-crf", str(crf),
                  "-pix_fmt", "yuv420p", "-avoid_negative_ts", "make_zero"]
-        if include_audio:
-            args += ["-c:a", "aac"]
-        args += [str(out_path)]
 
-        check_run(args, timeout=self.timeout_s)
+        def run(audio_args: list[str]) -> None:
+            try:
+                check_run(head + audio_args + [str(out_path)], timeout=self.timeout_s)
+            except MediaError:
+                # 失败会留下 0 字节半成品；调用方按**存在性**判「已抽好」⇒ 必须清掉，
+                # 否则下次导出静默复用坏素材（overwrite=False 时目标是调用方的，不动它）。
+                if overwrite:
+                    self._discard_partial(out_path)
+                raise
+
+        if not include_audio:
+            run([])
+        else:
+            try:
+                run(["-c:a", "aac"])
+            except MediaError:
+                run(["-c:a", "aac", "-ar", "48000", "-ac", "2"])
         return out_path
 
     # ------------------------------------------------------------------ #
