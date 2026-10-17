@@ -26,9 +26,10 @@
 > 产品数据根按设计落 C = `Roaming\Video Locator AI` 488MB（**包内验收就往这里写索引**）+
 > `Local\SourceVideoLocator` 448MB；`~\.qoder-cn` 735MB；工具链缓存 ~1.1GB（uv/pip/npm/electron，venv 在 D 但缓存在 C）；
 > PyInstaller `_MEI*` 残留 90MB；**我的探针/单测残留仅 14.8MB**（单测 `setUpClass` 的 mkdtemp 没配平清理）。
-**处置 = 用户裁决（2026-10-18）：三项都不做、不入待办、以后勿再提议。**
-> **未结**：ⓐ **mac dispatch 仍待他一步**（令牌非交互取不到；判据已订正 = 凡 `mvp/src` 改动 mac 就要重出，
-> 现役 mac 包 ≈ r24 代）；ⓑ 第五道包内合并验收升不升常设；ⓒ 主线三样外部输入；ⓓ `og720-720` 挂账。
+> **处置 = 用户裁决（2026-10-18）：三项都不做、不入待办、以后勿再提议。**
+> **未结**：ⓐ ~~mac dispatch 待他一步~~ = **他自己点了**（run `39060341032`，head = r26 构建点 `ad7cec4`；
+> 代理不追读，要看包换没换须回读 `mac-alpha` 资产字节数）；ⓑ 第五道包内合并验收升不升常设；
+> ⓒ 主线三样外部输入；ⓓ `og720-720` 挂账。
 > 明细 = STATE `Current Task` 补廿四 块；产物 `work/{r26_pkg,cdisk_20261018,cap15_film_20261018/}`。
 
 ## P1 — Next
