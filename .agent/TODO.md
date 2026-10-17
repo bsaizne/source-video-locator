@@ -26,9 +26,7 @@
 > 产品数据根按设计落 C = `Roaming\Video Locator AI` 488MB（**包内验收就往这里写索引**）+
 > `Local\SourceVideoLocator` 448MB；`~\.qoder-cn` 735MB；工具链缓存 ~1.1GB（uv/pip/npm/electron，venv 在 D 但缓存在 C）；
 > PyInstaller `_MEI*` 残留 90MB；**我的探针/单测残留仅 14.8MB**（单测 `setUpClass` 的 mkdtemp 没配平清理）。
-> ⇒ 可动三项**都等他点头**：ⓐ 删 ghidra 工作区回收 6.4GB（代价 = 4GB 二进制的 Ghidra 分析要重跑，小时级）；
-> ⓑ 把验收 harness 的 `appdata_dir()` 指到 D（一行，回收 ~0.9GB 且以后不再往 C 写索引）；
-> ⓒ 单测补 `tearDownClass` 清 temp + 删 `_MEI*`。
+**处置 = 用户裁决（2026-10-18）：三项都不做、不入待办、以后勿再提议。**
 > **未结**：ⓐ **mac dispatch 仍待他一步**（令牌非交互取不到；判据已订正 = 凡 `mvp/src` 改动 mac 就要重出，
 > 现役 mac 包 ≈ r24 代）；ⓑ 第五道包内合并验收升不升常设；ⓒ 主线三样外部输入；ⓓ `og720-720` 挂账。
 > 明细 = STATE `Current Task` 补廿四 块；产物 `work/{r26_pkg,cdisk_20261018,cap15_film_20261018/}`。
