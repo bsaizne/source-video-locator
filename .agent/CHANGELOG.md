@@ -3333,3 +3333,36 @@ STATE `Current Task` 顶部新增补八块并把补七的开放项②标为闭�
 - **未做**：cap 1.5 的**观感读图**（成片接缝/硬切）仍未做；`source_merge.py::_transcode_args`
   同族未改；**删 r22 等口令**（出 r25 后应留 r25/r24/r23，删前双验 r23/r24 逐字一致）。
 - 竞品侧本轮**未执行其任何代码、未改其任何文件**；结论只写文档，`mvp/` 产品代码零改动（用户边界）。
+
+## 2026-10-17（五）· 删 r22（口令「删 r22」）
+
+### Removed
+
+- `mvp/ui/release/Video-Locator-win-x64-20261012r22.zip`（**981,686,020B**，≈936MB）。
+  ⇒ 分发包现三档 = **r25 现役 + r24 + r23**；下次出 r26 时按同规矩删 **r23**。
+
+### Verified（删前双验，从 zip 内读、不读磁盘产物）
+
+- 新脚本 `work/r25_pkg/precheck_delete_r22.py`：回滚档 **r24 / r23** 均 `testzip=None` / 7,078 条目 /
+  `flat` / backend.exe 尺寸+sha16 与档案**逐字一致**（r24 `77,496,832B cf9c6ce003a47c66`、
+  r23 `77,493,384B 537bcca18760de77`）；待删档 r22 自身身份留痕
+  = `981,686,020B / 7,078 条目 / testzip=None / backend.exe 77,493,384B sha16 f0d00f10c4123813`。
+- 与仓库里那把独立尺子 `work/r17_pkg/zip_identity.py` 的读数**逐字相同**（两把尺子对同一件事）。
+
+### Fixed
+
+- **这条"防我记错期望值"的闸第一版是空转的**，两处各错一次、都被实跑打回：
+  ① 我按 `77493384` 去 STATE 里找，而档案写的是带千分位的 `77,493,384` ⇒ 恒"找不到"，
+     且我没把"找不到"当失败拦下 ⇒ 判据空转；先去千分位再查，并改成**任一条找不到就 exit 1**。
+  ② 改完立刻真咬一次：r23 的 backend.exe sha16 判「找不到」——**期望值没错**，
+     是我把搜索面只写成 `STATE.md`，而那条读数记在 `archive/checkpoint-2026-10-13-0040.md:127,662`
+     （STATE 里对应的 r23 段已随本日立档迁入 `STATE_history_20261017.md`，那份只留 zip 级读数）。
+     ⇒ 搜索面扩到整个 `.agent/`（实搜 173 份；`.agent/versions/` 下是**目录**，按文件读会
+     `PermissionError`，已跳过不可读者）。
+- 另记一次踩坑：把中文塞进 bash heredoc 里的 Python 源码被控制台编码打成乱码 ⇒ `SyntaxError`。
+  ⇒ 长中文改档一律走脚本文件（`work/apply_r22_deletion_docs.py`），不走 heredoc 内联。
+
+### Notes
+
+- STATE 的 `Current Problem`（现役包段）与 `Current Task` 补十九 ③、`TODO.md` 未结项已同步为"r22 已删"，
+  Last Updated 落档前重测系统时间 = `2026-10-17 23:38`。
