@@ -592,6 +592,15 @@ class ExpandMaterialSpansGuardTest(unittest.TestCase):
         self.assertEqual(n, 1)
         self.assertEqual((clips[0].orig_start, clips[0].orig_end), (2.0, 3.0))
 
+    def test_default_rel_cap_is_1_5(self):
+        """默认取材扩宽护栏 = 1.5（2026-10-17 用户拍板）。
+
+        依据四片导出层扫描（脚本 work/expand_sweep.py）：cap 1.5 相对 2.5 把 Sigma素材宽 从 499.1s
+        压到 421.7s（-15.5%），而**导出实得 131/139 与严格 135/139 逐位不变**；cap<=1.2 与「不扩宽」等价。
+        """
+        from infrastructure.config import ExportConfig
+        self.assertEqual(float(ExportConfig().material_expand_rel_cap), 1.5)
+
     def test_prepare_channel_plan_threads_rel_cap(self):
         # 结构锁：prepare_channel_plan 必须把 rel_cap 透传给 expand_material_spans（否则旋钮是死值）
         import inspect
