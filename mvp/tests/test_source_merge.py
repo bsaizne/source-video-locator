@@ -18,10 +18,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))  # -> mvp/src
 
 from media.ffmpeg import MediaError
-from media.ffmpeg.source_merge import (MergePlan, SourceVideoMerger, choose_extension, color_args,
-                                       concat_list_text, duration_tolerance, encoder_chain,
+from media.ffmpeg.source_merge import (CPU_ENCODER, MergePlan, SourceVideoMerger,
+                                       _DEAD_ENCODERS, audio_signature, choose_extension,
+                                       color_args, concat_list_text, copy_layout_note,
+                                       declared_layout, duration_tolerance, encoder_chain,
                                        error_summary, file_signature, is_copy_compatible,
-                                       is_hdr, is_high_bit_depth, merge_output_name,
+                                       is_encoder_dead, is_hdr, is_high_bit_depth,
+                                       mark_encoder_dead, merge_output_name, named_layout,
                                        parse_hevc_encoders, parse_progress_seconds,
                                        pick_pix_fmt, resolve_audio_layouts, x265_params)
 
@@ -421,6 +424,98 @@ class UnknownAudioLayoutE2ETest(unittest.TestCase):
         plan = m.plan([self.st30, self.st30])
         self.assertEqual(plan.audio_filters, [[], []])
         self.assertNotIn("布局", plan.reason)
+
+
+class LeftoverFixTest(unittest.TestCase):
+    """两项遗留（2026-10-18 补廿二）：copy 判据含布局 + 开不了的编码器不再反复白试。"""
+
+    def test_literal_unknown_from_ffprobe_is_still_unnamed(self):
+        # ffprobe 的 csv 视图给字面 "unknown"（json 视图是缺字段）。若把它当"已写明"，
+        # 整套补名归因会**静默失效**——这条锁就是防这个。
+        self.assertEqual(declared_layout({"channels": 6, "channel_layout": "unknown"}), "")
+        self.assertEqual(named_layout({"channels": 6, "channel_layout": "unknown"}), "5.1")
+        chains, note = resolve_audio_layouts([{"codec_type": "audio", "channels": 6,
+                                               "channel_layout": "unknown"},
+                                              {"codec_type": "audio", "channels": 6,
+                                               "channel_layout": "unknown"}])
+        self.assertEqual(chains, [["5.1"], ["5.1"]])
+        self.assertIn("补名为 5.1", note)
+
+    def test_copy_signature_uses_named_layout(self):
+        unk = {"codec_name": "aac", "sample_rate": "48000", "channels": 6,
+               "channel_layout": "unknown"}
+        d51 = {"codec_name": "aac", "sample_rate": "48000", "channels": 6,
+               "channel_layout": "5.1"}
+        hexa = {"codec_name": "aac", "sample_rate": "48000", "channels": 6,
+                "channel_layout": "hexagonal"}
+        # 同序（unknown vs 5.1）仍判可流复制：否则分集原片从秒级 copy 掉进几十分钟转码
+        self.assertEqual(audio_signature(unk), audio_signature(d51))
+        # 声道顺序真不同的两种 6 声道布局不再误判可流复制
+        self.assertNotEqual(audio_signature(d51), audio_signature(hexa))
+        self.assertTrue(is_copy_compatible([audio_signature(unk), audio_signature(d51)]))
+        self.assertFalse(is_copy_compatible([audio_signature(d51), audio_signature(hexa)]))
+
+    def test_side_layout_alias_avoids_needless_transcode(self):
+        side = {"codec_name": "aac", "sample_rate": "48000", "channels": 6,
+                "channel_layout": "5.1(side)"}
+        plain = {"codec_name": "aac", "sample_rate": "48000", "channels": 6,
+                 "channel_layout": "5.1"}
+        self.assertEqual(audio_signature(side), audio_signature(plain))
+
+    def test_copy_layout_note_only_when_first_is_unnamed(self):
+        unk = {"channels": 6, "channel_layout": "unknown"}
+        d51 = {"channels": 6, "channel_layout": "5.1"}
+        self.assertIn("流复制不改写布局声明", copy_layout_note([unk, d51]))
+        self.assertEqual(copy_layout_note([d51, unk]), "")
+        self.assertIn("无法命名", copy_layout_note([{"channels": 7}, d51]))
+
+    def test_dead_encoder_cache_and_cpu_guard(self):
+        _DEAD_ENCODERS.clear()
+        self.addCleanup(_DEAD_ENCODERS.clear)
+        mark_encoder_dead("ff", "hevc_nvenc")
+        self.assertTrue(is_encoder_dead("ff", "hevc_nvenc"))
+        self.assertFalse(is_encoder_dead("other-ff", "hevc_nvenc"))   # 按 ffmpeg 路径分键
+        mark_encoder_dead("ff", CPU_ENCODER)
+        self.assertFalse(is_encoder_dead("ff", CPU_ENCODER))          # CPU 兜底永不拉黑
+
+
+@unittest.skipUnless(FFMPEG.exists() and FFPROBE.exists(), "real ffmpeg/ffprobe not present")
+class DeadEncoderSkipE2ETest(unittest.TestCase):
+    """跳过分支：本机开不了的编码器第二次不再真开，也**不再向用户播报假故障**。"""
+
+    def setUp(self):
+        _DEAD_ENCODERS.clear()
+        self.addCleanup(_DEAD_ENCODERS.clear)
+        self.tmp = Path(tempfile.mkdtemp(prefix="svl_dead_"))
+        self.parts = []
+        for i, fps in enumerate((25, 30)):
+            p = self.tmp / f"p{i}.mp4"
+            subprocess.run([str(FFMPEG), "-hide_banner", "-loglevel", "error", "-y",
+                            "-f", "lavfi", "-i", f"testsrc=size=640x360:rate={fps}",
+                            "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000",
+                            "-t", "1.5", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                            "-c:a", "aac", "-shortest", str(p)],
+                           check=True, capture_output=True,
+                           creationflags=0x08000000 if sys.platform == "win32" else 0)
+            self.parts.append(p)
+
+    def _merger(self, **kw):
+        return SourceVideoMerger(FFMPEG, FFPROBE, self.tmp / "merged", timeout_s=180, **kw)
+
+    def test_marked_dead_encoder_is_skipped_and_merge_still_succeeds(self):
+        m = self._merger(prefer_hw=True)
+        chain = encoder_chain(m.available_hevc_encoders(), prefer_hw=True)
+        if len(chain) < 2:
+            self.skipTest("本机链里只有 CPU 兜底，跳过分支无从观测")
+        victim = chain[0]
+        mark_encoder_dead(FFMPEG, victim)
+        seen: list[str] = []
+        m2 = self._merger(prefer_hw=True, log=lambda *a: seen.append(" ".join(str(x) for x in a)))
+        info = m2.merge(self.parts)
+        self.assertTrue(Path(info["merged_path"]).exists())
+        # 注：``_log`` 收到的是 (格式串, *参数)，真日志由调用方 %-格式化
+        self.assertTrue(any("source merge skip" in s and victim in s for s in seen),
+                        f"已判死的编码器没被跳过: {seen}")
 
 
 if __name__ == "__main__":

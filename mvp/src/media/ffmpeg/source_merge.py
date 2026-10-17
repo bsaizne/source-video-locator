@@ -85,6 +85,11 @@ def audio_signature(astream: dict | None) -> tuple | None:
         str(astream.get("codec_name") or ""),
         str(astream.get("sample_rate") or ""),
         int(astream.get("channels") or 0),
+        # 2026-10-18 补：布局进 copy 判据。用**补名后**的布局而不是容器原值——
+        # 否则「6ch/unknown + 6ch/5.1」这对实际同序的输入会被挤出 copy、拖进全量转码
+        # （实测代价：分集原片从秒级流复制变成几十分钟转码）；而 hexagonal vs 5.1 这种
+        # **声道顺序真不同**的组合不再误判可流复制（流复制会把后段按前段的顺序解释）。
+        named_layout(astream) or "unnamed",
     )
 
 
@@ -126,6 +131,12 @@ def is_copy_compatible(sigs: Sequence[tuple]) -> bool:
 # 正确的上/下混系数——实测 5.1→stereo 是真下混而非丢声道，六条单音都在）。
 CHANNEL_COUNT_LAYOUT = {1: "mono", 2: "stereo", 6: "5.1", 8: "7.1"}
 _UNNAMED = "未写"
+# ffprobe 对"容器没写布局"会给空、也可能给字面 `unknown`（csv 视图就是 unknown，json 视图是缺字段）
+# ⇒ 两种都要当未解析，否则补名分支会被 "unknown" 这个字符串骗过去，整套归因静默失效。
+_UNRESOLVED_LAYOUTS = {"", "unknown", "0x3"}
+# 声道顺序相同、只差下混系数的两种写法（FFmpeg ≥7.1 区分 5.1 与 5.1(side)）。
+# 不合并这条就会把「MKV 的 5.1(side) + MP4 的 5.1」判成布局冲突、从秒级 copy 拖进全量转码。
+_LAYOUT_ALIAS = {"5.1(side)": "5.1"}
 
 
 def _shape_desc(widths: Sequence[int], declared: Sequence[str]) -> str:
@@ -138,10 +149,13 @@ def _first_audio_stream(probe: dict) -> dict | None:
 
 
 def declared_layout(astream: dict | None) -> str:
-    """容器里**写明**的布局（小写）；未写 / unknown → 空串。"""
+    """容器里**写明**的布局（小写、别名归一）；未写 / unknown → 空串。"""
     if not astream:
         return ""
-    return str(astream.get("channel_layout") or "").strip().lower()
+    lay = str(astream.get("channel_layout") or "").strip().lower()
+    if lay in _UNRESOLVED_LAYOUTS:
+        return ""
+    return _LAYOUT_ALIAS.get(lay, lay)
 
 
 def named_layout(astream: dict | None) -> str | None:
@@ -197,6 +211,24 @@ def resolve_audio_layouts(astreams: Sequence[dict | None]
     note = (f"各路音轨布局不一致（{desc}）⇒ 统一到 {target}"
             f"（未写布局的输入先按声道数补名再归一；不再由输入顺序决定产物）")
     return chains, note
+
+
+def copy_layout_note(astreams: Sequence[dict | None]) -> str:
+    """流复制腿的布局留痕（纯函数）。
+
+    copy 不重编码 ⇒ **改不了容器里的布局声明**（实测 `-c copy` 加 `-channel_layout 5.1 -ac 6`
+    仍然写出 `unknown`），所以这一段只能如实记下来：产物按**第一段**的声明解释其余段。
+    全部第一段可解析时不产生噪声。
+    """
+    if not astreams or astreams[0] is None:
+        return ""
+    first = astreams[0]
+    if declared_layout(first):
+        return ""
+    named = named_layout(first)
+    how = f"未写布局、按声道数记为 {named}" if named else f"{first.get('channels')} 声道且无法命名"
+    return (f"；流复制不改写布局声明 ⇒ 产物音轨按第一段记（{how}），"
+            f"其余段按同一声道顺序解释")
 
 
 
@@ -276,6 +308,29 @@ def parse_hevc_encoders(encoders_output: str) -> list[str]:
             if (name.startswith("hevc_") or name == CPU_ENCODER) and name not in found:
                 found.append(name)
     return found
+
+
+# --------------------------------------------------------------------------- #
+# 「这台机器开不了这个编码器」的进程内记忆（2026-10-18 实测）
+# --------------------------------------------------------------------------- #
+# `ffmpeg -encoders` 列的是**编译期**能力：无 NVIDIA/Intel 的机器照样列 hevc_nvenc/hevc_qsv，
+# 于是每次合并都要真开一遍才知道开不了（实测每条死臂 ≈0.57s 的滤镜图 + 编码器初始化，
+# 本机每次白跑 2 条 ≈1.15s）。省这点时间不是目的——微型探测本身同价；**目的是别再骗用户**：
+# 失败臂会向进度流播报「硬件编码器 X 执行失败，已回退到 Y」，正常机器上每次合并都刷两行假故障。
+# 判据用**结构性**的"一帧都没编出来"，不匹配 stderr 文案：开场即败 = 这台机器开不了它，
+# 编到一半死 = 参数/素材问题，两者不能混（后者仍照常播报）。
+_DEAD_ENCODERS: set[tuple[str, str]] = set()
+
+
+def is_encoder_dead(ffmpeg: str | Path, encoder: str) -> bool:
+    return (str(ffmpeg), encoder) in _DEAD_ENCODERS
+
+
+def mark_encoder_dead(ffmpeg: str | Path, encoder: str) -> None:
+    """记一台机器开不了的编码器。CPU 兜底**永不拉黑**（拉黑就等于没有兜底）。"""
+    if encoder == CPU_ENCODER:
+        return
+    _DEAD_ENCODERS.add((str(ffmpeg), encoder))
 
 
 def merge_output_name(paths: Sequence[str | Path], mode: str, ext: str) -> str:
@@ -441,6 +496,8 @@ class SourceVideoMerger:
         chains, audio_note = resolve_audio_layouts([_first_audio_stream(pb) for pb in probes])
         if mode == "transcode" and audio_note:
             reason += "；" + audio_note
+        elif mode == "copy":
+            reason += copy_layout_note([_first_audio_stream(pb) for pb in probes])
         return MergePlan(paths=[str(p) for p in ps], mode=mode, output=out,
                          total_duration=total, reason=reason, main_video=main_v,
                          has_audio=has_audio, fps=fps, audio_filters=chains)
@@ -630,6 +687,9 @@ class SourceVideoMerger:
         if plan.mode == "copy":
             attempts.append(("copy", self._copy_args, True))
         for enc in encoder_chain(self.available_hevc_encoders(), prefer_hw=self.prefer_hw):
+            if is_encoder_dead(self.ffmpeg, enc):
+                self._log("source merge skip: %s 本机开不了（此前一帧未编）", enc)
+                continue
             attempts.append((enc, self._transcode_builder(enc), False))
 
         last_err = ""
@@ -643,8 +703,16 @@ class SourceVideoMerger:
             else:
                 cmd = build(plan, tmp)  # type: ignore[arg-type]
                 run_label = f"转码合并（{label}）"
+            produced = {"any": False}
+
+            def _prog(frac, msg, _p=produced):
+                if frac:
+                    _p["any"] = True
+                if progress is not None:
+                    progress(frac, msg)
+
             try:
-                rc, err = self._run(cmd, total=plan.total_duration, progress=progress,
+                rc, err = self._run(cmd, total=plan.total_duration, progress=_prog,
                                     cancel=cancel, label=run_label)
             finally:
                 if uses_list:
@@ -665,9 +733,14 @@ class SourceVideoMerger:
             except OSError:
                 pass
             last_err = err
-            self._log("source merge attempt %s failed (rc=%s): %s", label, rc, err)
-            if progress is not None and label != "copy":
-                progress(None, f"硬件编码器 {label} 执行失败，已回退到 {nxt or 'CPU 兜底（仍失败）'}")
+            if label != "copy" and not produced["any"]:
+                # 开场即败 = 这台机器开不了它：记下来，下次直接跳过，且**不向用户播报假故障**
+                mark_encoder_dead(self.ffmpeg, label)
+                self._log("source merge: %s 一帧未编即失败（本机记为不可用）: %s", label, err)
+            else:
+                self._log("source merge attempt %s failed (rc=%s): %s", label, rc, err)
+                if progress is not None and label != "copy":
+                    progress(None, f"硬件编码器 {label} 执行失败，已回退到 {nxt or 'CPU 兜底（仍失败）'}")
         raise MediaError(f"原片合并失败（所有尝试均未产出有效输出）。最后错误: {last_err or '无输出文件'}")
 
     def _transcode_builder(self, encoder: str):
