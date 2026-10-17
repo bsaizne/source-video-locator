@@ -61,6 +61,8 @@ benchmark_report*.md
 
 # ----------------------- Generated env / report snapshots ------------------- #
 benchmark-*.agentctx.json
+# agent-context 的档案版本快照（STATE/TODO/CHANGELOG 的整份副本，4MB 级重复内容）
+.agent/versions/
 benchmark_results.json
 environment.json
 report_summary.json

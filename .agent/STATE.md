@@ -42,6 +42,77 @@
 
 ## Current Task
 
+> **▶ 2026-10-17（续63 补十八）— 上一会话三批未提交改动收口：音轨布局回退 + 竞品黑盒对照 + 取材扩宽护栏 1.5【现读这条】**
+> 口令「开始」。接手时工作树 = 上一会话留下的 **三批改动、全部未提交未出包**（交接件
+> `.agent/archive/HANDOFF_20261017_rea_competitor_blackbox.md`，自包含）。先验 mtime 无孤儿写入者
+> （源码停在 10-16 23:2x / 10-17 02:31），再**自己重跑门禁逐条取 rc**，不引用上一会话的数字。
+> **① 音轨回退（代码笔 `2afcec7`）**：源声轨为「N 声道 + **未指定布局**」时 ffmpeg 原生 aac 拒收
+> （`Unsupported channel layout "6 channels"` rc=-22、产物 0 字节）⇒ 抽素材/预览整腿当场失败。
+> **触发面不是人造源**：`5.1(side)`/hexagonal 编进 MP4 后布局信息就丢 ⇒ **本产品自抽的 `og*.mp4`
+> 天然是这种源**（把它当原片再抽一次即复现）。次生陷阱：失败留 0 字节文件 + 剪映腿裸 `exists()`
+> ⇒ 第二次导出**不再报错**却静默把坏素材写进草稿。修 = 首跑参数**逐字不变**、仅失败后按
+> 48k/stereo 重试一次；失败清半成品；可用性判据收成唯一来源 `app.exporters.clip_present`
+> （剪映腿 + 草稿写入端共用，教训 ⑲）。改前 A 臂 `MediaError`(rc=4294967274)/C 臂 rc=-22 0 字节，
+> 改后 A 臂 OK 447,853B 且 **C 臂仍 rc=-22（判据真咬）**；新锁 4 项。
+> **同族调用点本轮已枚举完（不是"修一处宣称其余安全"）**：另两处「存在即复用」形态**本身带有效性判据、
+> 无潜伏 0 字节复用** —— `timeline_render.py:594` 要 `st_size>0`、`source_merge.py::_valid_output`
+> 走 probe+视频流+时长吻合。**同族未改（登记，需单独立批）**：`source_merge.py::_transcode_args`
+> 也是 `concat → -c:a aac` 无布局归一（同形源失败更早：`Cannot select channel layout for the link
+> between filters auto_aresample_0 and Parsed_concat_6`）；但那是**硬失败非静默坏产物**，修法 = concat
+> 前插 `aformat=channel_layouts=stereo`。
+> **② 竞品（CutMatch）黑盒对照 —— 首次用同一把目检尺子量出「竞品 vs 我方」**（尺子 =
+> `mvp/scripts/shot_detect/boundary_gt_v1.json` 44 窗/125 条 conf=high；竞品数据 =
+> `D:\claudework\cutmatch-analysis\sandbox\out\` 只读）。切点质量（共同覆盖 2mkv+test1，±1.0s）：
+> **竞品 t0.50 = P/R/F1 0.885/0.958/0.920（test1 F1 1.000）** vs **我方 scn2 = 0.550/0.917/0.687
+> （test1 F1 0.200）**。后处理规则**已可逐帧复现**（其 probs + 自记参数重放：2mkv 1874/1874、
+> test1-om 491/491 全等）⇒ **`sensitivity=18` 对切点集合无可观测作用**（判据 = 不含它的规则即可复现）。
+> **导出层双臂**（只把竞品切点接进导出计划层）：A 我方 scn2 导出实得 **131/139**、严格 135 ·
+> B 竞品 TN 切点 **130/139**、严格 135 ⇒ **换更准的切点在导出实得上不涨（−1，噪声级）**，与档案旧结论
+> 同向（`FINDINGS_TN_CUT_QUALITY_VS_METRIC.md`）。**结论：竞品优势在信号源（TN 逐帧概率），不在后处理
+> 三条（阈值/组中点/min_gap）。** 附带量级事实：其 sidecar `.text` = 373MB（整包 87%），常量是
+> RVA 表而**无任何 RIP 相对引用**（8 modrm×5 opcode×8 REX 全扫 = 0）⇒ 字符串 xref→函数体这条路不存在。
+> **③ 取材扩宽护栏 `material_expand_rel_cap` 2.5 → 1.5（代码笔 `beedb91`，产品口径用户拍板）**：
+> 四片导出层扫描（`work/expand_sweep.py`，**同口径自证** 严格 135/139、导出实得 131/139 逐位吻合）
+> cap 2.5/2.0/**1.5**/1.2/core 不扩宽 ⇒ Σ素材宽 499.1/452.1/**421.7**/419.9/419.9s，
+> 而**导出实得与严格四档全不变** ⇒ 2.5 以上的扩宽在该口径下是纯代价（多转码 + 多无关画面）。
+> ⚠️ **口径必须读准**：cap 1.5 在这批数据上 **≈ 关闭扩宽**（不是"温和收紧 −15%"）—— 导出计划不变式里
+> 扩宽条数四片 = **0/0/0/1**（cap 2.5 时 11/7/9/12，本会话重跑独立印证），Σ 421.7s ≈ core 419.9s。
+> 语义 = **卷轴只给解说实际引用的核心窗，不再撑成完整原片镜头**；2026-10-11 的 K=2.5 是当时拍的口径。
+> 若要"保留部分整镜头扩宽"的温和档 = **2.0**（−9.4%），一条数值 + 一条锁 + 重跑门禁即可切。
+> **门禁（本会话逐字跑，`work/verify_20261017/`，rc 逐条取不用 `| tail`）**：后端全套
+> **`Ran 675 tests in 199.786s` OK (skipped=2) / BACKEND_RC=0**（DirectML 生效
+> `BACKEND_DEVICE directml amd`）· API **`Ran 150 tests` OK / API_RC=0** · 导出计划不变式
+> **FAILED=0（4 片 × 4 通道）/ INV_RC=0**。**代码已提交（两笔）但本批未重跑 UI**（无前端改动面）。
+> **静态逆向线两次判死、已收线（别再重开）**：① REA 的 Windows Ghidra P0 **只收原生 PE**
+> （原文 `accepts native PE and explicitly selected raw 6502 targets only`）⇒ 373MB 切片喂 Ghidra 被
+> 平台策略封死，rizin 能反汇编切片但 `axt` 只覆盖已分析范围（8MB=2%）；② 全量 PE 分析
+> 默认 `GHIDRA_HEADLESS_MAXMEM=2G` → 1h50m 后 `OutOfMemoryError: Java heap space`，抬到 10G 重跑
+> 30 分钟无产出（日志冻结/RSS 3.9GB）主动掐掉；③ 剩下唯一静态未知 = `commentary_boundary_refine_*`
+> 的"存在性"角色，而其**位置**角色 2026-09-26 已实测（施加在我方 227 条边界上 97.4% 位移 ≤4 帧）。
+> **环境（本轮新装，全在 D 盘）**：`D:\claudework\rea`（master，`npm ci`+`compile`）、`D:\npm-global`
+> （npm 前缀从 `%APPDATA%\npm` 迁来，`rea.cmd` 6.5.0）、`D:\tools\ghidra\ghidra_12.1.4_PUBLIC`
+> （sha256 = 官方 `ddac49f9…`）、`D:\tools\rizin` 0.9.1、`D:\tools\kuna`（REA 在 Windows 拒
+> `unsupported_host`）；User 级环境变量 `GHIDRA_INSTALL_DIR`/`REA_KUNA_COMMAND`，JDK 23 = `D:\java`；
+> REA+Ghidra `doctor` **10/10 全绿**（源码构建需从 npm 包拷 `native/windows/build/{manifest.json,
+> rea-windows-x64.node}` 回位才绿）。网络事实复确认：`github.com:443` 阻断、`api.github.com` 通。
+> **覆盖边界（有意取舍，不是漏判）**：① **观感面未测** —— cap 1.5 的成片接缝/硬切位置**没有读图验收**，
+> 本批只有只读数据面；② 黑盒对照只覆盖**共同可测的 2mkv+test1**（竞品未交付 test2/test3 的 probs）；
+> ③ **未出包** ⇒ 用户手上仍是 r24；本轮 `mvp/ui` 零改动 ⇒ **mac 不必另走 dispatch**（跨平台 JS/TS 未动）；
+> ④ 竞品侧一律**只读交付物**，未运行竞品。
+> **主线「导出过渡不流畅」仍未结**（`.agent/archive/HANDOFF_20261016_export_smoothness.md`）：缺三样
+> 外部输入 = 他指认的**具体秒数** / 未经微信转码的原始 `movie_*.mp4` / `<解说片名>__<hash8>.results.json`
+> （`%APPDATA%\Video Locator AI\data\exports\` 只有 2026-08-27 三份旧 results，不含本案 ⇒「主 span 本身就宽」
+> 与「snap 撑宽」占比拆不开）；机械层六项已排除、armB 帧级切点判负、armC 段宽上限有效且不撞 align 护栏；
+> 另一条挂账 = `og720-720` 相似度自相矛盾（0.08 vs 0.97，两数打架未查谁错）。
+> **产物**：代码 `mvp/src/{media/ffmpeg/ffmpeg_io.py, app/exporters.py, app/locator_service.py,
+> infrastructure/config.py}` + `mvp/tests/{test_ffmpeg_io.py, test_exporters.py,
+> test_locator_service.py}`；档案 `.agent/{STATE,TODO,CHANGELOG}.md` +
+> `.agent/archive/{HANDOFF_20261016_export_smoothness.md, HANDOFF_20261017_rea_competitor_blackbox.md}`
+> （本批首次入库）+ 旧块迁 `archive/{STATE_history_20261017.md, TODO_history_20261017.md}`；
+> 探针与日志（不入库）`work/{verify_20261017/, audio_51_20261017/, cap15_*.log, expand_sweep.py,
+> export_arm_bb.py, export_arm_gt.py, trans_smooth_20261016/}` 及
+> `D:\claudework\cutmatch-analysis\sandbox\{compare_bb_vs_ours,bb_final,rule_search,diag_timebase}.py`。
+
 > **▶ 2026-10-13（续63 补十七）— B 方案导出异步化：/api/tasks/export 带进度与可取消，UI 切任务通道【现读这条】**
 > 口令「开始 B 方案导出异步化」。动手前先核四条承重前提（每条带可证伪检查）：
 > **P1** 后端 hook 早已在位 = `locator_service.py:1590-1593`（`export_results`）与
@@ -146,8 +217,15 @@
 > 不是只看 run 绿）：`mac-alpha` 的 `Video-Locator-mac-arm64.zip` =
 > **916,828,395B @ updated_at 2026-10-12T16:56:33Z**（上一发 run 38277827813 的产物）
 > ⇒ 本轮门槛绿则同名 `--clobber` 覆盖，**字节数与时间戳应双双变化**。
-
-
+> **⑧ mac 换包核验已闭合（2026-10-16，公开 API 只读实测，未取令牌）**：run **38429952068** =
+> `completed / success`，head_sha `c7896705b`（= 档案笔 `c789670`）；`mac-alpha` 的
+> `Video-Locator-mac-arm64.zip` 现为 **916,840,558B @ 2026-10-13T17:01:02Z** ⇒ 对基线
+> **+12,163B 且时间戳变化**（两项都变 = 真换了包，不是只看 run 绿）。构建面同一性另核：
+> `git diff --name-only 811932e..c789670` = **仅 `.agent/{CHANGELOG,STATE,TODO}.md` 三份档案**
+> ⇒ mac 那发的代码面与 **r24 构建点 `811932e` 逐字等同**（含导出任务通道代码笔 `de930dc`，
+> `git merge-base --is-ancestor de930dc c789670` 通过）。⇒ 本块「状态 `in_progress`」与
+> Current Problem 里「mac-alpha 仍是 r23 那一代」**均过期，已按实测订正**。
+> 读数原文留 `work/mac_check/{rel,run}.json`（不入库）。
 
 > **▶ 2026-10-12（续63 补十六）— 真机红条定性反转：不是「后端掐连接」，是客户端 300s 头超时【现读这条】**
 > 口令两件：① release/ 删 r19（验完再删）② 「补十五 ⑤ 的未扩面项」本轮扩面。**② 的前提被实测打掉**，
@@ -231,52 +309,6 @@
 > `accept_{bundle,render}_r23.log` · `invariants_r23.log` · `startup_r23.log` · `r23_id.log` ·
 > `backend_diff.txt` · `r19_id.log`/`r20_id.log`。
 
-> **▶ 2026-10-12（续63 补十五）— 真机 SegmentOverlap 崩修复 + 导出第二层错误边界 + derived_stale 真机实证【现读这条】**
-> 用户递来截图（导出框红条「无法连接后端服务 (fetch failed)」）+ `video_locator_logs(2).zip`。
-> **① 版本定性**：日志 19:54 `rebuild index: derived table version changed (…scn1 → …scn2)` +
-> 19:56 `index derived refreshed`（**109s**）⇒ 他跑的正是 r21/scn2 代，且
-> **derived_stale 老用户首触重刷路径首获真机实证**（补十三 ⑥(e) / 补十四登记的「未实测」项闭合；
-> 随后 locate 3.8h 完成 657 段，重刷未引入异常）。
-> **② 新崩法 ≠ 第十二轮**：`pyJianYingDraft.SegmentOverlap: New segment overlaps with existing
-> segment [start: 728326000, end: 730242000]`（`exporters.py write_jianying_draft → track.add_segment`；
-> 库判据 `overlaps = not(end<=start or other.end<=start)` = 严格相交、贴边合法）。
-> **根因链（算术逐格对上）**：贴接裁开 64 对 → 产出 **<0.1s 窄素材**（上一条槽宽恰 0.084s）→
-> 碎片门槛 `min_clip_s=0.15` **只告警不裁** → 卷轴按真实宽度排槽 → `write_jianying_draft` 的
-> `rec_w=max(0.1,…)` 把 target 撑出槽位 0.016s → 与下一条严格相交 ⇒ 整导出打死 →
-> 意外异常逃 ASGI 掐连接 ⇒ UI 又弹误导文案。**与第十二轮同族（0.1 下限），这次越的是目标轴**
-> （十二轮越的是素材时长轴）。
-> **③ 修复两处**：A=`plan_jianying_assets` 卷轴**槽位与累加**都吃 `max(0.1, w)`，与 write 同口径
-> ⇒ 结构性无重叠（窄素材占 0.1s 槽、speed 走十二轮回压腿，不越素材时长）；
-> B=`routes/results.py` 第二层错误边界（第十二轮「等裁决」项被真机裁决）：意外异常 →
-> 结构化 400（message 带真实异常名 + 「请把日志发给支持人员」，traceback 落支持档）。
-> **④ 门禁**：后端 **Ran 670 OK (skipped=2)**（+2：窄素材槽位锁 + 结构锁「累加必须用下限后宽度」）·
-> API **Ran 130 OK**（+2：意外异常→400 / ApplicationError 分支不被吞）·
-> `check_export_plan_invariants.py` **FAILED=0** · 日志提取采坑：`accept_bundle_r21.log` 混编码，
-> 提取脚本一律 `stdout.reconfigure(utf-8)`（教训 ⑮ 同族再犯，已在补十四 CHANGELOG 登记）。
-> **⑤ 覆盖边界（如实）**：没在他那台机器复现真导出（判据=日志数字与算术相容 + 单测复现该形态）；
-> 第二层边界**只加了 /api/export 一条路由**，其它路由意外异常仍会穿 ASGI（未扩面）；
-> 窄素材被撑到 0.1s 槽 = 0.83× 慢放观感，属最保守默认（不丢画面），未做「<0.1s 直接丢」变体。
-> ✅ **定性订正（续63 补十六 实测）**：本块 ②「意外异常逃 ASGI ⇒ 掐连接」与 ⑤「其它路由仍会穿 ASGI」
-> **均不成立** —— `app.py:86` 的全局 `exception_handler(Exception)` 一直在跑并发结构化 500
-> （四臂真 uvicorn 实测 6/6 收到 500）；红条真因 = Electron 侧 Node fetch 的 undici 默认
-> **headersTimeout=300s** 先放弃，而那发导出实际跑了 374s/783s。判据与修法见顶部「补十六」块与
-> `Known Issues` 教训 ⑳。
-> **⑥ r22 已出（2026-10-12 口令「立档 → 提交 → 出 r22」）**：代码笔 `a506df4` + 档案笔 `36dec63`
-> 已推 ⇒ **r22 = 干净 commit `36dec63` 构建**；包内三道验收全绿（bundle FAILED=0 · render FAILED=0 ·
-> 不变式 FAILED=0）；zip `Video-Locator-win-x64-20261012r22.zip` 981,686,020B / 7,078 条目 /
-> testzip=None / **zip 内 backend.exe 77,493,384B sha16 `f0d00f10c4123813` == 磁盘**（对 r21 +341B，
-> 与本批两处小改动相容）。release/ 现四档 r22/r21/r20/r19，按「最新+上一档」应删 r19，等口令。
-> **口径更正（用户澄清）**：「推 release」= **更新 mac-alpha 上的 mac 包**（走 mac CI dispatch），
-> **Windows zip 不挂 GitHub**（继续本地分发）。我先前把「挂r22即可」理解成上传 Windows zip，
-> 并因 helper 挂死停在待传——该动作作废，Windows zip 不传。
-> **⑦ mac 更新已结清（2026-10-12 22:5x 实测公开 API）**：用户 dispatch 的 run `38262048171`
-> （head `686b178`，含 SegmentOverlap 修复）三 job 全绿 = mps-poc 5.8min / mvp-tests-macos 14.9min /
-> macos-package 11.4min，全程 27min（远快于档案写的 ≈180 macOS 分钟——该口径过期，留待下次核）；
-> `mac-alpha` 的 `Video-Locator-mac-arm64.zip` 已覆盖 = **916,823,896B / updated_at 2026-10-12T14:45:51Z**
-> （对旧版 916,769,503B +54KB，与本批代码改动量相容）。
-> 产物：`mvp/src/app/exporters.py` · `mvp/api/routes/results.py` · `mvp/tests/test_exporters.py` ·
-> `mvp/api/tests/test_api.py`；真机日志与解包在 `work/support_20261011b/`（不入库）。
-
 ## Completed
 
 - 历史完成项见 `.agent/archive/STATE_history_20261007.md`（Current Task 退休块续14~续61）、
@@ -290,8 +322,17 @@
 
 ## Current Problem
 
+- ✅ **上一会话留下的三批未提交改动已收口并本地提交（2026-10-17 续63 补十八）**：① 抽素材音轨
+  「N 声道 + 未指定布局」硬失败 + 0 字节残留被当已抽好（`2afcec7`）② 竞品切点黑盒对照 + 导出层双臂
+  （只读，无代码笔）③ 取材扩宽护栏 `material_expand_rel_cap` 2.5 → **1.5**（`beedb91`）。
+  本会话自己重跑门禁（不引用上一会话数字）= 后端 **Ran 675 OK (skipped=2)** · API **Ran 150 OK** ·
+  导出计划不变式 **FAILED=0**，三条 rc 均 0。⚠️ **未出包、未推远端** ⇒ 用户手上仍是 r24；
+  ⚠️ **cap 1.5 的观感面（成片接缝/硬切）未做读图验收**，本批只有数据面。
 - ✅ **导出「UI 干等 6~13 分钟」已修到任务通道（2026-10-13 续63 补十七）— `POST /api/tasks/export` 带进度与可取消，后端全套 670 / API 150 / UI 161 全绿，端到端跑编译产物 `PROBE PASS`（真跨进程 pickle 批）。**已提交并进包 r24**（干净 commit `811932e`，包内四道全绿）；
-  ⚠️ mac 侧未更（取不到令牌 ⇒ mac-alpha 仍是 r23 那一代，见 Current Task 补十七）。**
+  ✅ **mac 侧已更（2026-10-16 公开 API 实测闭合）**：他 dispatch 的 run `38429952068` = success，
+  head `c789670` 与 r24 构建点 `811932e` 只差三份 `.agent` 档案 ⇒ 代码面等同 r24；
+  `mac-alpha` 包 916,840,558B @ 2026-10-13T17:01:02Z（对基线 +12,163B 且时间戳变）= 真换了包。
+  读数与判据见 Current Task 补十七 ⑧。**
 - ✅ **「导出框红条·无法连接后端服务」结案（2026-10-12 续63 补十六）= 客户端 300s 头超时，不是后端掐连接**：
   全局 `exception_handler(Exception)` 一直有效（四臂真 uvicorn 实测 6/6 回结构化 500），真因是
   Electron 主进程 Node fetch（undici）默认 headersTimeout=300s × 分钟级**同步**导出
@@ -482,6 +523,14 @@
     见 Current Task ⑥(a)）。**(ii) 已拍板（口令「不用加」）**：老用户 derived_stale 升级路径
     **维持现状**——首次分析任务内重刷，文案/逐帧进度/可取消照旧，**不加预计耗时**，
     不做启动期后台预扫。本条无遗留。
+11. **补十八 开放项（2026-10-17，按代价从小到大）**：
+    ① **出包 r25**（等口令；`mvp/ui` 零改动 ⇒ **mac 不必另走 dispatch**；出包后按规矩删 r22，删前先验
+    回滚档 r23/r24 逐字一致）；② **cap 1.5 观感验收**（本批只数据面：成片接缝/硬切位置未读图，
+    建议出包后包内 accept + 双档对照各出一片再读图）；③ **`source_merge.py::_transcode_args` 同族批**
+    （声道布局无归一 ⇒ 多原片合并在同形源上硬失败 rc=-22；修法 = concat 前插
+    `aformat=channel_layouts=stereo`，需独立归因与验收）；④ **主线「过渡不流畅」**（缺他指认的秒数 /
+    未转码原始 `movie_*.mp4` / `*.results.json` 三样，缺任一样都只能给规模估计不是验收数）；
+    ⑤ `og720-720` 相似度自相矛盾（0.08 vs 0.97）未定位。~~⑥ 补十八 立档~~ = 本笔已完成。
 
 ## Important Constraints
 
@@ -629,4 +678,4 @@
 
 ## Last Updated
 
-2026-10-14 00:52
+2026-10-17 20:01

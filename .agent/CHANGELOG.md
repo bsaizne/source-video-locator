@@ -3085,3 +3085,189 @@ STATE `Current Task` 顶部新增补八块并把补七的开放项②标为闭�
 - Created `checkpoint-2026-10-14-0049.md` checkpoint (4 modified/untracked file(s)).
 
 - Created `checkpoint-2026-10-14-0049.md` checkpoint (1 modified/untracked file(s)).
+
+## 2026-10-15
+
+### Added
+
+- None.
+
+### Modified
+
+- Updated `.agent/STATE.md` last-updated timestamp.
+
+### Fixed
+
+- None.
+
+### Removed
+
+- None.
+
+### Notes
+
+- Created `checkpoint-2026-10-15-221716.md` checkpoint (2 modified/untracked file(s)).
+
+## 2026-10-16
+
+### Added
+
+- None.
+
+### Modified
+
+- `.agent/STATE.md` 补十七 块新增 ⑧、`TODO.md` P0 ② 条目：mac 换包核验由「待事后核」改为「已闭合」
+  （run `38429952068` completed/success；`mac-alpha` 包 916,840,558B @ 2026-10-13T17:01:02Z，
+  对基线 +12,163B 且时间戳变化；`git diff --name-only 811932e..c789670` 仅 `.agent` 三份档案
+  ⇒ mac 代码面等同 r24 构建点）。
+- Updated `.agent/STATE.md` last-updated timestamp.
+
+### Fixed
+
+- 订正 `STATE.md` `Current Problem` 首条过期断言「mac-alpha 仍是 r23 那一代」（取不到令牌那条已失效：
+  包已由他 dispatch 的 run 更新，实测公开 API 为证）。
+
+### Removed
+
+- None.
+
+### Notes
+
+- 本批只读核验（GitHub 公开 API + 本地 git），未取令牌、未跑构建、`mvp/` 代码零改动。
+- 读数原文留 `work/mac_check/{rel,run}.json`（不入库）。
+
+## 2026-10-17
+
+### Added
+
+- `mvp/src/app/exporters.py::clip_present` —— 素材可用性判据（**存在且非空**）的**唯一**来源，
+  剪映腿抽取缓存与草稿写入端共用（教训 ⑲：同型调用点两处各写一份必然漂移）。
+- 测试 4 项：`mvp/tests/test_ffmpeg_io.py` +3（未知声道布局回退 / 失败不留 0 字节半成品 /
+  首跑音频参数不变的结构锁）、`mvp/tests/test_locator_service.py` +1（`ClipPresentTest`）。
+
+### Modified
+
+- `mvp/src/media/ffmpeg/ffmpeg_io.py::extract_clip` —— 音轨改为「**首跑参数逐字不变** + 失败后按
+  48k/stereo 重试一次」（`-ac 2` 让编码器拿到明确布局）；两次尝试都失败时清掉半成品
+  （`overwrite=False` 不动调用方的文件）。
+- `mvp/src/app/locator_service.py` —— 剪映腿缓存判据 `clip_path.exists()` → `clip_present(clip_path)`。
+- `mvp/src/app/exporters.py::write_jianying_draft` —— 素材判据同上（0 字节素材不再进 `VideoMaterial`）。
+
+### Fixed
+
+- **剪映腿/预览在「N 声道 + 未指定布局」的源上硬失败（实测，非推断）**：ffmpeg 原生 aac 编码器拒收
+  `Unsupported channel layout "6 channels"`（rc=-22、产物 0 字节）⇒ 抽素材整腿（剪映导出/预览）当场失败。
+  **触发面不是人造源**：布局 `5.1(side)`／`hexagonal` 经本函数编码进 MP4 后布局信息就丢了
+  （ffprobe `channels=6 / channel_layout=unknown`）⇒ **本产品自己抽出的 clip 天然是这种源**
+  （复现：把 `og*.mp4` 当原片再抽一次，即失败）。
+- **失败残留的 0 字节素材会被当成「已抽好」**：裸 `exists()` 判据让**第二次导出不再报错**，
+  却把坏素材静默写进草稿（与「媒体格式不支持/时间线空白」同族）。
+- 复现与读数（改前）：`work/trans_smooth_20261016/probe_extract_clip_audio.py` + `audio_51_probe.log`
+  = A 臂走**产品代码**得 `MediaError`（rc=4294967274）· C 臂同参数裸 ffmpeg rc=-22/0 字节
+  · B 臂 `-ar 48000 -ac 2` rc=0/447,853B/stereo。**改后重跑 A 臂 = OK size=447,853**（C 臂仍 rc=-22 ⇒ 判据真咬）。
+
+### Removed
+
+- None.
+
+### Notes
+
+- Created `checkpoint-2026-10-17-193939.md` checkpoint (14 modified/untracked file(s)).
+
+- 门禁（改后树，逐条 `rc` 取值，不用 `| tail`）：后端全套 **Ran 674 tests OK (skipped=2)**
+  （670→674，差的 4 = 新锁 3+1）· API **Ran 150 OK**（改前改后同数）· 定向三模块 **Ran 115 OK**
+  · `test_ffmpeg_io` 单模块 24 OK · `test_exporters` 53 OK · 导出计划不变式 **FAILED=0（4 片 × 4 通道）**。
+- **同族未改（登记不修，等拍板）**：`media/ffmpeg/source_merge.py::_transcode_args` 也是
+  `concat(a/v) → -c:a aac`、无布局归一 ⇒ 同形源上**失败更早**（实测 `Cannot select channel layout for
+  the link between filters auto_aresample_0 and Parsed_concat_6`，rc=-22、0 字节）；
+  修法 = concat 前插 `aformat=channel_layouts=stereo`（或同款失败回退），归因与验收需单独立批。
+- **未提交、未出包**；`mvp/` 之外零改动；`.agent/STATE.md` / `TODO.md` 按多会话约定未动（只追加本文件）。
+- 来源 = 交接 `work/…/HANDOFF_20261016_export_smoothness.md` §6.4「一条独立观察未查」：
+  本轮把它从猜测变成可复现缺陷并修掉。**过渡不流畅那条主线仍未结**（等用户给的秒数 / 未转码原始成片 /
+  `*.results.json`），本轮未动该线任何判据。
+
+## 2026-10-17（二）· 取材扩宽护栏 2.5 → 1.5（导出层口径，用户拍板）
+
+### Modified
+
+- `mvp/src/infrastructure/config.py::ExportConfig.material_expand_rel_cap` **2.5 → 1.5**（注释内嵌逐档实测）。
+- `mvp/tests/test_exporters.py` +1：默认值锁（`ExportConfig().material_expand_rel_cap == 1.5`）。
+
+### 依据（四片导出层扫描 `work/expand_sweep.py`；同口径自证：严格 135/139、导出实得 131/139
+与生产已知基值**逐位吻合**）
+
+| cap | Σ素材宽 | 素材宽÷记录宽 | 导出实得 | 严格 |
+| --- | --- | --- | --- | --- |
+| 2.5（旧默认） | 499.1s | 1.53 | 131/139 | 135/139 |
+| 2.0 | 452.1s | 1.38 | 131/139 | 135/139 |
+| **1.5（新默认）** | **421.7s** | **1.29** | 131/139 | 135/139 |
+| 1.2 | 419.9s | 1.28 | 131/139 | 135/139 |
+| core 不扩宽 | 419.9s | 1.28 | 131/139 | 135/139 |
+
+### ⚠️ 订正我自己的口径（如实）
+
+- 我先前把它讲成「温和收紧 −15.5%」；**落地后实测：cap 1.5 在这批数据上 ≈ 关闭扩宽**——
+  导出计划不变式里扩宽条数四片 = **0/0/0/1**（cap 2.5 时是 11/7/9/12），Σ素材宽 421.7s ≈ core 419.9s
+  （差 1.8s = 1 条）。⇒ 语义上等于「卷轴只给解说实际引用的核心窗，不再撑成完整镜头」。
+- 这是**产品口径**：2026-10-11 的 K=2.5 = 保留完整镜头是用户当时拍的；2026-10-17 用户认可取 1.5。
+  若要「温和档」（保留部分整镜头扩宽、−9.4%）应取 **2.0**，一句话可切。
+
+### 门禁（改后树，逐条取 rc）
+
+- 后端全套 **Ran 675 tests OK (skipped=2)**（674→675 = 新锁）· API **Ran 150 OK**
+  · 导出计划不变式 **FAILED=0（4 片 × 4 通道）** · 导出实得复测 **131/139、严格 135/139 不变**。
+
+### 未做 / 边界
+
+- **未提交、未出包**（用户口径：跑完即关机）。观感面（成片接缝 / 硬切位置）**未实测**——本轮只做只读
+  数据面验收；成片读图对照留待下次开机、出包后按包内 accept 走。
+- 同日（一）· 黑盒竞品对照与导出层双臂的结论见上一节；竞品切点臂导出实得 130/139（−1，噪声级）。
+### Notes（交接）
+
+- 交接文档：`.agent/archive/HANDOFF_20261017_rea_competitor_blackbox.md`（自包含：三批改动 + 门禁读数 +
+  环境安装位置 + 静态线两次判死的证据 + 下次开机的提交/出包顺序）。
+- 本批（音轨回退 / 竞品黑盒对照 / 取材扩宽 1.5）**全部未提交、未出包**；观感面未测。
+
+## 2026-10-17（三）· 补十八立档收口：本会话重跑门禁 + 同族调用点枚举 + 两笔代码提交
+
+### Verified
+
+- **门禁由本会话自己重跑**（交接件的数字不引用），日志 `work/verify_20261017/`，rc 逐条取（不用 `| tail`）：
+  后端全套 `Ran 675 tests in 199.786s` → **OK (skipped=2)**、`BACKEND_RC=0`（DirectML 生效：
+  `BACKEND_DEVICE directml amd`）· API `Ran 150 tests` → **OK**、`API_RC=0` ·
+  `check_export_plan_invariants.py` → **FAILED=0（4 片 × 4 通道）**、`INV_RC=0`。
+- **独立印证 cap 1.5 的口径订正**：本会话的不变式读数里「剪映：扩宽」四片 = **0 / 0 / 0 / 1**
+  （2mkv/test1/test2/test3），与交接写的「cap 2.5 时 11/7/9/12」对照成立 ⇒ cap 1.5 ≈ 关闭扩宽。
+- **同族调用点枚举（教训 ⑲ 的收口，逐处读到行号）**：除已修的两处（`locator_service.py:1734`、
+  `exporters.py:959`）外，产品里另两处「文件存在即复用」形态**本身带有效性判据、无潜伏 0 字节复用** =
+  `timeline_render.py:594`（要 `st_size > 0`）、`source_merge.py::_valid_output`（probe + 视频流 +
+  时长吻合容差）。⇒ 「0 字节素材被当成已抽好」这一族在本轮**已枚举闭合**，只剩
+  `source_merge.py::_transcode_args` 的**布局未归一**（硬失败非静默，另立批）。
+
+### Added
+
+- `.agent/archive/STATE_history_20261017.md`（逐字迁出 `Current Task` 补十五块）、
+  `.agent/archive/TODO_history_20261017.md`（逐字迁出 `P0` 补十七块）。
+- `Current Task` 顶部 ▶ **续63 补十八** 块（三批改动 + 本会话门禁读数 + 覆盖边界 + 静态线判死 + 环境）；
+  `TODO.md` `P0` 同步换为补十八短块。迁移用带锚点断言的脚本 `work/apply_state_block18.py`
+  （改前/改后各断言：块数 = 3 / 1、首末块身份、被保留两块**逐字未变**、11 个章节唯一在位、
+  Last Updated 落档前重测系统时间 = `2026-10-17 20:01`）；断言全 PASS，`SCRIPT_RC=0`。
+
+### Modified
+
+- `.gitignore`：加 `.agent/versions/`（agent-context 的档案整份副本，实测 4.0MB 重复内容）。
+
+### Committed
+
+- `2afcec7` `fix(ffmpeg)`：音轨未知布局回退 + `clip_present` 判据收一（`mvp/src` 3 + `mvp/tests` 2）。
+- `beedb91` `feat(export)`：`material_expand_rel_cap` 2.5 → 1.5（`mvp/src/infrastructure/config.py` +
+  `mvp/tests/test_exporters.py` 默认值锁）。
+- 本笔 = 档案笔（`.agent/{STATE,TODO,CHANGELOG}.md` + archive 六件 + `.gitignore`）。
+
+### Notes
+
+- **未推远端、未出包**（等口令）⇒ 用户手上仍是 **r24**；本轮 `mvp/ui` 零改动 ⇒ **mac 不必另走 dispatch**。
+- 交接件 `HANDOFF_20261016_export_smoothness.md` / `HANDOFF_20261017_rea_competitor_blackbox.md`
+  首次入库（此前为未跟踪）。
+- 开放项见 `STATE.md` `Next Actions` 第 11 条（① 出 r25 · ② cap 1.5 观感读图 · ③ source_merge 同族批 ·
+  ④ 主线缺三样外部输入 · ⑤ `og720-720` 相似度自相矛盾）。
