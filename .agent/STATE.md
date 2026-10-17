@@ -43,6 +43,38 @@
 ## Current Task
 
 
+> **▶ 2026-10-18（续63 补廿二）— 两项遗留收口：开不了的编码器不再白试/不再报假故障 + copy 判据补布局 + 一条会让补廿一静默失效的加固【现读这条】**
+> 口令「接着修那两项遗留问题」。**改了产品代码，未出包** ⇒ 用户手上仍是 r25，补廿一 + 本批两条修复他都没有。
+> **① 编码器白跑（前提被实测改写了两次，别照档案原话做）**
+> - **时间不是主项**：微型探测本身同价（本机每条死编码器 ≈0.57s、探测 7 条 = 2.82s）⇒ **没有引入任何探测子进程**。
+> - 真正的缺陷是**用户可见的假故障**：改前每次合并向进度流播报
+>   `硬件编码器 hevc_nvenc 执行失败，已回退到 hevc_qsv` + `…hevc_qsv 执行失败，已回退到 hevc_amf`
+>   （本机无 NVIDIA/Intel 属正常态）。实测两臂各 6 条消息、其中 **2 条是假故障**。
+> - 实装 = **结构性判据**「一帧都没编出来」（不匹配 stderr 文案）⇒ 开场即败者进**进程内黑名单**
+>   （按 ffmpeg 路径分键；`libx265` CPU 兜底**永不拉黑**），下次直接跳过并留一条日志；
+>   **编到一半死**（参数/素材问题）仍照常播报，两种失败不混。
+> - 双臂读数：改后 run1 假故障 **0 条**（仍付一次发现成本，wall 5.06s）、run2 **1.77s**（改前同臂 4.98s
+>   ⇒ 同进程内后续每次省 ≈3.3s）。
+> **② copy 腿布局**
+> - 签名加**补名后**的布局：`6ch/unknown` 与 `6ch/5.1` 同序 ⇒ **仍判可流复制**（不把分集原片从秒级 copy
+>   拖进几十分钟转码）；`5.1(side)` 别名归一到 `5.1` 同理（FFmpeg ≥7.1 区分二者，只差下混系数不差声道顺序）。
+> - ⚠️ **收紧面在 MP4 上实测不可观测**：`hexagonal` 编进 MP4 后 ffprobe 也只报 `6/unknown`
+>   ⇒ 造不出"两路都写明且顺序不同"的 MP4 对照（`leftover_arms.json` 四对全 copy）。
+>   真实收益 = 容器**确实声明了**不同布局的情况（MKV `5.1` vs `hexagonal`、`stereo` vs `dual_mono`）不再误判可流复制。
+> - copy 腿另加 `copy_layout_note()` 留痕：实测 `-c copy` 配 `-channel_layout 5.1 -ac 6` **仍写 unknown**
+>   ⇒ 改不了元数据，只能如实记「产物音轨按第一段声明解释其余段」。
+> **③ 顺带堵掉一个会让补廿一整套归因静默失效的洞**
+> `declared_layout` 原先把字面 `"unknown"` 当"已写明"——ffprobe 的 **csv 视图给 `unknown`、json 视图缺字段**，
+> 现役恰好靠 json 才没出事（换个取数方式就整条链路静默退回旧行为）。现在两种都算未解析，
+> 并有锁 `test_literal_unknown_from_ffprobe_is_still_unnamed`。
+> **验收**：新锁 **6 项**（`LeftoverFixTest` 5 + `DeadEncoderSkipE2ETest` 1）；
+> 后端 **Ran 694 OK (skipped=2)**（补廿一 688）· API **Ran 150 OK** · 导出计划不变式 **FAILED=0**，三条 rc 均 0。
+> **产物**：代码笔 `mvp/src/media/ffmpeg/source_merge.py` + `mvp/tests/test_source_merge.py`；
+> 探针/日志（不入库）`work/merge_layout_20261018/{leftover_probe.py,leftover_probe.json,leftover_arms.py,
+> leftover_arms_pre.json,leftover_arms_post.json,test_leftover*.log,backend_suite3.log,api_suite3.log,invariants3.log}`。
+> **现役未结项**：主线「过渡不流畅」三样外部输入 · `og720-720` 挂账 · 下次出 r26 时删 r23 ·
+> ⚠️ 出包时 **mac 要另走 dispatch**（补廿一 + 本批都是纯后端 Python 改动）。
+
 > **▶ 2026-10-18（续63 补廿一）— source_merge 音频布局归一：全 unknown 硬失败 + 混合形态「顺序决定产物」两族一并修掉【现读这条】**
 > 口令：「先处理 source_merge 声道布局批次」（补二十 之后三件候选里的第一件）。**本批改了产品代码，未出包**
 > ⇒ 用户手上仍是 r25、**还没有这个修复**；纯后端 Python ⇒ **mac 包要另走 dispatch 才带上**。
@@ -71,7 +103,7 @@
 >   后端全套 **Ran 688 OK (skipped=2)**（改前 675）· API **Ran 150 OK** · 导出计划不变式 **FAILED=0**，三条 rc 均 0。
 > - 预期红实测：`source_merge.py` 退回 HEAD 版跑新测试文件 ⇒ `ImportError: cannot import name 'resolve_audio_layouts'`；
 >   行为级红由 `pre_fix_report3.json`（RAISE + 2/stereo）承载。
-> **四、两条新登记（本批不做，只记）**
+> **四、两条新登记（本批不做，只记）→ ✅ 两项均已于同日续63 补廿二 收口**（①的修法换了方向：不是探测提速，是不再报假故障）
 > ① `available_hevc_encoders()` 只看 ffmpeg 编码器列表、不看能否真开 ⇒ 本机每次合并**白跑 nvenc + qsv 两回**
 >   （各一次完整滤镜图初始化，stderr 分别 `Cannot load nvcuda.dll` / `Error creating a MFX session: -9`）；
 > ② **copy 腿**签名 = `(codec, sample_rate, channels)` **不含布局** ⇒ 6ch/unknown 与 6ch/5.1 判为"可流复制"，
@@ -126,73 +158,6 @@
 > **现役未结项**：`source_merge::_transcode_args` 同族批 · 主线「过渡不流畅」三样外部输入 · `og720-720` 挂账 ·
 > 下次出 r26 时删 r23。
 
-> **▶ 2026-10-17（续63 补十九）— 竞品三刀（只写文档）+ r25 出包【现读这条】**
-> 口令：「先不用（上午那三批的下一批），先拿 rea 完整逆向竞品」→「按你的计划来」→「继续下一刀」→
-> 「跑一下竞品项目的采集脚本」→「修复采集器缺陷并重新运行自检」→「推远端 / 出 r25」。
-> **动手前追问了四轮**（用户点名要求「挖之前先反复追问问清楚」），定下的口径全部落档：
-> 目标 = 语义规格+参数清单+定点通道+模型层；手段 = 运行+动态插桩；载体 = 本机直启行政解包树（不安装）；
-> **使用边界 = 结论只写文档，一行不进产品代码**；优先链 = 模型特征→主链参数→解说边界→导出 schema。
-> **一、竞品侧（正文一律在 `D:\claudework\cutmatch-analysis`，本仓 `Next Actions` 第 4 条只留指针）**
-> 四条承重前提被实测打掉，于是没按原选项执行：①「只拉模块」不成立（全树 0 个 app `.py`、无 app 级
-> `.pyd`；`*_mypyc.pyd` 是 charset_normalizer 的 ⇒ 旧「sidecar=mypyc」归因要改）；
-> ② 常量块内 **C(code object) 记录 = 0** ⇒ 函数行号/posonly/kwonly 静态永不可得（旧 `codes` 出 0 行的真因）；
-> ③ 其 IPC **不是命名管道 JSON-RPC，是本地 Flask HTTP/WS**（`cutmatch.web.*` + `flask` 串 504 次 +
-> 真实路由字面串）；④「只支持 NVIDIA」**在代码层不成立**（docstring 明写 CUDA/**MPS**/CPU 三档 +
-> `device_keys/macos.py`）⇒ 战略差异重述为「其 Windows 包押 CUDA vs 我方 DirectML」。
-> **产出**：`FINDINGS/13`（137 模块 / 11,213 名字 / 1,891 参数名表 / **3,202 条他们自写中文 docstring**）、
-> `FINDINGS/14`（22 个 `/api/*` + **16 键阶段词表**（快 8 / 精 11 子集，强推断）+ batch 状态 12 键 +
-> 授权 18 码 + 导出格式四元组 + `source/commentary/output` 三角色）、`FINDINGS/15`（话术 341 条 +
-> model lease 357 条）。三处对我方决策直接有用：**他们原片侧 1fps 索引且不切镜头**（独立印证 cap 1.5
-> ≈ 关闭扩宽是同侧口径）／**时长守恒靠变速补齐（90–110%）而非 0.1s 下限撑宽**（我方第十/十二轮
-> 越界那一族在其结构里不存在）／**渲染失败仍交付 XML**（档案挂着未决的口径当场闭合）。
-> **动态腿判死（确证，不再追）**：`licensing.client.legacy` 原文「**每次启动都向授权服务器校验**」+
-> D4「`content_key` 由服务器下发」+ `protected_assets`「租约配置只在进程间内存传递、加载完即清理」
-> ⇒ 用户要的「本机直启 + 先断网」下推理与解密链不可达；且静态三条永久边界（函数体控制流 /
-> HTTP 方法与请求体 / 权重明文）已写死。**本轮未执行竞品任何代码、未改其任何文件。**
-> **二、采集器（`runtime_evidence` 那条链）修了 7 处**：README 被当证据（造假符号 `host/name/port`）／
-> **我自己上轮修法引入的回归**（白名单收窄到 `.log/.txt` ⇒ `01_exports` 的 `draft_content.json`/CSV/XML
-> 被一起跳过）／CSV-TSV 整族无行判据／XML 属性名抢匹配吞掉内层键值（真 FCPXML 上必然复发）／
-> UTF-16 日志按 utf-8 硬解 = 静默零命中（教训 ⑮ 同族）／防自喂只有文件名规则 + **我的排除件在报表里
-> 凭空消失**（自造静默丢弃）／压缩包混进「扩展名不符」静默丢。
-> 新增硬断言自检 `scripts/selftest_parse_runtime_log.py` = **17/17 PASS**。夹具首版我手写了两个
-> **不在符号表里的键** ⇒ 表现为假失败，已改成从 `load_symbols() ∩ WANTED` 动态取键、每通道唯一键。
-> **前提核查**：`runtime_evidence/` 从未投放证据、竞品日志路径在本机全部不存在 ⇒
-> `data/runtime_params_observed.json` 现 = **{}（本机没有任何竞品观测）**；自检只证「链路可用」。
-> **三、r25 已出（构建点 = 干净 commit `c3a17e5`，已推 `cf71641..c3a17e5` 4 笔）**
-> 推之前远端多出一笔**用户自己在 GitHub 网页的改动**（10-16 11:41 删 README 一行）⇒ 不覆盖，
-> 把本地 4 笔 **rebase** 到它之上（我的提交不碰 README，无冲突面）。`mvp/ui` 本轮零改动
-> ⇒ **mac 不需另走 dispatch**。四道包内验收对 `win-unpacked` 取，**逐条 rc=0**：
-> bundle **33 PASS / FAILED=0**（含上一批 4 条导出通道锁仍真绿：渲染层产物锁命中 `index--VHmdytl.js`、
-> 后端通道 `http=200`；12 行 `locate leg=` 齐）· render **FAILED=0**（R1/R3 子进程未误判硬崩）·
-> 导出计划不变式 **FAILED=0**（4 片 × 4 通道，扩宽条数 0/0/0/1 = cap 1.5 语义再确认）·
-> 启动冒烟 **FAILED=0**（Electron 4 + backend 1 / 30s 存活 / `AFTER_KILL=0`）。
-> **zip 身份** = `Video-Locator-win-x64-20261017r25.zip` **981,693,605B**（对 r24 **+1,417B**）/
-> 条目 **7,079**（文件 6,993 + 空目录 86；r24 是 85，差的那 1 个 = 本代 `resources/` 确实无直属文件）/
-> `testzip=None` / `zip 内 backend.exe 77,498,025B sha16 ae04274989342708 == 磁盘` /
-> `zip 内 bridge.js 8,882B sha16 7d3e0427e3d3a4db == 磁盘` /
-> **与 r24 的文件名集合差集 = 0/0（逐名等同）**。
-> ⚠️ **两处我自己的错，立准在此**：① 打包脚本的目录条目规则我先按「每个目录都写」造出 1,374 条
-> ⇒ 与历代 7,078 不可比，实测出 r24 规则 = 只给无直属文件的目录写显式条目后重打；
-> ② 更严重的一次是清死代码时删掉 `pre = ` 却留 `if pre:` ⇒ 脚本在**写包前** NameError，
-> **而我下一条消息里已经报了「7,079 条目 / 981,703,678B」这组没有读数支撑的数** ⇒ 已当场更正、
-> 核磁盘确认 `ABSENT` 才重跑。判据教训：包体身份核验原先只比嵌套件（backend.exe/bridge.js），
-> **缺「条目数 == 磁盘文件数」+「顶层关键件在位」+「与上一代文件名差集」三道 ⇒ 坏包能全绿出门**，
-> 现已写进 `work/r25_pkg/make_zip_r25.py` 并在不过时就 `exit 1` 不写包。
-> **覆盖边界（有意取舍）**：① **cap 1.5 的观感面仍未测**（成片接缝/硬切无读图，四档指标不变只是数据面）；
-> ② 动态面只剩「HTTP 方法与请求体字段」拿不到，要他那边**已激活真机**按 5 类产物投放；
-> ③ ~~删 r22~~ = **已删（2026-10-17 口令）**，用 `work/r25_pkg/precheck_delete_r22.py` 双验：
->    回滚档 r23/r24 均 `testzip=None` / 7,078 条目 / backend.exe 尺寸+sha16 与档案逐字一致；
->    r22 自身身份留痕 = 981,686,020B / 7,078 条目 / backend.exe 77,493,384B sha16 `f0d00f10c4123813`。
->    ⚠️ 这条闸第一版**只查 STATE.md** ⇒ r23 的 sha16 判「找不到」（它记在 `archive/checkpoint-2026-10-13-0040.md:127,662`，
->    STATE 里那段读数已随立档迁入 `STATE_history_20261017.md` 且只留 zip 级读数）⇒ **期望值没错，是判据搜索面写窄**；
->    现扩到整个 `.agent/`（实搜 173 份，`.agent/versions/` 下是目录、按文件读会 PermissionError，已跳过不可读者）。
-> ④ `source_merge.py::_transcode_args` 声道布局同族缺陷**仍未改**（硬失败非静默，需单独立批）。
-> **产物**：代码笔 `e79d4ee`（音轨回退 + `clip_present`）/ `36acc50`（cap 1.5）/ 档案笔 `4783594`·`c3a17e5`；
-> 本仓 `work/{r25_pkg/make_zip_r25.py, r25_pkg/diag_zip_dir_rule.py, verify_20261017/,
-> accept_{bundle,render}_r25.log, invariants_r25.log, startup_r25.log, build_r25.log}`；
-> 竞品仓 `scripts/{mine_module_semantics,extract_http_contract,extract_messages_and_lease,
-> selftest_parse_runtime_log,parse_runtime_log}.py` + `data/module_semantics_20261017.*` 等。
-
 ## Completed
 
 - 历史完成项见 `.agent/archive/STATE_history_20261007.md`（Current Task 退休块续14~续61）、
@@ -206,6 +171,13 @@
 
 ## Current Problem
 
+- ✅ **补廿一 登记的两项遗留已收口（2026-10-18 续63 补廿二）**：① 「开不了」的编码器不再反复白试，
+  关键是**不再向用户播报假故障**（改前每次合并 2 条「硬件编码器执行失败，已回退」，而本机无
+  NVIDIA/Intel 属正常态；实测同进程内后续每次合并还省 ≈3.3s）；② copy 判据补上「补名后的布局」
+  + copy 腿布局留痕，⚠️ 但**收紧面在 MP4 上实测不可观测**（hexagonal 进 MP4 也只报 unknown），
+  收益只在容器确实声明不同布局时；③ 顺带堵掉 `declared_layout` 把字面 unknown 当已写明的洞
+  （那会让补廿一整套归因静默失效）。新锁 6 项；后端 694 / API 150 / 不变式全绿。
+  **仍未出包 ⇒ 用户补廿一 + 本批两条修复都没有。**
 - ✅ **`source_merge` 音频布局两族缺陷已修（2026-10-18 续63 补廿一）**：第一族 = 全部输入
   「6ch + 容器未写布局」在**滤镜图协商阶段**硬失败（`Cannot select channel layout … Parsed_concat_{8,12,28}`，
   n=2/3/7 复现）；第二族 = 混合形态**不报错但产物声道结构由第一路决定**（`[5.1,stereo]→6/5.1` vs
@@ -588,4 +560,4 @@
 
 ## Last Updated
 
-2026-10-18 01:00
+2026-10-18 01:19

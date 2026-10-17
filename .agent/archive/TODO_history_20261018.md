@@ -56,3 +56,24 @@
 > 读的是原片帧而非剪映真机回放、未测其它置信档。
 > 明细 = STATE `Current Task` 补二十 块；未结项 = `source_merge::_transcode_args` 同族批 · 主线三样外部输入 ·
 > `og720-720` 挂账 · 出 r26 时删 r23。
+
+---
+
+> **▶ 2026-10-18（续63 补廿一）— source_merge 音频布局归一（两族缺陷一并修，改了产品代码、未出包）【现读这条】**
+> 口令「先处理 source_merge 声道布局批次」。**⚠️ 用户手上仍是 r25 ⇒ 这个修复他还没有**；
+> 纯后端 Python ⇒ **mac 包要另走 dispatch 才带上**（下次出 mac 包时，本批不单独 dispatch）。
+> **归因比档案写的更宽**：① 全输入「6ch + 容器未写布局」⇒ 每条编码器尝试都在**滤镜图协商阶段**抛
+> `Cannot select channel layout … auto_aresample_0 and Parsed_concat_{8,12,28}`（n=2/3/7 复现）→ `MediaError`
+> （但 tmp 清理 + 输出校验在位 ⇒ 不留坏缓存，档案这条说对了）；② **档案没记的第二族**：混合形态**不报错**，
+> 而**产物声道结构 = 第一路的布局**（`[5.1,stereo]→6/5.1` vs `[stereo,5.1]→2/stereo`）= 顺序决定语义、零留痕。
+> 真形源 = 用户导出的 `Downloads/clips/og*.mp4`（35 个逐个探过 = 6ch/unknown），夹具用 `pan=5.1(side)` 复现并有锁。
+> **修法**：`resolve_audio_layouts()` 算每路"依次施加的布局链"——都可解析且全等 ⇒ **空链（命令逐字不变）**；
+> 未写布局可补名（1/2/6/8→mono/stereo/5.1/7.1）⇒ 只补名不改声道数；仍不一致 ⇒ 统一到**声道数最多**的可解析布局
+> （否则退 stereo），未写布局的路**先补名再归一**（实测 5.1→stereo 是真下混，六条单音全在，不是丢声道）。
+> 并把 `plan.reason` 落进日志（此前连"音频有无不一致降级纯视频"都隐身）。
+> **验收**：同脚本双臂 = `allunknown2/3/7` RAISE→OK 且 6/5.1、两种顺序产物相同、stereo 基线逐字未变；
+> 新锁 13 项（含日志留痕锁）；后端 **688 OK(skipped=2)**（改前 675）· API **150 OK** · 不变式 **FAILED=0**；
+> 预期红实测（退回 HEAD 版 ⇒ ImportError）。
+> **本批不做、只登记**：① `available_hevc_encoders()` 不看能否真开 ⇒ 本机每次白跑 nvenc+qsv 两回；
+> ② copy 腿签名不含布局 ⇒ 6ch/unknown 与 6ch/5.1 判为可流复制，产物布局仍由第一段决定（改签名会收紧 copy 命中率）。
+> 明细 = STATE `Current Task` 补廿一 块；探针与日志 `work/merge_layout_20261018/`。

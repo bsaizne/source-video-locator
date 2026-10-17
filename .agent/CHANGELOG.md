@@ -3516,3 +3516,65 @@ TODO P0 换块（补十九迁 `archive/TODO_history_20261018.md`）、`Current P
 
 代码笔未提交前：**未推、未出包** ⇒ 现役包仍是 r25（不含本修复）；纯后端 Python ⇒
 **mac 包要另走 dispatch 才带上**（下次出 mac 包时一并，本批不单独 dispatch）。
+
+## 2026-10-18（续63 补廿二）— 两项遗留：编码器假故障播报 + copy 判据补布局（含一条静默失效加固）
+
+口令：「接着修那两项遗留问题」（= 补廿一 登记的两条）。改产品代码，**未出包**。
+
+### 开工前提被实测改写两次（①）
+
+档案原话是「本机每次合并白跑 nvenc + qsv 两回」，读起来像**性能**问题。实测：
+
+| 量 | 值 |
+|---|---|
+| 每条"开不了"的编码器一次完整尝试 | ≈0.57s（`hevc_nvenc` 4294967295 / `hevc_qsv` 2981409195） |
+| 微型探测（3 帧黑场）逐条代价 | libx265 0.09s · amf 0.24s · 五条死臂各 0.22~0.57s，**全探 2.82s** |
+| ⇒ 结论 | **探测本身与白跑同价**，为省时间引入探测 = 零收益 |
+
+真正的缺陷是**用户可见的假故障**：`merge()` 对每条失败臂向进度流播报
+`硬件编码器 hevc_nvenc 执行失败，已回退到 hevc_qsv`（+ 第二条），而本机没有 NVIDIA/Intel **是正常态**。
+实测改前每次合并 6 条进度消息里 **2 条是假故障**，且**每次都重播**（无记忆）。
+
+### 实装（①）
+
+- 判据用**结构性的**「一帧都没编出来」（`_run` 只在真收到 `out_time` 行时回调进度），
+  **不匹配 stderr 文案**：开场即败 = 这台机器开不了它；编到一半死 = 参数/素材问题，仍照常播报。
+- 新增进程内黑名单 `_DEAD_ENCODERS: set[(ffmpeg 路径, 编码器)]` + `is_encoder_dead` / `mark_encoder_dead`；
+  **`libx265` CPU 兜底永不拉黑**（拉黑等于没有兜底）。构建尝试链时跳过已判死者并留一条日志。
+- 双臂（`leftover_arms_pre/post.json`，同脚本、同夹具、连续两次合并）：
+  改前 run1/run2 各 4.97/4.98s 且各含 2 条假故障；改后 run1 5.06s **假故障 0 条**（仍付一次发现成本）、
+  run2 **1.77s**（同进程内后续每次省 ≈3.3s）。
+
+### 实装（②：copy 腿的布局）
+
+- `audio_signature` 由 `(codec, sample_rate, channels)` 扩为再带**补名后的布局**
+  （`named_layout` 或 `"unnamed"`）。用"补名后"而非容器原值，是为了**不把常见分集从 copy 拖进转码**：
+  `6ch/unknown` 与 `6ch/5.1` 声道顺序相同 ⇒ 仍判可流复制；另加别名 `5.1(side) → 5.1`
+  （FFmpeg ≥7.1 区分二者，只差下混系数不差顺序），否则「MKV 5.1(side) + MP4 5.1」会被误判冲突。
+- ⚠️ **如实记：收紧面在 MP4 上实测不可观测**——`aformat=channel_layouts=hexagonal` 编进 MP4 后
+  ffprobe 也只报 `6/unknown`，四对组合（unknown6↔5.1、hexagonal↔5.1、unknown6↔unknown6、stereo↔5.1）
+  的 `plan.mode` 与改前**完全一致**（前三对 copy、末对 transcode）。⇒ 本条的真实收益只在
+  **容器确实声明了不同布局**的情况（MKV `5.1` vs `hexagonal`、`stereo` vs `dual_mono`）。
+- copy 腿新增纯函数 `copy_layout_note()` 留痕：实测 `-c copy` 配 `-channel_layout 5.1 -ac 6`
+  **仍写 `unknown`** ⇒ 改不了元数据，只能如实记「产物音轨按第一段声明解释其余段」。
+
+### 顺带堵掉一个洞（③，会让补廿一整套归因静默失效）
+
+`declared_layout` 原先把字面 `"unknown"` 当成"已写明"。ffprobe 的 **csv 视图给 `unknown`、
+json 视图缺该字段**——现役产品走 json 才碰巧没事，但只要换一种取数方式（或未来版本改行为），
+`named_layout` 就会返回 `"unknown"`、补名分支永不触发，**整套布局归因静默退回旧失败形态**。
+现改为 `{"", "unknown", "0x3"}` 都算未解析，并加锁
+`test_literal_unknown_from_ffprobe_is_still_unnamed`（含"字面 unknown 仍走补名"的端到端判据）。
+
+### 验收
+
+新锁 **6 项**：`LeftoverFixTest` 5（字面 unknown 加固 / 签名含补名布局 / side 别名 /
+copy 留痕只在第一段未写明时出现 / 黑名单语义 + CPU 不拉黑）+ `DeadEncoderSkipE2ETest` 1
+（真 ffmpeg：标记链首编码器为死后，合并仍成功且日志出现 `source merge skip`）。
+门禁逐条取 rc：后端 **Ran 694 OK (skipped=2)**（补廿一 688，+6）· API **Ran 150 OK** ·
+导出计划不变式 **FAILED=0**。
+
+### 交付状态
+
+**未推远端、未出包** ⇒ 用户手上仍是 r25，**补廿一 + 本批两条修复他都没有**。
+两批都是纯后端 Python ⇒ **下次出包后 mac 要另走 dispatch** 才带上（本批不单独 dispatch）。
