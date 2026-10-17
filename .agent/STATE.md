@@ -42,6 +42,68 @@
 
 ## Current Task
 
+> **▶ 2026-10-17（续63 补十九）— 竞品三刀（只写文档）+ r25 出包【现读这条】**
+> 口令：「先不用（上午那三批的下一批），先拿 rea 完整逆向竞品」→「按你的计划来」→「继续下一刀」→
+> 「跑一下竞品项目的采集脚本」→「修复采集器缺陷并重新运行自检」→「推远端 / 出 r25」。
+> **动手前追问了四轮**（用户点名要求「挖之前先反复追问问清楚」），定下的口径全部落档：
+> 目标 = 语义规格+参数清单+定点通道+模型层；手段 = 运行+动态插桩；载体 = 本机直启行政解包树（不安装）；
+> **使用边界 = 结论只写文档，一行不进产品代码**；优先链 = 模型特征→主链参数→解说边界→导出 schema。
+> **一、竞品侧（正文一律在 `D:\claudework\cutmatch-analysis`，本仓 `Next Actions` 第 4 条只留指针）**
+> 四条承重前提被实测打掉，于是没按原选项执行：①「只拉模块」不成立（全树 0 个 app `.py`、无 app 级
+> `.pyd`；`*_mypyc.pyd` 是 charset_normalizer 的 ⇒ 旧「sidecar=mypyc」归因要改）；
+> ② 常量块内 **C(code object) 记录 = 0** ⇒ 函数行号/posonly/kwonly 静态永不可得（旧 `codes` 出 0 行的真因）；
+> ③ 其 IPC **不是命名管道 JSON-RPC，是本地 Flask HTTP/WS**（`cutmatch.web.*` + `flask` 串 504 次 +
+> 真实路由字面串）；④「只支持 NVIDIA」**在代码层不成立**（docstring 明写 CUDA/**MPS**/CPU 三档 +
+> `device_keys/macos.py`）⇒ 战略差异重述为「其 Windows 包押 CUDA vs 我方 DirectML」。
+> **产出**：`FINDINGS/13`（137 模块 / 11,213 名字 / 1,891 参数名表 / **3,202 条他们自写中文 docstring**）、
+> `FINDINGS/14`（22 个 `/api/*` + **16 键阶段词表**（快 8 / 精 11 子集，强推断）+ batch 状态 12 键 +
+> 授权 18 码 + 导出格式四元组 + `source/commentary/output` 三角色）、`FINDINGS/15`（话术 341 条 +
+> model lease 357 条）。三处对我方决策直接有用：**他们原片侧 1fps 索引且不切镜头**（独立印证 cap 1.5
+> ≈ 关闭扩宽是同侧口径）／**时长守恒靠变速补齐（90–110%）而非 0.1s 下限撑宽**（我方第十/十二轮
+> 越界那一族在其结构里不存在）／**渲染失败仍交付 XML**（档案挂着未决的口径当场闭合）。
+> **动态腿判死（确证，不再追）**：`licensing.client.legacy` 原文「**每次启动都向授权服务器校验**」+
+> D4「`content_key` 由服务器下发」+ `protected_assets`「租约配置只在进程间内存传递、加载完即清理」
+> ⇒ 用户要的「本机直启 + 先断网」下推理与解密链不可达；且静态三条永久边界（函数体控制流 /
+> HTTP 方法与请求体 / 权重明文）已写死。**本轮未执行竞品任何代码、未改其任何文件。**
+> **二、采集器（`runtime_evidence` 那条链）修了 7 处**：README 被当证据（造假符号 `host/name/port`）／
+> **我自己上轮修法引入的回归**（白名单收窄到 `.log/.txt` ⇒ `01_exports` 的 `draft_content.json`/CSV/XML
+> 被一起跳过）／CSV-TSV 整族无行判据／XML 属性名抢匹配吞掉内层键值（真 FCPXML 上必然复发）／
+> UTF-16 日志按 utf-8 硬解 = 静默零命中（教训 ⑮ 同族）／防自喂只有文件名规则 + **我的排除件在报表里
+> 凭空消失**（自造静默丢弃）／压缩包混进「扩展名不符」静默丢。
+> 新增硬断言自检 `scripts/selftest_parse_runtime_log.py` = **17/17 PASS**。夹具首版我手写了两个
+> **不在符号表里的键** ⇒ 表现为假失败，已改成从 `load_symbols() ∩ WANTED` 动态取键、每通道唯一键。
+> **前提核查**：`runtime_evidence/` 从未投放证据、竞品日志路径在本机全部不存在 ⇒
+> `data/runtime_params_observed.json` 现 = **{}（本机没有任何竞品观测）**；自检只证「链路可用」。
+> **三、r25 已出（构建点 = 干净 commit `c3a17e5`，已推 `cf71641..c3a17e5` 4 笔）**
+> 推之前远端多出一笔**用户自己在 GitHub 网页的改动**（10-16 11:41 删 README 一行）⇒ 不覆盖，
+> 把本地 4 笔 **rebase** 到它之上（我的提交不碰 README，无冲突面）。`mvp/ui` 本轮零改动
+> ⇒ **mac 不需另走 dispatch**。四道包内验收对 `win-unpacked` 取，**逐条 rc=0**：
+> bundle **33 PASS / FAILED=0**（含上一批 4 条导出通道锁仍真绿：渲染层产物锁命中 `index--VHmdytl.js`、
+> 后端通道 `http=200`；12 行 `locate leg=` 齐）· render **FAILED=0**（R1/R3 子进程未误判硬崩）·
+> 导出计划不变式 **FAILED=0**（4 片 × 4 通道，扩宽条数 0/0/0/1 = cap 1.5 语义再确认）·
+> 启动冒烟 **FAILED=0**（Electron 4 + backend 1 / 30s 存活 / `AFTER_KILL=0`）。
+> **zip 身份** = `Video-Locator-win-x64-20261017r25.zip` **981,693,605B**（对 r24 **+1,417B**）/
+> 条目 **7,079**（文件 6,993 + 空目录 86；r24 是 85，差的那 1 个 = 本代 `resources/` 确实无直属文件）/
+> `testzip=None` / `zip 内 backend.exe 77,498,025B sha16 ae04274989342708 == 磁盘` /
+> `zip 内 bridge.js 8,882B sha16 7d3e0427e3d3a4db == 磁盘` /
+> **与 r24 的文件名集合差集 = 0/0（逐名等同）**。
+> ⚠️ **两处我自己的错，立准在此**：① 打包脚本的目录条目规则我先按「每个目录都写」造出 1,374 条
+> ⇒ 与历代 7,078 不可比，实测出 r24 规则 = 只给无直属文件的目录写显式条目后重打；
+> ② 更严重的一次是清死代码时删掉 `pre = ` 却留 `if pre:` ⇒ 脚本在**写包前** NameError，
+> **而我下一条消息里已经报了「7,079 条目 / 981,703,678B」这组没有读数支撑的数** ⇒ 已当场更正、
+> 核磁盘确认 `ABSENT` 才重跑。判据教训：包体身份核验原先只比嵌套件（backend.exe/bridge.js），
+> **缺「条目数 == 磁盘文件数」+「顶层关键件在位」+「与上一代文件名差集」三道 ⇒ 坏包能全绿出门**，
+> 现已写进 `work/r25_pkg/make_zip_r25.py` 并在不过时就 `exit 1` 不写包。
+> **覆盖边界（有意取舍）**：① **cap 1.5 的观感面仍未测**（成片接缝/硬切无读图，四档指标不变只是数据面）；
+> ② 动态面只剩「HTTP 方法与请求体字段」拿不到，要他那边**已激活真机**按 5 类产物投放；
+> ③ **删 r22 未做**（等口令；规矩 = 出 r25 后留 r25/r24/r23，删前先双验 r23/r24 逐字一致）；
+> ④ `source_merge.py::_transcode_args` 声道布局同族缺陷**仍未改**（硬失败非静默，需单独立批）。
+> **产物**：代码笔 `e79d4ee`（音轨回退 + `clip_present`）/ `36acc50`（cap 1.5）/ 档案笔 `4783594`·`c3a17e5`；
+> 本仓 `work/{r25_pkg/make_zip_r25.py, r25_pkg/diag_zip_dir_rule.py, verify_20261017/,
+> accept_{bundle,render}_r25.log, invariants_r25.log, startup_r25.log, build_r25.log}`；
+> 竞品仓 `scripts/{mine_module_semantics,extract_http_contract,extract_messages_and_lease,
+> selftest_parse_runtime_log,parse_runtime_log}.py` + `data/module_semantics_20261017.*` 等。
+
 > **▶ 2026-10-17（续63 补十八）— 上一会话三批未提交改动收口：音轨布局回退 + 竞品黑盒对照 + 取材扩宽护栏 1.5【现读这条】**
 > 口令「开始」。接手时工作树 = 上一会话留下的 **三批改动、全部未提交未出包**（交接件
 > `.agent/archive/HANDOFF_20261017_rea_competitor_blackbox.md`，自包含）。先验 mtime 无孤儿写入者
@@ -227,88 +289,6 @@
 > Current Problem 里「mac-alpha 仍是 r23 那一代」**均过期，已按实测订正**。
 > 读数原文留 `work/mac_check/{rel,run}.json`（不入库）。
 
-> **▶ 2026-10-12（续63 补十六）— 真机红条定性反转：不是「后端掐连接」，是客户端 300s 头超时【现读这条】**
-> 口令两件：① release/ 删 r19（验完再删）② 「补十五 ⑤ 的未扩面项」本轮扩面。**② 的前提被实测打掉**，
-> 扩面改打到真因上。
-> **① 定性反转（连错两次的档案断言已订正）**：补十五/第十二轮都写「意外异常逃 ASGI ⇒ uvicorn 不发响应
-> ⇒ UI fetch failed」。三条反证：(a) `mvp/api/app.py:86` **早装了**全局 `exception_handler(Exception)`，
-> 真机日志那行 `unhandled error on POST /api/export` 就是它的落盘行；(b) 四臂真 uvicorn 实测
-> （A 裸 / B +2×BaseHTTPMiddleware / C +CORS / **D 复刻生产栈**，同 starlette 1.6.0 + uvicorn 0.52.4）
-> = **6/6 客户端收到结构化 500 JSON、服务存活、零连接失败**；(c) Starlette `ServerErrorMiddleware`
-> 源码在 re-raise 前先 `await response(...)`。**真因 = 客户端不等**：Electron 主进程用 Node 全局 fetch
-> （undici）默认 headersTimeout=300s，探针实测 `{message:"fetch failed", causeName:"HeadersTimeoutError",
-> reject_after_ms:300504}`；而真机那两发崩的导出请求实际跑了 **374s / 783s**（从 locator_service 的
-> `material expand` 行到崩溃行卡 Δ），同档另有 **571s / 475s 的成功导出** ⇒ 草稿已写完、UI 报「连不上后端」。
-> **② 修（全在 Electron 主进程，`mvp/src`/`mvp/api` 零改动）**：A=桥接层默认 transport
-> `globalThis.fetch` → **`httpRequester`（node:http，无隐式头超时）**，显式兜底
-> `BRIDGE_REQUEST_TIMEOUT_MS=30min`（取值=实测最坏 783s 留 ~2× 余量；挂死仍会断，不静默永久转圈）；
-> B=**非 2xx 把错误体当 `data` 带回**——旧写法只给 error/detail ⇒ 渲染层读不到 `body.message/code`，
-> 包内把后端写好的中文话术+LOC 码降级成英文技术串（dev 态走 fetchTransport 有 data ⇒ **只有包内暴露**）。
-> **③ 门禁**：UI **150 项全绿**（146→150，bridge.test.ts +6：node:http 真 socket 往返/查询串转发/
-> 默认 transport 结构锁/显式超时断连→network:true/服务端断连→network:true/非 JSON 兜底/非 2xx 透传）
-> + **双 typecheck 干净**（app + desktop）。包侧新锁 2 条进 `accept_packaged_bundle.py`，
-> 打在 **r22 现役包上首跑 = FAILED=2（预期红，证锁真咬）**，其余 26 项全绿（DirectML wall=27.1s、
-> 剪映通道 http=200、12 行腿埋点齐）。端到端 `work/probe_bridge_long_request.cjs`（跑**编译产物**
-> `out/electron/backend/bridge.js`，两臂并发打同一 330s 慢服务器）= **PROBE PASS**：
-> node:http 臂 `ok=true status=200 waited=330065ms`，旧 undici 臂 `network=true waited=307099ms`。
-> **④ r19 已删**（口令「删（验完再删）」）：先验回滚档 r20（testzip=None · 7,078 条目 · backend.exe
-> 77,474,898B · sha16 `63987715436d5e31`）**与档案逐字一致**，再验 r19 自身（testzip=None · 7,078 条目 ·
-> 77,474,263B · sha16 `86d2007c00cfc673`）一致 ⇒ 删（释放 ≈936MB）。release/ 现**三档 r22/r21/r20**。
-> **⑤ 覆盖边界（如实）**：改动不进 `backend.exe` ⇒ **r22 zip 不含本批修复**，需重出（r23 = 见 ⑥）。
-> 超过 300s 的证据来自「编译产物 + 真 socket + 330s 慢**夹具**」，**不是真机真导出**；夹具侧显式关了 Node
-> 服务端 `requestTimeout/headersTimeout`（真后端 uvicorn 无此限制——真机 571s/475s 都回过响应）。
-> ~~undici 默认值实测在 Node v24.18.0，Electron 34 内嵌 Node 20.x 的同值未单独实测（同族 300s，登记为边界）~~
-> → **已在 Electron 内实测关闭**（`work/probe_electron_fetch_default.cjs`，Electron **34.5.8 / Node 20.19.1**）：
-> global fetch 臂 **306,602ms** 抛 `fetch failed`(cause `HeadersTimeoutError`)、node:http 臂
-> **330,006ms 真拿到 200** ⇒ `PROBE PASS`，定性在产品实际运行环境里同样成立。
-> dev 态浏览器 fetch 路径未动（分发不走它）。导出 >30min 仍会被切断回 network:true（取「有界等待」）。
-> **其它路由不加 per-route try/except**（前提已证伪，全局 handler 继续作 500）；`/api/export` 的第二层
-> 边界**保留**（<300s 的意外异常仍给 400+人话），但其档案理由以本块为准。本批未重跑后端/API 全套（无 Python 改动面）。
-> **⑥ r23 已出（2026-10-13 00:1x，口令「先提交再打r23」）**：代码笔 `8fbd02c` + 档案笔 `a84119d`
-> ⇒ **r23 = 干净 commit `a84119d` 构建**（构建时工作树干净）。`build-release.ps1` 四步 PS_EXIT=0。
-> 包内四道全绿：**bundle 28 PASS / 0 FAIL**（含两条新桥接层锁——它们在 r22 包上**首跑预期红 FAILED=2**，
-> 现在转绿）· **render 8 PASS / FAILED=0**（R1 completed wall=60s · 64 段无交叠 · 136.366 vs 136.344s ·
-> h264_amf · 隔离子进程在位）· **导出计划不变式 FAILED=0**（4 片 × 4 通道）· **启动冒烟**
-> Electron 4 + backend 1 / 30s 存活 / AFTER_KILL=0。
-> zip `Video-Locator-win-x64-20261012r23.zip` = **981,687,209B / 7,078 条目 / testzip=None / flat**
-> （对 r22 +1,189B，与「只改一份主进程 JS」相容）；**zip 内 bridge.js 与磁盘逐字节相同**（8,882B，
-> 含 `require("node:http")` + `fetchImpl = httpRequester` + `data: bodyData`）= 修复确实在分发包里，
-> 不只是在 win-unpacked 里。
-> ⚠️ **一处预登记预期被推翻并订正**：本块原写「预期 r23 的 backend.exe sha16 与 r22 逐字相同」——
-> 实测**不等**（r23 `537bcca18760de77` vs r22 `f0d00f10c4123813`，**同尺寸 77,493,384B**）。字节级 diff
-> = **仅 9 字节、3 段各 3 字节**（偏移 264 / 344 / 253492，其中 264 与 253492 两处同值 ⇒ 归档长度/偏移类字段），
-> 形态符合 PyInstaller「.pyc 内嵌构建时间戳 ⇒ 压缩后位移」的**非确定性构建**；佐证 =
-> `git diff 36dec63..a84119d -- mvp/src mvp/api` **为空**（本批没动 Python 运行面）。⇒ 正确口径是
-> 「同尺寸 + 差异只在归档长度/时间戳字段」，**不是**「逐字相同」；`zip 内 == 磁盘构建`
-> （matches_disk_build=True）这条仍然成立且是有效闸。
-> ~~⚠️ mac 侧未跟新：同一份 `bridge.ts` 缺陷在 mac 包里同样存在，要经 mac CI dispatch 才到用户手上~~
-> → **已随本批 dispatch（见 ⑦）**：mac 包与 Windows 共用同一份 `bridge.ts`，改 JS/跨平台代码后
-> **必须主动交代「mac 要另走一发 dispatch」**，否则会默默留下「Win 已修、mac 仍崩」的裂口。
-> **⑦ 收口三件（2026-10-13 00:2x–00:3x，口令「1.删r20，2.动，动完之后就走ci更新mac平台」）**：
-> ① **r20 已删**——按规矩先验回滚档 r21（`testzip=None` · 7,078 条目 · backend.exe 77,493,043B ·
-> sha16 `fa3c394567cc17d2` **与档案逐字一致**）；r20 自身本批早先也验过（`63987715436d5e31` 一致）。
-> ⇒ release/ 现**三档 = r23 现役 + r22 + r21**（本块 ⑥ 原写「四档、删 r20 等口令」已执行，口径以此处为准）。
-> ② **已 push `1a05aba..4fe0d96`（4 笔）**（含代码笔 `8fbd02c` 与 r23 构建点 `a84119d`）。
-> ③ **mac 已 dispatch**：`h3-macos-mps.yml`（ref=master）HTTP **204** ⇒ run **38277827813**，
-> head_sha `4fe0d96a5`（= 最新 master，故构建面含桥接层修复）。**话术口径钉一次**：
-> **push ≠ 走工作流**——该 workflow 是 `workflow_dispatch` 专用（push 不触发，为省 macOS 分钟），
-> push 只是**前置**（dispatch 取默认分支 head）。要「更 mac 包」得单独说 dispatch。
-> **自动换包机制**（读 `.github/workflows/h3-macos-mps.yml` 本体，非回忆）：`macos-package`
-> `needs: mvp-tests-macos`(:103) ⇒ 「Accept packaged mac bundle (gate publish)」(:278) ⇒
-> 「Publish to GitHub Releases (rolling tag mac-alpha)」(:281) 对已存在 tag 执行
-> `gh release upload mac-alpha "$Z" --clobber`(:288) ⇒ **门槛绿就同名资产就地覆盖，无需人工步骤**；
-> **门槛红则 publish 整步不跑，mac-alpha 留旧包**（= 历史「两轮红第三轮绿」那几轮没换包的原因）。
-> 收口读数（run 三 job 结论 + `mac-alpha` 资产字节数/`updated_at` 对旧值 916,823,896B @
-> 2026-10-12T14:45:51Z）另笔登记；用户 00:3x 明确「mac zip 不用我确认」，此项**不再自行追读**。
-> **未结**：**B 方案=导出异步化**（`/api/tasks/export` 进现有 tasks 框架，带进度+可取消，根治
-> 「UI 干等 6~13 分钟」）已向用户报过、未拍板未开工。
-> 产物：`mvp/ui/electron/backend/bridge.ts` · `mvp/ui/electron/backend/tests/bridge.test.ts` ·
-> `mvp/scripts/accept_packaged_bundle.py`；探针/日志在 `work/`（不入库）：`probe_global_handler.py` ·
-> `probe_node_fetch_timeout.js` · `probe_bridge_long_request.cjs` · `probe_electron_fetch_default.cjs` ·
-> `bridge_long_request.log` · `electron_fetch_timeout.log` · `node_fetch_timeout.log` ·
-> `accept_{bundle,render}_r23.log` · `invariants_r23.log` · `startup_r23.log` · `r23_id.log` ·
-> `backend_diff.txt` · `r19_id.log`/`r20_id.log`。
-
 ## Completed
 
 - 历史完成项见 `.agent/archive/STATE_history_20261007.md`（Current Task 退休块续14~续61）、
@@ -326,7 +306,7 @@
   「N 声道 + 未指定布局」硬失败 + 0 字节残留被当已抽好（`2afcec7`）② 竞品切点黑盒对照 + 导出层双臂
   （只读，无代码笔）③ 取材扩宽护栏 `material_expand_rel_cap` 2.5 → **1.5**（`beedb91`）。
   本会话自己重跑门禁（不引用上一会话数字）= 后端 **Ran 675 OK (skipped=2)** · API **Ran 150 OK** ·
-  导出计划不变式 **FAILED=0**，三条 rc 均 0。⚠️ **未出包、未推远端** ⇒ 用户手上仍是 r24；
+  导出计划不变式 **FAILED=0**，三条 rc 均 0。✅ **已推远端并出包 r25（同日续63 补十九）**：4 笔 rebase 到用户自己的网页改动（`cf71641..c3a17e5`）之上 ⇒ **用户手上现在是 r25**；
   ⚠️ **cap 1.5 的观感面（成片接缝/硬切）未做读图验收**，本批只有数据面。
 - ✅ **导出「UI 干等 6~13 分钟」已修到任务通道（2026-10-13 续63 补十七）— `POST /api/tasks/export` 带进度与可取消，后端全套 670 / API 150 / UI 161 全绿，端到端跑编译产物 `PROBE PASS`（真跨进程 pickle 批）。**已提交并进包 r24**（干净 commit `811932e`，包内四道全绿）；
   ✅ **mac 侧已更（2026-10-16 公开 API 实测闭合）**：他 dispatch 的 run `38429952068` = success，
@@ -429,7 +409,8 @@
   （脚本「同名先删再传」⇒ 三份删了重传），又 kill 掉大文件那一发 ⇒ ISC `.data` 在服务器上缺了≈25 分钟。
   ⇒ 教训：**长上传的进度判据 = 服务端 asset 列表，不是本机 `tasklist` 里 curl 的驻留内存**。
   公开性事实（他已选定，不再重提）：`mac-alpha` 是公开 prerelease ⇒ 权重随公开包一同公开，ISC 为 NC 许可。
-- Windows 现役包 = **r24**（`Video-Locator-win-x64-20261013r24.zip`，**干净 commit `811932e` 构建**，
+- Windows 现役包 = **r24**- Windows 现役包 = **r25**（`Video-Locator-win-x64-20261017r25.zip`，**干净 commit `c3a17e5` 构建**，= 音轨未知布局回退 + `clip_present` 判据收一 + 取材扩宽护栏 1.5；包内 bundle 33/0 · render 0 · 不变式 0 · 冒烟 AFTER_KILL=0；zip 981,693,605B / 条目 7,079（文件 6,993 + 空目录 86）/ `testzip=None` / backend.exe 77,498,025B sha16 `ae04274989342708` == 磁盘 / bridge.js sha16 `7d3e0427e3d3a4db` == 磁盘 / **与 r24 文件名集合差集 0/0**）。
+  上一档 r24（`Video-Locator-win-x64-20261013r24.zip`，**干净 commit `811932e` 构建**，
   含导出任务通道 + 取消残留可见；包内 bundle 33/0 · render 0 · 不变式 0 · 冒烟 0，身份读数见 Current Task 补十七）。
   上一档 r23（`Video-Locator-win-x64-20261012r23.zip`，**干净 commit `a84119d` 构建**，
   含 Electron 桥接层 300s 头超时修复 + 非 2xx 错误体透传；身份与四道包内验收读数见 Current Task 补十六 ⑥）。
@@ -535,7 +516,7 @@
     **维持现状**——首次分析任务内重刷，文案/逐帧进度/可取消照旧，**不加预计耗时**，
     不做启动期后台预扫。本条无遗留。
 11. **补十八 开放项（2026-10-17，按代价从小到大）**：
-    ① **出包 r25**（等口令；`mvp/ui` 零改动 ⇒ **mac 不必另走 dispatch**；出包后按规矩删 r22，删前先验
+    ~~① 出包 r25~~ = **已出（同日补十九）**；`mvp/ui` 零改动 ⇒ **mac 不必另走 dispatch**；出包后按规矩删 r22，删前先验
     回滚档 r23/r24 逐字一致）；② **cap 1.5 观感验收**（本批只数据面：成片接缝/硬切位置未读图，
     建议出包后包内 accept + 双档对照各出一片再读图）；③ **`source_merge.py::_transcode_args` 同族批**
     （声道布局无归一 ⇒ 多原片合并在同形源上硬失败 rc=-22；修法 = concat 前插
@@ -689,4 +670,4 @@
 
 ## Last Updated
 
-2026-10-17 20:01
+2026-10-17 23:27

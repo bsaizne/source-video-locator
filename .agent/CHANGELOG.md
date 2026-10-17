@@ -3271,3 +3271,65 @@ STATE `Current Task` 顶部新增补八块并把补七的开放项②标为闭�
   首次入库（此前为未跟踪）。
 - 开放项见 `STATE.md` `Next Actions` 第 11 条（① 出 r25 · ② cap 1.5 观感读图 · ③ source_merge 同族批 ·
   ④ 主线缺三样外部输入 · ⑤ `og720-720` 相似度自相矛盾）。
+
+## 2026-10-17（四）· r25 出包 + 竞品三刀（只写文档）+ 采集器硬化
+
+### Added
+
+- `.agent/archive/STATE_history_20261017.md` 追加迁出：`Current Task` 补十六块（逐字）。
+- `.agent/archive/TODO_history_20261017.md` 追加迁出：`P0` 补十八块（逐字）。
+- `Current Task` 顶部 ▶ **续63 补十九** 块（竞品三刀 + r25 身份 + 两处我自己的错 + 覆盖边界）；
+  `TODO.md` `P0` 同步换为补十九短块。迁移与插入用带锚点断言的脚本
+  `work/apply_state_block19.py`（35 条断言全 PASS：改前 3 块/首末块身份、改后仍 3 块、
+  保留两块逐字未变、11 个章节唯一在位、Last Updated 落档前重测系统时间 = `2026-10-17 23:27`）。
+- 打包件 `work/r25_pkg/{make_zip_r25.py, diag_zip_dir_rule.py}`（zip 生成 + 跨代结构判据 + r24 目录规则诊断）。
+
+### Committed
+
+- 推远端 = `cf71641..c3a17e5`（4 笔）。**推之前发现远端多一笔用户自己在 GitHub 网页的改动**
+  （`cf71641 Update README.md`，10-16 11:41，删一行）⇒ **不覆盖**：把本地 4 笔 `git rebase origin/master`
+  到它之上（我的提交不碰 README，零冲突面），rebase 后 `HEAD == origin/master == c3a17e5`。
+  代码笔 = `e79d4ee`（音轨回退 + `clip_present`）· `36acc50`（cap 1.5）· 档案笔 `4783594`（补十八立档）·
+  `c3a17e5`（竞品侧指针）。
+
+### Verified（r25 = 干净 commit `c3a17e5` 构建）
+
+- `build-release.ps1` 四步走完（`work/build_r25.log`，`BUILD_RC=0`；[3/4] `Build complete!`）。
+- 四道包内验收对 **`win-unpacked`** 取，**串行**跑（各自起包内后端），逐条取 rc：
+  bundle **33 PASS / FAILED=0 / rc=0**（上一批 4 条导出任务通道锁在 r25 仍真绿：渲染层产物锁命中
+  `index--VHmdytl.js`、后端通道 `http=200`；12 行 `locate leg=` 齐）· render **FAILED=0 / rc=0**
+  （R1 completed、R3 子进程未误判硬崩）· 导出计划不变式 **FAILED=0 / rc=0**（4 片 × 4 通道，
+  扩宽条数 **0/0/0/1** = cap 1.5 语义在生产包内再次确认）· 启动冒烟 **FAILED=0 / rc=0**
+  （Electron 4 + backend 1 / 30s 存活 / `AFTER_KILL=0`）。
+- **zip 身份** `Video-Locator-win-x64-20261017r25.zip` = **981,693,605B**（对 r24 **+1,417B**）/
+  条目 **7,079**（文件 6,993 + 空目录 86）/ `testzip=None` /
+  `zip 内 backend.exe 77,498,025B sha16 ae04274989342708 == 磁盘` /
+  `zip 内 bridge.js 8,882B sha16 7d3e0427e3d3a4db == 磁盘` /
+  **与 r24 的文件名集合差集 = 0/0（逐名等同）** ⇒ `ZIP_RC=0`、`RESULT OK`。
+- 目录条目跨代可比性查证：r24 的 85 个目录条目 = 「**无直属文件的目录**」这一规则
+  （`diag_zip_dir_rule.py` 实测 zero-file 集合与 r24 集合仅差 `resources/`，
+  而本代 `resources/` 确实 0 个直属文件 ⇒ r25 = 86 个，差 1 可解释）。
+- `mvp/ui` 本轮零改动 ⇒ **mac 不需另走 dispatch**（跨平台 JS/TS 未动）。
+
+### Fixed
+
+- **竞品项目采集器 `parse_runtime_log.py` 修 7 处**（正文与自检在 cutmatch-analysis 仓，本仓不承载）：
+  README 被当证据造出 `host/name/port` 假符号 / **我上轮修法引入的回归**（证据扩展名被收窄到
+  `.log/.txt` ⇒ `draft_content.json`、CSV、XML 整族被跳过）/ CSV-TSV 无行判据 /
+  XML 属性名抢匹配吞掉内层键值（真 FCPXML 上必然复发）/ UTF-16 日志按 utf-8 硬解 = 静默零命中 /
+  防自喂只有文件名规则 + **我的排除件在报表里凭空消失**（自造静默丢弃）/ 压缩包混进"扩展名不符"。
+  新自检 `scripts/selftest_parse_runtime_log.py` = **17/17 PASS**，夹具键改为从符号表动态取
+  （首版我手写了两个不在符号表里的键 ⇒ 表现为假失败）。
+
+### Notes
+
+- ⚠️ **两处我自己的错，如实留痕**：① zip 目录条目规则先按"每目录都写"实现 ⇒ 1,374 条、与历代 7,078
+  不可比，查明规则后重打；② 清死代码时删掉 `pre = ` 却留 `if pre:` ⇒ 打包脚本在**写包之前**
+  `NameError`（`ZIP_RC=1`、zip 不存在），**而我下一条消息已把「7,079 条目 / 981,703,678B」这组
+  没有读数支撑的数报了出去** ⇒ 当场更正、`ls` 核到 `ABSENT` 才重跑（教训同族：
+  后台通知的 exit code ≠ 被测脚本的 rc，读数必须来自被验对象的日志）。
+  ⇒ 由此给包体核验补三道硬断言：条目数 == 磁盘文件数 / 顶层关键件（`Video Locator.exe`、
+  `resources.pak`、`icudtl.dat`）在位 / 与上一代文件名差集非空即停；不过就 `exit 1` **不写包**。
+- **未做**：cap 1.5 的**观感读图**（成片接缝/硬切）仍未做；`source_merge.py::_transcode_args`
+  同族未改；**删 r22 等口令**（出 r25 后应留 r25/r24/r23，删前双验 r23/r24 逐字一致）。
+- 竞品侧本轮**未执行其任何代码、未改其任何文件**；结论只写文档，`mvp/` 产品代码零改动（用户边界）。
