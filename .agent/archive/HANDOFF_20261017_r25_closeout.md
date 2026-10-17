@@ -67,7 +67,11 @@ Windows 现役包 = **r25**（`Video-Locator-win-x64-20261017r25.zip`，构建�
    四档（2.5/2.0/1.5/1.2）导出实得 131/139、严格 135/139 **逐位不变** ⇒ 只证了数据面，
    **成片接缝 / 硬切位置的读图没做**。要温和档 = 2.0（−9.4%，保留部分整镜头扩宽），
    一条数值 + 一条默认值锁 + 重跑门禁。
-2. **`mvp/src/media/ffmpeg/source_merge.py::_transcode_args` 同族未改**：`concat → -c:a aac` 无布局归一
+2. ~~`mvp/src/media/ffmpeg/source_merge.py::_transcode_args` 同族未改~~
+   = ✅ **已于 2026-10-18 续63 补廿一/补廿二 修完并随 r26 出包**（且实测是**两族**：全 unknown 硬失败 +
+   混合形态"产物布局由第一路决定"；原写的修法「concat 前插 `aformat=channel_layouts=stereo`」**不够**，
+   实装 = 先按声道数补名再统一到声道数最多的可解析布局）。⇒ 本条以下原文留档，读时按已闭合处理：
+   `concat → -c:a aac` 无布局归一
    ⇒ 同形源（6 声道 / layout=unknown）**失败更早**（`Cannot select channel layout for the link between
    filters auto_aresample_0 and Parsed_concat_6`，rc=-22、0 字节）。这是**硬失败非静默坏产物**，
    修法 = concat 前插 `aformat=channel_layouts=stereo` 或同款失败回退。需单独立批（含归因与验收）。

@@ -89,10 +89,13 @@
 > | 我的探针/单测残留 | **仅 14.8 MB**（163 项） | `svl_*`/`tmp.*`；`tempfile.mkdtemp` 在单测 `setUpClass` 里**没有配平清理** ⇒ 每跑一次全套留 ~10 个目录（量小但在长） |
 > ⇒ **结论：代码与产物确实在 D，吃 C 的是"数据根按设计落 AppData"+"一次性逆向工作区 6.39GB"+"工具链缓存"**。
 > **处置 = 用户裁决（2026-10-18）：三项都不做、不入待办、以后勿再提议。**
-> **五、现役未结项**：ⓐ ~~mac dispatch 待他一步~~ = **他自己点了**（run `39060341032`，
->   head = r26 构建点 `ad7cec4`，10-18 02:57 起飞；按既定纪律代理不追读该 run，
->   要看"包换没换"须回读 `mac-alpha` 资产 `size`/`updated_at`）；ⓑ 第五道包内合并验收**升不升为常设**；
->   ⓒ 主线「过渡不流畅」三样外部输入；ⓓ `og720-720` 相似度自相矛盾挂账。
+> **五、现役未结项**：ⓐ ~~mac dispatch 待他一步~~ = **已闭合**（run `39060341032` 全程 22.5min，
+>   三 job 全 success；`macos-package` 11.5min、21 步全绿，含
+>   **`Accept packaged mac bundle (gate publish)` success** 与 **`Publish to mac-alpha` success**；
+>   回读资产 = `Video-Locator-mac-arm64.zip` **917,013,005B @ 2026-10-17T19:19:39Z**，
+>   对旧值 916,840,558B @ 10-13 **+172,447B 且时间戳变** ⇒ 包确实换了，**mac 侧已含 r25+r26 全部后端修复**）；
+>   ⓑ 第五道包内合并验收**升不升为常设**；ⓒ 主线「过渡不流畅」三样外部输入；
+>   ⓓ `og720-720` 相似度自相矛盾挂账。
 > **产物**：`work/r26_pkg/precheck_delete_r23.py`、`work/cap15_film_20261018/{four_cases.py,four_case_report.json,four_cases.log,sheets_four.py,sheets4/×7,sheets4_index.json}`、`work/cdisk_20261018/measure_c.py`。
 
 > **▶ 2026-10-18（续63 补廿三）— r26 出包（构建点 = 干净 commit `ad7cec4`）+ 包内新增第五道「合并腿」实测；mac dispatch 卡在令牌【现读这条】**
@@ -352,9 +355,10 @@
 
 ## Next Actions
 
-> 现役未结项以 `Current Task` 顶部「续63 补二十」块 + 本表为准；**交接读这一份就够**：
-> `.agent/archive/HANDOFF_20261017_r25_closeout.md`（自包含：今天四件事的读数索引、四条被打掉的旧结论、
-> 静态永久边界、我自己三处错的形态、开放项 1~5、复跑命令与两个 Windows 坑）；
+> 现役未结项以 `Current Task` 顶部「续63 补廿四」块 + 本表为准；**交接读这一份就够**：
+> `.agent/archive/HANDOFF_20261018_r26_closeout.md`（自包含：这一夜五批的读数索引、七条被打掉的旧结论、
+> 包身份与五道验收读数、未结项 1~5、复跑命令、我自己四处错的形态与 Windows 坑）；
+> 上一份 `.agent/archive/HANDOFF_20261017_r25_closeout.md` 已被它取代（其 §5 开放项 1/2 均已闭合）；
 > 历史交接块已迁 `.agent/archive/STATE_history_20261007.md`（续55「交接要点」与 (c) 关键新知识七条在其中，
 > 后者已浓缩为 `Known Issues` 的「工程教训速查」）。
 
@@ -581,4 +585,4 @@
 
 ## Last Updated
 
-2026-10-18 02:27
+2026-10-18 03:23

@@ -27,8 +27,10 @@
 > `Local\SourceVideoLocator` 448MB；`~\.qoder-cn` 735MB；工具链缓存 ~1.1GB（uv/pip/npm/electron，venv 在 D 但缓存在 C）；
 > PyInstaller `_MEI*` 残留 90MB；**我的探针/单测残留仅 14.8MB**（单测 `setUpClass` 的 mkdtemp 没配平清理）。
 > **处置 = 用户裁决（2026-10-18）：三项都不做、不入待办、以后勿再提议。**
-> **未结**：ⓐ ~~mac dispatch 待他一步~~ = **他自己点了**（run `39060341032`，head = r26 构建点 `ad7cec4`；
-> 代理不追读，要看包换没换须回读 `mac-alpha` 资产字节数）；ⓑ 第五道包内合并验收升不升常设；
+> **未结**：ⓐ ~~mac dispatch~~ = **已闭合**（run `39060341032` 22.5min 三 job 全 success，
+> 门槛 `Accept packaged mac bundle` 绿 ⇒ `Publish to mac-alpha` 跑了；回读
+> `Video-Locator-mac-arm64.zip` = **917,013,005B @ 19:19:39Z**，对旧值 +172,447B 且时间戳变
+> ⇒ **mac 侧现已含 r25+r26 全部后端修复**）；ⓑ 第五道包内合并验收升不升常设；
 > ⓒ 主线三样外部输入；ⓓ `og720-720` 挂账。
 > 明细 = STATE `Current Task` 补廿四 块；产物 `work/{r26_pkg,cdisk_20261018,cap15_film_20261018/}`。
 

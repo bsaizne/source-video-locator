@@ -3719,3 +3719,7 @@ zip 内 bridge.js     8,882 B sha16 7d3e0427e3d3a4db == 磁盘   （与 r25 逐�
 ### 五、交付状态
 
 未推远端（本批只有档案笔）；现役包 = **r26**；mac 包仍 ≈ r24 代（**dispatch 还等他一步**）。
+
+### Notes
+
+- Created `checkpoint-2026-10-18-0323.md` checkpoint (4 modified/untracked file(s)).
