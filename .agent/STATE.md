@@ -43,6 +43,42 @@
 ## Current Task
 
 
+> **▶ 2026-10-18（续63 补廿三）— r26 出包（构建点 = 干净 commit `ad7cec4`）+ 包内新增第五道「合并腿」实测；mac dispatch 卡在令牌【现读这条】**
+> 口令「打包 r26 并在 mac 跑 dispatch」。**推远端已完成 = `e5b5d90..ad7cec4`（6 笔，fast-forward，无 force）**。
+> ⚠️ **mac dispatch 没做成（等他一步）**：非交互取令牌两条路都堵——`git credential fill` 返空；
+> `git credential-manager get` 首跑**挂死 60s**，加 `GCM_INTERACTIVE=never` 后明确报
+> `Cannot prompt because user interactivity has been disabled`（rc=255）⇒ 按规矩**停手不重试、不弹窗**。
+> 入口：仓库 `bsaizne/source-video-locator` → Actions → **H3 macOS MPS POC + MVP tests** → Run workflow
+> （ref=master，head 应为 `ad7cec4`）；或他本机交互跑一次 `git credential-manager get` 让令牌可用，我再 dispatch。
+> ⚠️ **顺带订正一条档案判据**（就在他要决定的这件事上）：补十九 块写的「`mvp/ui` 零改动 ⇒ mac 不需另走
+> dispatch」**只对了一半**——mac 包的 backend 由 CI 从检出 ref **现编**（workflow 有
+> `Build backend bundle (PyInstaller onedir…)`）⇒ **凡 `mvp/src` 改动 mac 就得重出**。
+> 所以现役 mac 包（10-16 dispatch，head `c789670` ≈ r24 代）**不含** r25 两笔（`e79d4ee` 音轨布局回退、
+> `36acc50` cap 1.5）也**不含**补廿一/补廿二。判据改为：**`mvp/src` 或 `mvp/ui` 任一改动 ⇒ mac 需 dispatch**。
+> **构建** = `mvp/ui/scripts/build-release.ps1` 四步 rc=0（`work/r26_pkg/build_r26.log`，[3/4] `Build complete!`）。
+> **五道包内验收串行、逐条取 rc（全 0）**：
+> · bundle **33 PASS / FAILED=0**（12 行 `locate leg=` 齐、跳格 48 分位口径对得上）
+> · render **FAILED=0**（64 段 / 136.344 vs 136.366s / h264_amf / wall 60.1s，与 r25 **逐字同**）
+> · 导出计划不变式 **FAILED=0**（4 片 × 4 通道）· 启动冒烟 **FAILED=0 / AFTER_KILL=0**
+> · **新增第五道 `work/r26_pkg/accept_packaged_merge.py` FAILED=0** = 真起包内 `backend.exe` + 包内 ffmpeg/ffprobe
+>   打 `POST /api/source/merge`：M1 两个「6ch+未写布局」输入合并 `mode=transcode` 且产物 **`6/5.1`**、
+>   夹具锁确为 `6/unknown`、M2 两种先后顺序产物布局**相同**（改前是 `6/5.1` vs `2/stereo`）、
+>   M3 包内支持档出现 `source merge plan:` 留痕 ⇒ **补廿一 + 补廿二 的修复确认在分发包里生效**。
+> **zip 身份**（两把尺子读数逐字相同：`make_zip_r26.py` 与独立的 `work/r17_pkg/zip_identity.py`）
+> = `Video-Locator-win-x64-20261018r26.zip` **981,697,844B**（对 r25 **+4,239B**）/ 条目 **7,079**
+> （文件 6,993 + 空目录 86，与 r25 同）/ `testzip=None` / `root_form=flat` /
+> `backend.exe 77,502,636B sha16 9410f2e7baa948d6` **zip 内 == 磁盘**（对 r25 的 77,498,025B **+4,611B**，
+> 与本批源码改动面相容）/ `bridge.js 8,882B sha16 7d3e0427e3d3a4db` **与 r25 逐字相同**（本批零 JS 改动）/
+> **与 r25 文件名集合差集 = 0/0** / 渲染层含 `/api/tasks/export` 的资产仍命中 `index--VHmdytl.js`。
+> **覆盖边界（如实）**：① M1 那句"改前会 500"来自**源码树实测**（`pre_fix_report3.json` 的 RAISE），
+> **包内改前臂没跑**——r25 的 `win-unpacked` 已被本批构建覆盖，为补一条对照重解 981MB 包不值；
+> ② 第五道目前住在 `work/r26_pkg/`，**升不升为常设（`mvp/scripts/`）待他拍板**；
+> ③ 分发包现有**四档**（r26/r25/r24/r23）。
+> **待口令**：ⓐ mac dispatch（见上）；ⓑ 按「每出一代删最老」应删 **r23**——删前照例双验 r25/r24 逐字一致
+> （脚本 `work/r25_pkg/precheck_delete_r22.py` 改 EXPECT 即可复用）。
+> **产物**：`work/r26_pkg/{build_r26.log, accept_{bundle,render}_r26.log, invariants_r26.log, startup_r26.log,
+> accept_packaged_merge.py, accept_merge_r26.log, make_zip_r26.py, make_zip_r26.log, dispatch_mac.py}`。
+
 > **▶ 2026-10-18（续63 补廿二）— 两项遗留收口：开不了的编码器不再白试/不再报假故障 + copy 判据补布局 + 一条会让补廿一静默失效的加固【现读这条】**
 > 口令「接着修那两项遗留问题」。**改了产品代码，未出包** ⇒ 用户手上仍是 r25，补廿一 + 本批两条修复他都没有。
 > **① 编码器白跑（前提被实测改写了两次，别照档案原话做）**
@@ -113,51 +149,6 @@
 > attribute_pre3.py, pre_fix_report3.json, post_fix_report3.json, measure_collapse.py(余弦法因未对齐不作证据),
 > spectral_semantics.py, test_source_merge*.log, backend_suite*.log, api_suite.log, invariants.log}`。
 
-> **▶ 2026-10-18（续63 补二十）— cap 1.5 观感面读图收口（2mkv 单片）+ 「双档各出一张成片」验收设计判空【现读这条】**
-> 口令：接上一会话，在三个开放项里点选 **cap 1.5 观感读图**。**零产品代码改动**（只读探针 + 逐张读图），
-> `git diff HEAD -- mvp src` 为空 ⇒ 树与 r25 构建点 `c3a17e5` 相同。
-> **一、动手前打掉两条前提（各是我自己的错）**
-> ① 交接件写的验收法「包内 accept + 双档（2.5 vs 1.5）各出一片再读图」= **空实验**：`material_expand`
-> 只允许 `channel="jianying"`（`exporters.py:433` 硬守卫 raise），成片通道调用 `prepare_channel_plan`
-> 时**根本不传**这两个参数（`locator_service.py:992-998`）⇒ **cap 对成片/EDL/XML 惰性，两档成片逐字节相同**；
-> 观感面唯一载体 = **剪映卷轴素材**。
-> ② 我开工第一条消息报「四片原片在 UNC `\\ProjectXIXI`、`net use` 空 ⇒ 缺素材做不了」**是错的**：
-> r25 包内 render 验收用的 `work/stable_sort_regress/2mkv.results.json` 记的是本地路径
-> **`D:\video\2.mkv`（1,020,168,298B，在位）**。⇒ 教训：**路径要核到当前这批用的那份 results 文件**，
-> 别拿另一批（`work/fastglobal_default_*`）里的 UNC 字段当事实。（test1/2/3 确实只有 UNC 记录、本机无副本 ⇒ 那三片仍不可渲染。）
-> **二、计划层读数（2mkv，索引 `2__4c6d4ab2` = scn2+evt1 @1fps，逐 clip 只读）**
-> - **cap1.5 逐 clip == 关闭扩宽**（`cap15_identical_to_core_per_clip=true`），且
->   **1.5 档卷轴区间 == 成片通道区间**（`scroll_15_equals_movie_spans=true`，2.5 档 false）
->   ⇒ 现役包里**剪映素材相对成片零余量（零 handle）**。
-> - 两档差异 = **12/72 条**（11 条 2.5 扩宽 + clip34 被去重叠连带裁短），2.5 档多出 **26.4s**
->   （Σ素材宽 161.2 vs 135.4s，`n_expanded` 11 vs 0）；本轮在本地路径上复现了 10-17 02:32 那轮的
->   161.2/135.4 ⇒ 两把尺子对同一件事，索引等价、跨臂可比。
-> - 「至少一边不在索引切点上」的 clip：**1.5 档 47 / 2.5 档 37**，其中**两档都算镜头中间的 37 条
->   ⇒ cap 只归因 10 条**；1.5 档越界深度 中位 1.81s、最大 8.0s，>1.0s 的边界 47/144。
-> **三、真剪点偏差（把「2.5 = 整镜头」削掉一半）**
-> 13 个扩宽边界逐个在 ±1.0s 窗内**逐帧解码自算像素差**（v1 用 ffmpeg `metadata=print` 的读数不合法：
-> 出现窗口外时间戳 + 跨窗复读 ⇒ 判废重做，`edge_offsets.py` 只留作判废证据）：
-> **11/13 有显著真剪点，中位偏 0.209s、最大 0.917s，8/13 偏 >0.12s、3/13 偏 >0.30s**；
-> 2 条边界附近根本没有剪点（clip46@1766.0 / clip54@2008.0）。按符号拆开：**5 条正向 ⇒ 2.5 素材把
-> 邻镜头 ≤0.25s 带进卷轴（闪切）**；6 条负向 ⇒ 少带 0.2~0.9s 本镜头内容
-> ⇒ 「换 2.0/2.5 买到的是**近似**镜头完整度 + 闪切风险，不是干净的整镜头」。
-> **四、逐张读图（12 张接触表全读，每张 8 帧 @300px，标 S15/S25/E15/E25）**
-> 1.5 档一致形态 = 入/出点落在**动作中途**：clip13 入点时士兵已举绳／clip35 丢掉 2.4s 举杯动作／
-> clip46 直接从坐定阅读开始／clip54 入点时步枪已举起／clip61 丢掉 2s 走向三脚架／clip62·68·69 出点时
-> 手势未完；clip70 尾那条 10s「镜头」实测含 **≥2 条真剪点**（scenes.npy 漏切并成一条）。
-> 2.5 档读到的反面与第三节符号**同向对上**：clip38 素材头 0.3s 是上一条镜头（机头特写）、
-> clip68/69 素材尾把下一镜头开头带进来、clip70 头带 0.35s 道具特写。
-> **五、结论（分级）**
-> - **硬证据**：cap 不进成片通道；1.5 档卷轴 = 成片区间（零 handle）；cap 归因的边界变化只有 10/72 条。
-> - **方向性**：1.5 的观感代价 = 入/出点在动作中途 + 零余量；2.5 的代价 = 串镜头闪切 + 卷轴比解说引用长 19%。
->   **cap 既不是「过渡不流畅」的成因、也不是解药**（与 10-16 armC 反证「段宽不改像素静止占比」同向）。
-> - **未知（覆盖边界，如实登记）**：① 单片（2mkv）结论，test1/2/3 原片不在本地；② 读图对象是**原片帧**
->   （素材 = 该区间转码，构造等同），**未在剪映里真机回放**两档卷轴；③ 未测其它置信档/低策略下的形态。
-> **产物**：`work/cap15_film_20261018/{plan_diff.py,plan_diff.json,changed12.json,frames.py,sheets/×12png,
-> sheets_index.json,edge_offsets_v2.py,edge_offsets_v2.json}`（`work/` 不入库）。
-> **现役未结项**：`source_merge::_transcode_args` 同族批 · 主线「过渡不流畅」三样外部输入 · `og720-720` 挂账 ·
-> 下次出 r26 时删 r23。
-
 ## Completed
 
 - 历史完成项见 `.agent/archive/STATE_history_20261007.md`（Current Task 退休块续14~续61）、
@@ -171,6 +162,14 @@
 
 ## Current Problem
 
+- ✅ **r26 已出（2026-10-18 续63 补廿三，构建点 = 干净 commit `ad7cec4`）**：`build-release.ps1` rc=0，
+  五道包内验收串行逐条 rc=0（bundle 33 PASS / render / 不变式 / 冒烟 + **新增第五道包内合并腿实测**
+  ⇒ 证得补廿一/廿二 的修复**在分发包里生效**）；zip 身份两把尺子逐字相同
+  = `Video-Locator-win-x64-20261018r26.zip` 981,697,844B / 7,079 条目 / backend.exe sha16 `9410f2e7baa948d6`
+  zip 内 == 磁盘 / 与 r25 文件名差集 0/0。已推远端 `e5b5d90..ad7cec4`（fast-forward）。
+- ⚠️ **mac dispatch 未完成（等他一步）**：非交互取令牌被 GCM 明确拒绝（`Cannot prompt…`，首跑还挂死 60s）
+  ⇒ 按规矩停手不重试。且**订正一条判据**：mac 的 backend 由 CI 现编 ⇒ 凡 `mvp/src` 改动 mac 就要重出，
+  所以现役 mac 包（head `c789670` ≈ r24）**不含** r25 两笔 + 补廿一/廿二。
 - ✅ **补廿一 登记的两项遗留已收口（2026-10-18 续63 补廿二）**：① 「开不了」的编码器不再反复白试，
   关键是**不再向用户播报假故障**（改前每次合并 2 条「硬件编码器执行失败，已回退」，而本机无
   NVIDIA/Intel 属正常态；实测同进程内后续每次合并还省 ≈3.3s）；② copy 判据补上「补名后的布局」
@@ -560,4 +559,4 @@
 
 ## Last Updated
 
-2026-10-18 01:19
+2026-10-18 01:52

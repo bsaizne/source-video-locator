@@ -8,22 +8,28 @@
 
 ## P0 — Current
 
-> **▶ 2026-10-18（续63 补廿二）— 两项遗留收口（编码器假故障播报 + copy 判据补布局 + 一条静默失效加固）【现读这条】**
-> 口令「接着修那两项遗留问题」。**改了产品代码、未出包** ⇒ 用户仍没有补廿一与本批两条修复。
-> **①** 前提被实测改写：**时间不是主项**（微型探测与白跑同价，死臂 ≈0.57s/条、探 7 条 2.82s）⇒ 不引入探测子进程；
-> 真缺陷是**用户可见的假故障**——改前每次合并播报 2 条「硬件编码器 hevc_nvenc/hevc_qsv 执行失败，已回退」（本机无
-> NVIDIA/Intel 属正常态）。实装 = 结构性判据「一帧都没编出来」⇒ 开场即败进**进程内黑名单**（按 ffmpeg 路径分键，
-> CPU 兜底永不拉黑）下次跳过；编到一半死仍照常播报。双臂：改后 run1 假故障 0 条（wall 5.06s）、run2 **1.77s**
-> （改前同臂 4.98s ⇒ 同进程后续每次省 ≈3.3s）。
-> **②** copy 签名加**补名后**布局：`6ch/unknown` vs `6ch/5.1` 同序 ⇒ **仍 copy**（不把分集从秒级流复制拖进几十分钟转码）、
-> `5.1(side)` 别名归一同理；⚠️ **收紧面在 MP4 上实测不可观测**（hexagonal 进 MP4 也只报 `6/unknown`，四对全 copy），
-> 真实收益在容器确实声明不同布局的情况（MKV 5.1 vs hexagonal、stereo vs dual_mono）。另加 `copy_layout_note()` 留痕
-> ——实测 `-c copy` 加 `-channel_layout 5.1 -ac 6` **仍写 unknown**，改不了元数据只能记下来。
-> **③** 堵掉一个会让补廿一整套归因**静默失效**的洞：`declared_layout` 原把字面 `"unknown"` 当已写明
-> （ffprobe csv 视图给 `unknown`、json 视图缺字段，现役靠 json 才没出事），现已两种都算未解析 + 一条锁。
-> **验收**：新锁 6 项；后端 **694 OK(skipped=2)**（补廿一 688）· API **150 OK** · 不变式 **FAILED=0**。
-> ⚠️ **出包时 mac 要另走 dispatch**（补廿一 + 本批均为纯后端 Python 改动）。
-> 明细 = STATE `Current Task` 补廿二 块；探针/日志 `work/merge_layout_20261018/`。
+> **▶ 2026-10-18（续63 补廿三）— r26 已出（构建点 = 干净 commit `ad7cec4`）+ 包内第五道「合并腿」实测；mac dispatch 卡在令牌【现读这条】**
+> 口令「打包 r26 并在 mac 跑 dispatch」。**已推远端 `e5b5d90..ad7cec4`（6 笔 fast-forward，无 force）**。
+> ⚠️ **mac dispatch 未完成，等他一步**：非交互取令牌两条路都堵（`credential fill` 返空；
+> `credential-manager get` 首跑挂死 60s、加 `GCM_INTERACTIVE=never` 明确报 "Cannot prompt"）
+> ⇒ 按规矩停手不重试。入口 = Actions → **H3 macOS MPS POC + MVP tests** → Run workflow（ref=master，
+> head `ad7cec4`）；或他本机交互取一次令牌我再 dispatch。
+> ⚠️ **订正一条档案判据**：补十九 写的「`mvp/ui` 零改动 ⇒ mac 不需 dispatch」只对一半——mac 的 backend
+> 由 CI 从检出 ref 现编 ⇒ **凡 `mvp/src` 改动 mac 就要重出**。现役 mac 包（head `c789670` ≈ r24）**不含**
+> r25 两笔（音轨回退 + cap 1.5）也不含补廿一/廿二。
+> **构建 rc=0**（`build-release.ps1` 四步）。**五道包内验收串行、逐条 rc=0**：bundle **33 PASS/0** ·
+> render **0**（64 段 / 136.344 vs 136.366s / h264_amf / 60.1s，与 r25 逐字同）· 不变式 **0** ·
+> 冒烟 **AFTER_KILL=0** · **新增第五道**（真起包内 backend 打 `/api/source/merge`）：两个「6ch+未写布局」输入
+> 合并 `mode=transcode` 且产物 **`6/5.1`**、两种先后顺序产物布局**相同**、支持档出现 `source merge plan:` 留痕
+> ⇒ **补廿一/廿二 的修复确认在分发包里生效**（四道老验收一条都不覆盖合并腿）。
+> **zip**（两把尺子逐字同）= `Video-Locator-win-x64-20261018r26.zip` **981,697,844B**（对 r25 +4,239B）/
+> 条目 **7,079**（6,993 文件 + 86 空目录）/ `testzip=None` / `backend.exe 77,502,636B sha16 9410f2e7baa948d6`
+> **zip 内 == 磁盘**（对 r25 +4,611B，与改动面相容）/ `bridge.js` **与 r25 逐字同**（零 JS 改动）/
+> **与 r25 文件名差集 0/0**。
+> **覆盖边界**：M1 的"改前会 500"是源码树实测，**包内改前臂没跑**（r25 的 win-unpacked 已被覆盖）；
+> 第五道是否升为常设待拍板；分发包现**四档**（r26/r25/r24/r23）。
+> **待口令**：ⓐ mac dispatch；ⓑ 删 r23（删前双验 r25/r24 逐字一致）。
+> 明细 = STATE `Current Task` 补廿三 块；产物 `work/r26_pkg/`。
 
 ## P1 — Next
 
