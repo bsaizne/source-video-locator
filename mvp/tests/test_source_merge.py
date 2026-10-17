@@ -18,12 +18,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))  # -> mvp/src
 
 from media.ffmpeg import MediaError
-from media.ffmpeg.source_merge import (SourceVideoMerger, choose_extension, color_args,
+from media.ffmpeg.source_merge import (MergePlan, SourceVideoMerger, choose_extension, color_args,
                                        concat_list_text, duration_tolerance, encoder_chain,
                                        error_summary, file_signature, is_copy_compatible,
                                        is_hdr, is_high_bit_depth, merge_output_name,
                                        parse_hevc_encoders, parse_progress_seconds,
-                                       pick_pix_fmt, x265_params)
+                                       pick_pix_fmt, resolve_audio_layouts, x265_params)
 
 BENCH = Path(__file__).resolve().parents[2]
 FFMPEG = BENCH / "tools" / "ffmpeg.exe"
@@ -271,6 +271,156 @@ class MergeOriginalsServiceFlowTest(unittest.TestCase):
         from infrastructure.errors import LocatorError
         with self.assertRaises(LocatorError):
             svc.merge_originals([str(FFMPEG), str(FFMPEG)])
+
+
+# ------------------------------------------------ 音频布局归一（2026-10-18 缺陷批）
+def _a(ch: int, layout: str | None = None) -> dict:
+    d = {"codec_type": "audio", "codec_name": "aac", "sample_rate": "48000", "channels": ch}
+    if layout is not None:
+        d["channel_layout"] = layout
+    return d
+
+
+class AudioLayoutResolveTest(unittest.TestCase):
+    """resolve_audio_layouts：「不需要归一时命令逐字不变」这条边界必须真咬。"""
+
+    def test_all_declared_equal_needs_no_filter(self):
+        chains, note = resolve_audio_layouts([_a(2, "stereo"), _a(2, "stereo")])
+        self.assertEqual(chains, [[], []])
+        self.assertEqual(note, "")
+
+    def test_unknown_only_gets_named_by_channel_count(self):
+        chains, note = resolve_audio_layouts([_a(6), _a(6)])
+        self.assertEqual(chains, [["5.1"], ["5.1"]])
+        self.assertIn("声道数不变", note)
+        self.assertNotIn("不一致", note)
+
+    def test_mixed_same_count_only_fixes_the_unnamed_one(self):
+        chains, _ = resolve_audio_layouts([_a(6), _a(6, "5.1")])
+        self.assertEqual(chains, [["5.1"], []])
+
+    def test_input_order_does_not_decide_target(self):
+        self.assertEqual(resolve_audio_layouts([_a(6), _a(2, "stereo")])[0], [["5.1"], ["5.1"]])
+        self.assertEqual(resolve_audio_layouts([_a(2, "stereo"), _a(6)])[0], [["5.1"], ["5.1"]])
+
+    def test_unnameable_channel_count_falls_back_to_stereo(self):
+        chains, note = resolve_audio_layouts([_a(7), _a(2, "stereo")])
+        self.assertEqual(chains, [["stereo"], []])
+        self.assertIn("统一到 stereo", note)
+
+    def test_missing_audio_is_left_to_upper_layer(self):
+        chains, note = resolve_audio_layouts([_a(2, "stereo"), None])
+        self.assertEqual(chains, [[], []])
+        self.assertEqual(note, "")
+
+
+class TranscodeArgsChainTest(unittest.TestCase):
+    """``_transcode_args``：空链 ⇒ 音轨直连（与改前逐字相同）；有链 ⇒ 依次插 aformat。"""
+
+    def _merger(self) -> SourceVideoMerger:
+        return SourceVideoMerger("ffmpeg", "ffprobe", Path(tempfile.mkdtemp(prefix="svl_args_")))
+
+    def _plan(self, chains, has_audio=True) -> MergePlan:
+        return MergePlan(paths=["a.mp4", "b.mp4"], mode="transcode", output=Path("out.mp4"),
+                         total_duration=10.0, reason="", main_video=_vstream(),
+                         has_audio=has_audio, fps="25/1", audio_filters=chains)
+
+    def _fc(self, args: list[str]) -> str:
+        return args[args.index("-filter_complex") + 1]
+
+    def test_empty_chain_keeps_direct_wiring(self):
+        fc = self._fc(self._merger()._transcode_args(self._plan([[], []]), "libx265", Path("o.mp4")))
+        self.assertIn("[v0][0:a:0][v1][1:a:0]concat=n=2:v=1:a=1", fc)
+        self.assertNotIn("aformat", fc)
+
+    def test_two_step_chain_names_then_unifies(self):
+        fc = self._fc(self._merger()._transcode_args(
+            self._plan([["5.1", "stereo"], []]), "libx265", Path("o.mp4")))
+        self.assertIn("[0:a:0]aformat=channel_layouts=5.1,aformat=channel_layouts=stereo[a0]", fc)
+        self.assertIn("[v0][a0][v1][1:a:0]concat=n=2:v=1:a=1", fc)
+
+    def test_silent_plan_untouched(self):
+        fc = self._fc(self._merger()._transcode_args(
+            self._plan([[], []], has_audio=False), "libx265", Path("o.mp4")))
+        self.assertIn("concat=n=2:v=1:a=0", fc)
+        self.assertNotIn("aformat", fc)
+
+
+def _make_unknown6(dst: Path, *, fps: int, w: int = 640, secs: float = 2.0) -> None:
+    """造「6 声道 + 容器未写布局」的形制源。
+
+    不是随手造的形制：``5.1(side)`` 编进 MP4 后布局信息就丢（ffprobe 报 unknown），
+    线上产品自抽的 ``og*.mp4`` 实测就是这个形制（用户导出的 35 个文件逐个探过）。
+    """
+    exprs = "|".join(f"0.3*sin(2*PI*{f}*t)" for f in (200, 350, 500, 650, 800, 950))
+    h = int(round(w * 0.5625 / 2) * 2)
+    subprocess.run([str(FFMPEG), "-hide_banner", "-loglevel", "error", "-y",
+                    "-f", "lavfi", "-i", f"testsrc=size={w}x{h}:rate={fps}",
+                    "-f", "lavfi", "-i", f"aevalsrc={exprs}:s=48000:c=5.1",
+                    "-af", "pan=5.1(side)|c0=c0|c1=c1|c2=c2|c3=c3|c4=c4|c5=c5",
+                    "-t", str(secs), "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                    "-c:a", "aac", "-shortest", str(dst)],
+                   check=True, capture_output=True,
+                   creationflags=0x08000000 if sys.platform == "win32" else 0)
+
+
+@unittest.skipUnless(FFMPEG.exists() and FFPROBE.exists(), "real ffmpeg/ffprobe not present")
+class UnknownAudioLayoutE2ETest(unittest.TestCase):
+    """改前实测：全 unknown 输入 ⇒ 每条编码器尝试都白跑后 ``MediaError``（stderr 原文
+    ``Cannot select channel layout for the link between filters auto_aresample_0 and
+    Parsed_concat_8``）；unknown+stereo 混合 ⇒ 不报错但产物布局由**第一路**决定。"""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = Path(tempfile.mkdtemp(prefix="svl_layout_e2e_"))
+        cls.u25 = cls.tmp / "u25.mp4"
+        cls.u30 = cls.tmp / "u30.mp4"
+        cls.st30 = cls.tmp / "st30.mp4"
+        _make_unknown6(cls.u25, fps=25)
+        _make_unknown6(cls.u30, fps=30, w=700)
+        subprocess.run([str(FFMPEG), "-hide_banner", "-loglevel", "error", "-y",
+                        "-f", "lavfi", "-i", "testsrc=size=700x394:rate=30",
+                        "-f", "lavfi", "-i", "sine=frequency=1500:sample_rate=48000",
+                        "-t", "2", "-c:v", "libx264", "-pix_fmt", "yuv420p",
+                        "-c:a", "aac", "-ac", "2", "-shortest", str(cls.st30)],
+                       check=True, capture_output=True,
+                       creationflags=0x08000000 if sys.platform == "win32" else 0)
+
+    def _audio(self, p: Path) -> tuple:
+        out = subprocess.run([str(FFPROBE), "-v", "error", "-select_streams", "a:0",
+                              "-show_entries", "stream=channels,channel_layout",
+                              "-of", "default=nw=1:nk=1", str(p)],
+                             capture_output=True).stdout.decode().split()
+        return (int(out[0]), out[1] if len(out) > 1 else "unknown")
+
+    def test_fixture_is_actually_unnamed(self):
+        self.assertEqual(self._audio(self.u25), (6, "unknown"))
+
+    def test_two_unknown_inputs_merge_to_named_51(self):
+        seen: list[str] = []
+        m = SourceVideoMerger(FFMPEG, FFPROBE, self.tmp / "m_unk", timeout_s=180,
+                              prefer_hw=False,
+                              log=lambda *a: seen.append(" ".join(str(x) for x in a)))
+        info = m.merge([self.u25, self.u30])
+        self.assertEqual(self._audio(Path(info["merged_path"])), (6, "5.1"))
+        self.assertIn("补名为 5.1", m.plan([self.u25, self.u30]).reason)
+        # 判据必须落进日志：reason 此前既不回传也不打日志，用户侧无从知道产物声道结构被动过
+        self.assertTrue(any("source merge plan" in s and "补名为 5.1" in s for s in seen),
+                        f"布局判据未落日志: {seen}")
+
+    def test_mixed_order_yields_same_layout(self):
+        a = SourceVideoMerger(FFMPEG, FFPROBE, self.tmp / "m_a", timeout_s=180, prefer_hw=False)
+        b = SourceVideoMerger(FFMPEG, FFPROBE, self.tmp / "m_b", timeout_s=180, prefer_hw=False)
+        la = self._audio(Path(a.merge([self.u25, self.st30])["merged_path"]))
+        lb = self._audio(Path(b.merge([self.st30, self.u25])["merged_path"]))
+        self.assertEqual(la, lb)
+        self.assertEqual(la[0], 6)
+
+    def test_uniform_declared_inputs_get_no_chain(self):
+        m = SourceVideoMerger(FFMPEG, FFPROBE, self.tmp / "m_st", timeout_s=180, prefer_hw=False)
+        plan = m.plan([self.st30, self.st30])
+        self.assertEqual(plan.audio_filters, [[], []])
+        self.assertNotIn("布局", plan.reason)
 
 
 if __name__ == "__main__":

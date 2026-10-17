@@ -110,6 +110,96 @@ def is_copy_compatible(sigs: Sequence[tuple]) -> bool:
     return all(s == sigs[0] for s in sigs[1:])
 
 
+# --------------------------------------------------------------------------- #
+# 转码腿的音频布局归一（2026-10-18 实测缺陷，见 .agent/CHANGELOG.md 同日段）
+# --------------------------------------------------------------------------- #
+# MP4 里的多声道 AAC 经常**不写** channel_layout（ffprobe 报 unknown）——本产品自己抽出的
+# 素材就是这个形制（源布局 5.1(side)/hexagonal 编进 MP4 后布局信息丢失）。而 concat 滤镜
+# 要求各路布局可解析，实测两族后果：
+#   ① 全部输入未写布局 → 滤镜图**协商阶段**就失败（stderr: `Cannot select channel layout
+#      for the link between filters auto_aresample_0 and Parsed_concat_8`），编码器尝试链
+#      每臂白跑一遍，最终 MediaError（n=2/3/7 均复现）；
+#   ② 混合形态（未写布局 + 已写布局）**不报错**，但产物布局**由第一路决定**（实测
+#      5.1+stereo → 6/5.1，stereo+5.1 → 2/stereo）= 输入顺序决定语义且零留痕。
+# 归一目标 = 各路中**声道数最多**的可解析布局（合并结果不该因输入顺序丢声道；第一路恰为
+# 最大时与现役产物相同），未写布局的输入**先按声道数补名**再归一（补名后 ffmpeg 才拿到
+# 正确的上/下混系数——实测 5.1→stereo 是真下混而非丢声道，六条单音都在）。
+CHANNEL_COUNT_LAYOUT = {1: "mono", 2: "stereo", 6: "5.1", 8: "7.1"}
+_UNNAMED = "未写"
+
+
+def _shape_desc(widths: Sequence[int], declared: Sequence[str]) -> str:
+    return "/".join(f"{widths[i]}ch/{declared[i] or _UNNAMED}" for i in range(len(widths)))
+
+
+def _first_audio_stream(probe: dict) -> dict | None:
+    return next((s for s in (probe.get("streams") or [])
+                 if s.get("codec_type") == "audio"), None)
+
+
+def declared_layout(astream: dict | None) -> str:
+    """容器里**写明**的布局（小写）；未写 / unknown → 空串。"""
+    if not astream:
+        return ""
+    return str(astream.get("channel_layout") or "").strip().lower()
+
+
+def named_layout(astream: dict | None) -> str | None:
+    """该路音轨的可用布局：容器写明就用，否则按声道数补名；表外声道数（如 7）→ None。"""
+    lay = declared_layout(astream)
+    if lay:
+        return lay
+    return CHANNEL_COUNT_LAYOUT.get(int((astream or {}).get("channels") or 0))
+
+
+def resolve_audio_layouts(astreams: Sequence[dict | None]
+                          ) -> tuple[list[list[str]], str]:
+    """纯函数：多原片转码合并时**每路音轨要依次施加的布局链** + 留痕说明。
+
+    空链 = 该路**不加任何滤镜**（现役命令逐字不变，零语义风险）。判据：
+      1) 任一路无音频 → 全空链（"音频有无不一致 → 降级纯视频"由上层负责，这里不越权）；
+      2) 各路布局都写明且全等 → 全空链；
+      3) 有路未写布局、但按声道数补名后与其余各路全等 → 只给未写的路补名（声道数不变）；
+      4) 补名后仍不一致，或存在表外声道数（不可命名）→ 统一到目标布局
+         （可命名时取声道数最多者，否则退 ``stereo``），未写布局的路先补名再归一。
+    """
+    n = len(astreams)
+    if any(s is None for s in astreams):
+        return [[] for _ in range(n)], ""
+    declared = [declared_layout(s) for s in astreams]
+    named = [named_layout(s) for s in astreams]
+    widths = [int((s or {}).get("channels") or 0) for s in astreams]
+
+    if all(declared) and len(set(declared)) == 1:
+        return [[] for _ in range(n)], ""
+
+    if all(named) and len(set(named)) == 1:
+        target = named[0]
+        chains = [[target] if not declared[i] else [] for i in range(n)]
+        note = (f"音轨未写布局，按声道数补名为 {target}（声道数不变）"
+                f"；各路形制 = {_shape_desc(widths, declared)}")
+        return chains, note
+
+    if any(x is None for x in named):
+        target = "stereo"
+    else:
+        target = max(((named[i], widths[i]) for i in range(n)), key=lambda t: (t[1], t[0]))[0]
+
+    chains: list[list[str]] = []
+    for i in range(n):
+        if declared[i] == target:
+            chains.append([])
+        elif not declared[i] and named[i] and named[i] != target:
+            chains.append([named[i], target])   # 先补名（拿正确混音系数），再归一
+        else:
+            chains.append([target])
+    desc = _shape_desc(widths, declared)
+    note = (f"各路音轨布局不一致（{desc}）⇒ 统一到 {target}"
+            f"（未写布局的输入先按声道数补名再归一；不再由输入顺序决定产物）")
+    return chains, note
+
+
+
 def is_hdr(vstream: dict) -> bool:
     """竞品确证判据：PQ / HLG / BT.2020 原色 / bt2020* 色彩空间 任一命中。"""
     trc = str(vstream.get("color_trc") or "")
@@ -268,6 +358,7 @@ class MergePlan:
     main_video: dict = field(default_factory=dict)
     has_audio: bool = True
     fps: str = "25/1"
+    audio_filters: list[list[str]] = field(default_factory=list)   # 每路要依次施加的布局链
 
 
 class SourceVideoMerger:
@@ -347,9 +438,12 @@ class SourceVideoMerger:
         fps = str(main_v.get("avg_frame_rate") or "0/0")
         if fps in ("0/0", ""):
             fps = "25/1"
+        chains, audio_note = resolve_audio_layouts([_first_audio_stream(pb) for pb in probes])
+        if mode == "transcode" and audio_note:
+            reason += "；" + audio_note
         return MergePlan(paths=[str(p) for p in ps], mode=mode, output=out,
                          total_duration=total, reason=reason, main_video=main_v,
-                         has_audio=has_audio, fps=fps)
+                         has_audio=has_audio, fps=fps, audio_filters=chains)
 
     def _valid_output(self, out: Path, total: float) -> bool:
         """竞品「输出校验」语义：存在 + 有视频流 + 时长≈各段之和（容差内）。"""
@@ -382,7 +476,21 @@ class SourceVideoMerger:
         fc = [f"[{i}:v:0]scale={w}:{h}:force_original_aspect_ratio=decrease,"
               f"pad={w}:{h}:(ow-iw)/2:(oh-ih)/2,setsar=1,fps={plan.fps}[v{i}]"
               for i in range(n)]
-        ins = "".join(f"[v{i}]" + (f"[{i}:a:0]" if plan.has_audio else "") for i in range(n))
+        # 音频布局归一（见 resolve_audio_layouts）：链为空的路**保持现役直连**，
+        # 全等且都可解析时整条命令与改前逐字相同。
+        alab: list[str] = []
+        for i in range(n):
+            if not plan.has_audio:
+                alab.append("")
+                continue
+            chain = plan.audio_filters[i] if i < len(plan.audio_filters) else []
+            if not chain:
+                alab.append(f"[{i}:a:0]")
+                continue
+            f = ",".join(f"aformat=channel_layouts={lay}" for lay in chain)
+            fc.append(f"[{i}:a:0]{f}[a{i}]")
+            alab.append(f"[a{i}]")
+        ins = "".join(f"[v{i}]{alab[i]}" for i in range(n))
         if plan.has_audio:
             fc.append(f"{ins}concat=n={n}:v=1:a=1[outv][outa]")
         else:
@@ -513,6 +621,10 @@ class SourceVideoMerger:
                     "reused": True, "duration_s": plan.total_duration}
 
         # tmp 必须保留目标扩展名（ffmpeg 按扩展选 muxer），.part 走前缀位
+        if plan.reason:
+            # 布局/降级判据要落进支持档才叫留痕——``reason`` 此前只进 ``MergePlan``，
+            # 既不回传也不打日志（"音频有无不一致，降级纯视频"同样隐身）。
+            self._log("source merge plan: %s", plan.reason)
         tmp = plan.output.parent / (plan.output.stem + ".part" + plan.output.suffix)
         attempts: list[tuple[str, Callable[[Path, Path], list[str]], bool]] = []
         if plan.mode == "copy":
