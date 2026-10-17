@@ -275,6 +275,7 @@
 > r25 包内 render 验收用的 `work/stable_sort_regress/2mkv.results.json` 记的是本地路径
 > **`D:\video\2.mkv`（1,020,168,298B，在位）**。⇒ 教训：**路径要核到当前这批用的那份 results 文件**，
 > 别拿另一批（`work/fastglobal_default_*`）里的 UNC 字段当事实。（test1/2/3 确实只有 UNC 记录、本机无副本 ⇒ 那三片仍不可渲染。）
+> ⚠️ **同日补廿四订正：这条也是错的**——四片原片全在本地 D（`D:\ProjectXIXI\test*\*-om.*`），错因是我的 `sed 's/.*: *//'` 把盘符 `D:` 吃掉；四片扩测见 STATE 补廿四 块。
 > **二、计划层读数（2mkv，索引 `2__4c6d4ab2` = scn2+evt1 @1fps，逐 clip 只读）**
 > - **cap1.5 逐 clip == 关闭扩宽**（`cap15_identical_to_core_per_clip=true`），且
 >   **1.5 档卷轴区间 == 成片通道区间**（`scroll_15_equals_movie_spans=true`，2.5 档 false）
@@ -301,9 +302,49 @@
 > - **硬证据**：cap 不进成片通道；1.5 档卷轴 = 成片区间（零 handle）；cap 归因的边界变化只有 10/72 条。
 > - **方向性**：1.5 的观感代价 = 入/出点在动作中途 + 零余量；2.5 的代价 = 串镜头闪切 + 卷轴比解说引用长 19%。
 >   **cap 既不是「过渡不流畅」的成因、也不是解药**（与 10-16 armC 反证「段宽不改像素静止占比」同向）。
-> - **未知（覆盖边界，如实登记）**：① 单片（2mkv）结论，test1/2/3 原片不在本地；② 读图对象是**原片帧**
+> - **未知（覆盖边界，如实登记）**：① ~~单片（2mkv）结论，test1/2/3 原片不在本地~~ = **同日补廿四已订正并扩到四片**（原片全在 D；且 test3 有 1 条 1.5 档仍扩宽 ⇒ 口径改为 ≈）；② 读图对象是**原片帧**
 >   （素材 = 该区间转码，构造等同），**未在剪映里真机回放**两档卷轴；③ 未测其它置信档/低策略下的形态。
 > **产物**：`work/cap15_film_20261018/{plan_diff.py,plan_diff.json,changed12.json,frames.py,sheets/×12png,
 > sheets_index.json,edge_offsets_v2.py,edge_offsets_v2.json}`（`work/` 不入库）。
 > **现役未结项**：`source_merge::_transcode_args` 同族批 · 主线「过渡不流畅」三样外部输入 · `og720-720` 挂账 ·
 > 下次出 r26 时删 r23。
+
+---
+
+> **▶ 2026-10-18（续63 补廿一）— source_merge 音频布局归一：全 unknown 硬失败 + 混合形态「顺序决定产物」两族一并修掉【现读这条】**
+> 口令：「先处理 source_merge 声道布局批次」（补二十 之后三件候选里的第一件）。**本批改了产品代码，未出包**
+> ⇒ 用户手上仍是 r25、**还没有这个修复**；纯后端 Python ⇒ **mac 包要另走 dispatch 才带上**。
+> **一、归因（改前双臂，读数在 `work/merge_layout_20261018/`）**：档案原话只写了"失败更早、硬失败非静默"，
+> 实测是**两族**，第二族比第一族更坏。
+> ① **硬失败（确证）**：所有输入都是「6 声道 + 容器未写布局」⇒ 每条编码器尝试都在**滤镜图协商阶段**抛
+>   `Cannot select channel layout for the link between filters auto_aresample_0 and Parsed_concat_{8,12,28}`
+>   （n=2/3/7 全复现）⇒ `MediaError`；`tmp` 有清理 + `_valid_output` 有拦 ⇒ **不留坏缓存**（这条档案说对了）。
+> ② **静默改写（档案没记，本轮新查）**：混合形态**不报错**，但**产物声道结构 = 第一路的布局**
+>   （实测 `[5.1,stereo]→6/5.1`、`[stereo,5.1]→2/stereo`、`[unknown6,stereo]→2/stereo`）
+>   ⇒ 用户多段原片合并后的声道数由**输入顺序**决定，且**零留痕**。
+> 真形源不是手造的：`C:\Users\Bsaizne\Downloads\clips\clips\og*.mp4`（用户从本产品导出）**35 个文件逐个探过 = 6ch/unknown**；
+> 成因链 = `5.1(side)` 编进 MP4 后布局信息丢失（与 `e79d4ee` 同一条）。测试夹具用 `pan=5.1(side)|…` 复现该形制，
+> 并有一条 `test_fixture_is_actually_unnamed` 锁住"夹具真的是 unknown"。
+> **二、修法**（`mvp/src/media/ffmpeg/source_merge.py`：纯函数 + 一处接线 + 一处日志）
+> `resolve_audio_layouts()` 给每路算"要依次施加的布局链"：① 都写明且全等 ⇒ **空链 = 命令逐字不变**；
+> ② 未写布局但按声道数可补名（1/2/6/8 → mono/stereo/5.1/7.1）⇒ 只补名（**声道数不变**）；
+> ③ 补名后仍不一致或存在表外声道数 ⇒ 统一到**声道数最多**的可解析布局（否则退 `stereo`），
+> 未写布局的路**先补名再归一**（补名后 ffmpeg 才拿到正确上/下混系数——实测 5.1→stereo 是**真下混**：
+> 200/350/500/650/800/950Hz 六条单音在产物两声道里都在，不是丢声道）。
+> 顺带把 `plan.reason` 落进日志：此前 `reason` 既不回传也不打日志，连原有的"音频有无不一致，降级纯视频"也一直隐身。
+> **三、验收**
+> - 同脚本双臂：改后 `allunknown2/3/7` **RAISE → OK 且产物 6/5.1**、`real_unk_pair`（真 og 派生）转绿、
+>   `unk_then_st` 与 `st_then_unk` 产物布局**相同**（顺序不再决定）；基线 `stereo_base` 仍 2/stereo 且命令逐字未变。
+> - 新锁 **13 项**（纯函数 6 + `_transcode_args` 结构 3 + 真 ffmpeg E2E 4，含一条**日志留痕锁**）；
+>   后端全套 **Ran 688 OK (skipped=2)**（改前 675）· API **Ran 150 OK** · 导出计划不变式 **FAILED=0**，三条 rc 均 0。
+> - 预期红实测：`source_merge.py` 退回 HEAD 版跑新测试文件 ⇒ `ImportError: cannot import name 'resolve_audio_layouts'`；
+>   行为级红由 `pre_fix_report3.json`（RAISE + 2/stereo）承载。
+> **四、两条新登记（本批不做，只记）→ ✅ 两项均已于同日续63 补廿二 收口**（①的修法换了方向：不是探测提速，是不再报假故障）
+> ① `available_hevc_encoders()` 只看 ffmpeg 编码器列表、不看能否真开 ⇒ 本机每次合并**白跑 nvenc + qsv 两回**
+>   （各一次完整滤镜图初始化，stderr 分别 `Cannot load nvcuda.dll` / `Error creating a MFX session: -9`）；
+> ② **copy 腿**签名 = `(codec, sample_rate, channels)` **不含布局** ⇒ 6ch/unknown 与 6ch/5.1 判为"可流复制"，
+>   产物布局同样由第一段决定；本批只改转码腿（动签名会收紧 copy 命中率，需单独判据与回归）。
+> **产物**：代码笔 `mvp/src/media/ffmpeg/source_merge.py` + `mvp/tests/test_source_merge.py`（待提）；
+> 探针/日志（不入库）`work/merge_layout_20261018/{attribute_pre.py, attribute_pre2.py(自身缺陷判废),
+> attribute_pre3.py, pre_fix_report3.json, post_fix_report3.json, measure_collapse.py(余弦法因未对齐不作证据),
+> spectral_semantics.py, test_source_merge*.log, backend_suite*.log, api_suite.log, invariants.log}`。

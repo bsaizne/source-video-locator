@@ -43,6 +43,59 @@
 ## Current Task
 
 
+> **▶ 2026-10-18（续63 补廿四）— r23 已删 + cap 1.5 结论从单片扩到四片（含两条对我自己上一轮的订正）+ C 盘占用查清【现读这条】**
+> 口令「删旧包吧，然后继续，然后查查为什么做你这个项目我的 C 盘老被占用空间，不是都在 D 盘吗」。
+> **一、删旧包**：按「每出一代删最老」删 **r23**（释放 981,687,209B ≈ 936MB）。删前
+> `work/r26_pkg/precheck_delete_r23.py` 双验（期望值从 197 份 `.agent` 文本里抓、读数从 zip 里取）：
+> **r26 现役 / r25 / r24 三档与档案逐字一致、`testzip=None`**，r23 自身身份留痕
+> = 981,687,209B / 7,078 条目 / backend.exe 77,493,384B sha16 `537bcca18760de77`。⇒ 磁盘三档 = **r26/r25/r24**。
+> **二、⚠️ 订正我上一轮写的两条（都是我的错，原话留在档案里不悄悄改，只加订正）**
+> ① **「test1/2/3 原片不在本地 ⇒ 单片结论」= 错**。四片原片**全在本地 D 盘**：
+>   `D:\video\2.mkv` + `D:\ProjectXIXI\test{1,2,3}\test{n}-om.*`（逐个 `os.path.exists` 已验）。
+>   错因 = 我自己那条 grep 管道里的 `sed 's/.*: *//'` **把盘符 `D:` 一起吃掉了**，
+>   于是 `D:\ProjectXIXI\...` 显示成 `\ProjectXIXI\...`，我据此判成"UNC 不可达"。
+>   ⇒ 教训同族但形态新：**shell 文本处理能造出"看起来像证据"的假读数**；路径存在性一律用
+>   `os.path.exists` 逐条判，不要用 sed/grep 的输出反推。
+> ② **「cap1.5 逐 clip == 关闭扩宽」+「1.5 档卷轴区间 == 成片通道区间」= 只在 3/4 片成立**。
+>   test3 有 **1 条 clip 在 1.5 档仍被扩宽**（`clip62` core=[2939.000, 2943.167] 4.17s → 1.5 档
+>   [2939.000, 2945.000] 6.0s = **1.44×，正好在 1.5 阈内**），⇒ 该片的"卷轴 == 成片"不成立。
+>   口径改为：**cap 1.5 ≈ 关闭扩宽**（四片 234 条 clip 里 1 条仍扩宽），不是"等于关闭"。
+> **三、四片实测（`work/cap15_film_20261018/{four_cases.py,four_case_report.json,sheets_four.py,sheets4/}`）**
+> | 片 | clips | 两档不同 | cap 归因 | 至少一边不在切点 1.5/2.5 | Σ素材宽 2.5/1.5/core | 1.5==core | 1.5 卷轴==成片 |
+> |---|---|---|---|---|---|---|---|
+> | 2mkv | 72 | 12 | 10 | 47 / 37 | 161.2 / 135.4 / 135.4 | ✓ | ✓ |
+> | test1 | 45 | 7 | 7 | 42 / 35 | 103.0 / 84.6 / 84.6 | ✓ | ✓ |
+> | test2 | 47 | 9 | 8 | 25 / 17 | 92.2 / 76.7 / 76.7 | ✓ | ✓ |
+> | test3 | 70 | 11 | 9 | 37 / 28 | 142.7 / 125.0 / **123.2** | **✗ 1 条** | **✗** |
+> | **合计** | **234** | **39** | **34** | 151 / 117 | 499.1 / 421.7 / 419.9 | 3/4 片 | 3/4 片 |
+> 真剪点偏差（四片合并，44 个扩宽边界、±1.0s 窗逐帧自算像素差）：**32/44 有显著剪点，
+> 中位 |Δ| 0.249s、最大 0.917s，26/32 偏 >0.12s、11/32 >0.30s**；按符号 **18 正向 = 2.5 素材把邻镜头
+> ≤0.9s 带进卷轴（闪切）**、14 负向 = 少带 0.2~0.9s 本镜头内容。
+> 读图 **7/7 张**（新增三片各取头/尾最长两条 + test3 那条 1.5 仍扩宽的）：
+> test1 出点时两人扭打未完（丢 4.0s 收尾）／test2 出点丢掉守卫转身收尾 2.0s／test3 入点从精灵特写中段开始
+> （丢 2.0s）；2.5 侧 test3_clip33 素材头 **带进上一条镜头 ~0.4-0.8s**（与 18 条正向偏差同向对上）；
+> test3_clip62 的 1.5 档出点 2944.72 距真剪点 ~2944.9 只差一两帧 ⇒ **1.5 不是"砍掉收尾"，是"只允许到 1.44×"**。
+> **⇒ 补二十 的结论在四片上全部成立且更强**：cap **既不是「过渡不流畅」的成因、也不是解药**
+> （cap 归因 34/234 条，而"切口落在镜头中间"两档都有 117~151 条）；单片覆盖边界**已关闭**。
+> **四、C 盘占用查清（`work/cdisk_20261018/measure_c.py`，只量不删）**
+> | 写入点 | 量 | 谁写的 |
+> |---|---|---|
+> | `%TEMP%\rea-ghidra-*`（两个目录） | **6.39 GB** | **竞品逆向那条线**（Ghidra headless 工作区，10-17 00:12 / 02:14，内含 428MB 目标 exe 副本 + 分析缓存）⇒ 不是本项目 |
+> | `%APPDATA%\Video Locator AI` | 488 MB（`data` 377 + `Cache` 95） | **分发包数据根** + 包内验收（`attr_packaged_headless.appdata_dir()` 就指这里：index 116 + edited_cache 126 + models 88 + isc 30 + merged 11） |
+> | `~\.qoder-cn` | 735 MB | CLI 自身（会话/记忆/快照） |
+> | `%LOCALAPPDATA%\SourceVideoLocator` | 448 MB（edited_cache 228 + index 102 + models 88） | **源码树/探针态数据根**（`paths.app_data_dir()` = LOCALAPPDATA） |
+> | 工具链缓存 | ~1.1 GB | uv 406 + pip 386 + npm 191 + electron 116（venv 在 D，**缓存目录默认在 C**） |
+> | `%TEMP%\_MEI000022f02` | 90 MB | PyInstaller 解包残留（10-11，非正常退出留下的） |
+> | 我的探针/单测残留 | **仅 14.8 MB**（163 项） | `svl_*`/`tmp.*`；`tempfile.mkdtemp` 在单测 `setUpClass` 里**没有配平清理** ⇒ 每跑一次全套留 ~10 个目录（量小但在长） |
+> ⇒ **结论：代码与产物确实在 D，吃 C 的是"数据根按设计落 AppData"+"一次性逆向工作区 6.39GB"+"工具链缓存"**。
+> 可动的三项（**都等他点头**）：ⓐ 删 `%TEMP%\rea-ghidra-*` 回收 6.4GB（代价 = 竞品分析要重跑，Ghidra 分析那个 4GB 二进制是小时级）；
+> ⓑ 把验收 harness 的 `appdata_dir()` 指到 D（一行改动，回收 ~0.9GB 且以后不再往 C 写索引）；
+> ⓒ 给单测补 `tearDownClass` 清 temp + 删 `_MEI*` 残留（90MB）。
+> **五、现役未结项**：ⓐ **mac dispatch 仍待他一步**（令牌非交互取不到；且判据已订正 = 凡 `mvp/src` 改动 mac 就要重出，
+> 现役 mac 包 ≈ r24 代）；ⓑ 第五道包内合并验收**升不升为常设**；ⓒ 主线「过渡不流畅」三样外部输入；
+> ⓓ `og720-720` 相似度自相矛盾挂账。
+> **产物**：`work/r26_pkg/precheck_delete_r23.py`、`work/cap15_film_20261018/{four_cases.py,four_case_report.json,four_cases.log,sheets_four.py,sheets4/×7,sheets4_index.json}`、`work/cdisk_20261018/measure_c.py`。
+
 > **▶ 2026-10-18（续63 补廿三）— r26 出包（构建点 = 干净 commit `ad7cec4`）+ 包内新增第五道「合并腿」实测；mac dispatch 卡在令牌【现读这条】**
 > 口令「打包 r26 并在 mac 跑 dispatch」。**推远端已完成 = `e5b5d90..ad7cec4`（6 笔，fast-forward，无 force）**。
 > ⚠️ **mac dispatch 没做成（等他一步）**：非交互取令牌两条路都堵——`git credential fill` 返空；
@@ -111,44 +164,6 @@
 > **现役未结项**：主线「过渡不流畅」三样外部输入 · `og720-720` 挂账 · 下次出 r26 时删 r23 ·
 > ⚠️ 出包时 **mac 要另走 dispatch**（补廿一 + 本批都是纯后端 Python 改动）。
 
-> **▶ 2026-10-18（续63 补廿一）— source_merge 音频布局归一：全 unknown 硬失败 + 混合形态「顺序决定产物」两族一并修掉【现读这条】**
-> 口令：「先处理 source_merge 声道布局批次」（补二十 之后三件候选里的第一件）。**本批改了产品代码，未出包**
-> ⇒ 用户手上仍是 r25、**还没有这个修复**；纯后端 Python ⇒ **mac 包要另走 dispatch 才带上**。
-> **一、归因（改前双臂，读数在 `work/merge_layout_20261018/`）**：档案原话只写了"失败更早、硬失败非静默"，
-> 实测是**两族**，第二族比第一族更坏。
-> ① **硬失败（确证）**：所有输入都是「6 声道 + 容器未写布局」⇒ 每条编码器尝试都在**滤镜图协商阶段**抛
->   `Cannot select channel layout for the link between filters auto_aresample_0 and Parsed_concat_{8,12,28}`
->   （n=2/3/7 全复现）⇒ `MediaError`；`tmp` 有清理 + `_valid_output` 有拦 ⇒ **不留坏缓存**（这条档案说对了）。
-> ② **静默改写（档案没记，本轮新查）**：混合形态**不报错**，但**产物声道结构 = 第一路的布局**
->   （实测 `[5.1,stereo]→6/5.1`、`[stereo,5.1]→2/stereo`、`[unknown6,stereo]→2/stereo`）
->   ⇒ 用户多段原片合并后的声道数由**输入顺序**决定，且**零留痕**。
-> 真形源不是手造的：`C:\Users\Bsaizne\Downloads\clips\clips\og*.mp4`（用户从本产品导出）**35 个文件逐个探过 = 6ch/unknown**；
-> 成因链 = `5.1(side)` 编进 MP4 后布局信息丢失（与 `e79d4ee` 同一条）。测试夹具用 `pan=5.1(side)|…` 复现该形制，
-> 并有一条 `test_fixture_is_actually_unnamed` 锁住"夹具真的是 unknown"。
-> **二、修法**（`mvp/src/media/ffmpeg/source_merge.py`：纯函数 + 一处接线 + 一处日志）
-> `resolve_audio_layouts()` 给每路算"要依次施加的布局链"：① 都写明且全等 ⇒ **空链 = 命令逐字不变**；
-> ② 未写布局但按声道数可补名（1/2/6/8 → mono/stereo/5.1/7.1）⇒ 只补名（**声道数不变**）；
-> ③ 补名后仍不一致或存在表外声道数 ⇒ 统一到**声道数最多**的可解析布局（否则退 `stereo`），
-> 未写布局的路**先补名再归一**（补名后 ffmpeg 才拿到正确上/下混系数——实测 5.1→stereo 是**真下混**：
-> 200/350/500/650/800/950Hz 六条单音在产物两声道里都在，不是丢声道）。
-> 顺带把 `plan.reason` 落进日志：此前 `reason` 既不回传也不打日志，连原有的"音频有无不一致，降级纯视频"也一直隐身。
-> **三、验收**
-> - 同脚本双臂：改后 `allunknown2/3/7` **RAISE → OK 且产物 6/5.1**、`real_unk_pair`（真 og 派生）转绿、
->   `unk_then_st` 与 `st_then_unk` 产物布局**相同**（顺序不再决定）；基线 `stereo_base` 仍 2/stereo 且命令逐字未变。
-> - 新锁 **13 项**（纯函数 6 + `_transcode_args` 结构 3 + 真 ffmpeg E2E 4，含一条**日志留痕锁**）；
->   后端全套 **Ran 688 OK (skipped=2)**（改前 675）· API **Ran 150 OK** · 导出计划不变式 **FAILED=0**，三条 rc 均 0。
-> - 预期红实测：`source_merge.py` 退回 HEAD 版跑新测试文件 ⇒ `ImportError: cannot import name 'resolve_audio_layouts'`；
->   行为级红由 `pre_fix_report3.json`（RAISE + 2/stereo）承载。
-> **四、两条新登记（本批不做，只记）→ ✅ 两项均已于同日续63 补廿二 收口**（①的修法换了方向：不是探测提速，是不再报假故障）
-> ① `available_hevc_encoders()` 只看 ffmpeg 编码器列表、不看能否真开 ⇒ 本机每次合并**白跑 nvenc + qsv 两回**
->   （各一次完整滤镜图初始化，stderr 分别 `Cannot load nvcuda.dll` / `Error creating a MFX session: -9`）；
-> ② **copy 腿**签名 = `(codec, sample_rate, channels)` **不含布局** ⇒ 6ch/unknown 与 6ch/5.1 判为"可流复制"，
->   产物布局同样由第一段决定；本批只改转码腿（动签名会收紧 copy 命中率，需单独判据与回归）。
-> **产物**：代码笔 `mvp/src/media/ffmpeg/source_merge.py` + `mvp/tests/test_source_merge.py`（待提）；
-> 探针/日志（不入库）`work/merge_layout_20261018/{attribute_pre.py, attribute_pre2.py(自身缺陷判废),
-> attribute_pre3.py, pre_fix_report3.json, post_fix_report3.json, measure_collapse.py(余弦法因未对齐不作证据),
-> spectral_semantics.py, test_source_merge*.log, backend_suite*.log, api_suite.log, invariants.log}`。
-
 ## Completed
 
 - 历史完成项见 `.agent/archive/STATE_history_20261007.md`（Current Task 退休块续14~续61）、
@@ -162,6 +177,14 @@
 
 ## Current Problem
 
+- ✅ **r23 已删（2026-10-18 续63 补廿四，双验通过）**：磁盘三档 = **r26/r25/r24**，释放 ≈936MB。
+- ⚠️ **上一轮我自己两条读数被四片实测订正**：① 「test1/2/3 原片不在本地」= 我的 `sed` 把盘符 `D:`
+  吃掉造成的误判（四片原片全在 D）；② 「cap1.5 逐 clip == 关闭扩宽」只在 3/4 片成立
+  （test3 有 1 条 1.44× 仍扩宽）⇒ 口径改为 **cap1.5 ≈ 关闭扩宽**。四片扩测后**结论不变且更强**：
+  cap 归因 34/234 条，「切口落在镜头中间」两档都 117~151 条 ⇒ **cap 非成因亦非解药**，单片覆盖边界已关闭。
+- ✅ **C 盘占用查清**：大头是 `%TEMP%\rea-ghidra-*` **6.39GB（竞品逆向那条线）**；本项目侧 =
+  产品数据根按设计落 AppData（Roaming 488MB + Local 448MB，**包内验收每次往这里写索引**）
+  + 工具链缓存 ~1.1GB + 我的探针/单测残留仅 14.8MB。可动三项**都等他点头**（见补廿四 块）。
 - ✅ **r26 已出（2026-10-18 续63 补廿三，构建点 = 干净 commit `ad7cec4`）**：`build-release.ps1` rc=0，
   五道包内验收串行逐条 rc=0（bundle 33 PASS / render / 不变式 / 冒烟 + **新增第五道包内合并腿实测**
   ⇒ 证得补廿一/廿二 的修复**在分发包里生效**）；zip 身份两把尺子逐字相同
@@ -559,4 +582,4 @@
 
 ## Last Updated
 
-2026-10-18 01:52
+2026-10-18 02:27

@@ -8,28 +8,30 @@
 
 ## P0 — Current
 
-> **▶ 2026-10-18（续63 补廿三）— r26 已出（构建点 = 干净 commit `ad7cec4`）+ 包内第五道「合并腿」实测；mac dispatch 卡在令牌【现读这条】**
-> 口令「打包 r26 并在 mac 跑 dispatch」。**已推远端 `e5b5d90..ad7cec4`（6 笔 fast-forward，无 force）**。
-> ⚠️ **mac dispatch 未完成，等他一步**：非交互取令牌两条路都堵（`credential fill` 返空；
-> `credential-manager get` 首跑挂死 60s、加 `GCM_INTERACTIVE=never` 明确报 "Cannot prompt"）
-> ⇒ 按规矩停手不重试。入口 = Actions → **H3 macOS MPS POC + MVP tests** → Run workflow（ref=master，
-> head `ad7cec4`）；或他本机交互取一次令牌我再 dispatch。
-> ⚠️ **订正一条档案判据**：补十九 写的「`mvp/ui` 零改动 ⇒ mac 不需 dispatch」只对一半——mac 的 backend
-> 由 CI 从检出 ref 现编 ⇒ **凡 `mvp/src` 改动 mac 就要重出**。现役 mac 包（head `c789670` ≈ r24）**不含**
-> r25 两笔（音轨回退 + cap 1.5）也不含补廿一/廿二。
-> **构建 rc=0**（`build-release.ps1` 四步）。**五道包内验收串行、逐条 rc=0**：bundle **33 PASS/0** ·
-> render **0**（64 段 / 136.344 vs 136.366s / h264_amf / 60.1s，与 r25 逐字同）· 不变式 **0** ·
-> 冒烟 **AFTER_KILL=0** · **新增第五道**（真起包内 backend 打 `/api/source/merge`）：两个「6ch+未写布局」输入
-> 合并 `mode=transcode` 且产物 **`6/5.1`**、两种先后顺序产物布局**相同**、支持档出现 `source merge plan:` 留痕
-> ⇒ **补廿一/廿二 的修复确认在分发包里生效**（四道老验收一条都不覆盖合并腿）。
-> **zip**（两把尺子逐字同）= `Video-Locator-win-x64-20261018r26.zip` **981,697,844B**（对 r25 +4,239B）/
-> 条目 **7,079**（6,993 文件 + 86 空目录）/ `testzip=None` / `backend.exe 77,502,636B sha16 9410f2e7baa948d6`
-> **zip 内 == 磁盘**（对 r25 +4,611B，与改动面相容）/ `bridge.js` **与 r25 逐字同**（零 JS 改动）/
-> **与 r25 文件名差集 0/0**。
-> **覆盖边界**：M1 的"改前会 500"是源码树实测，**包内改前臂没跑**（r25 的 win-unpacked 已被覆盖）；
-> 第五道是否升为常设待拍板；分发包现**四档**（r26/r25/r24/r23）。
-> **待口令**：ⓐ mac dispatch；ⓑ 删 r23（删前双验 r25/r24 逐字一致）。
-> 明细 = STATE `Current Task` 补廿三 块；产物 `work/r26_pkg/`。
+> **▶ 2026-10-18（续63 补廿四）— r23 已删（三档=r26/r25/r24）+ cap1.5 结论扩到四片并订正两条 + C 盘占用查清【现读这条】**
+> 口令「删旧包吧，然后继续，然后查查为什么做你这个项目我的 C 盘老被占用」。
+> **删档**：`work/r26_pkg/precheck_delete_r23.py` 双验通过（期望值从 197 份 `.agent` 文本抓、读数从 zip 里取，
+> r26/r25/r24 与档案逐字一致）⇒ 删 r23，释放 981,687,209B ≈ **936MB**。
+> **⚠️ 订正我上一轮两条**：① 「test1/2/3 原片不在本地」**是错的**——四片原片全在 D（`D:\ProjectXIXI\test*`、
+> `D:\video\2.mkv`），错因 = 我的 `sed 's/.*: *//'` **把盘符 `D:` 一起吃掉**，输出看着像 UNC ⇒
+> 教训：**路径存在性一律 `os.path.exists` 逐条判，别拿 sed/grep 输出反推**（shell 文本处理能造假读数）。
+> ② 「cap1.5 逐 clip == 关闭扩宽 / 1.5 卷轴 == 成片」**只在 3/4 片成立**：test3 有 1 条 1.5 档仍扩宽
+> （core 4.17s → 6.0s = **1.44×，正落在阈内**）⇒ 口径改为 **cap1.5 ≈ 关闭扩宽**（四片 234 条里 1 条）。
+> **四片实测**：clips 72/45/47/70；两档不同 12/7/9/11（合计 39）；**cap 归因 10/7/8/9 = 34**；
+> 「至少一边不在切点」1.5 档 47/42/25/37 vs 2.5 档 37/35/17/28；Σ素材宽 499.1/421.7/419.9s（2.5/1.5/core）。
+> 真剪点偏差（44 边界，逐帧自算）：**32/44 有显著剪点、中位 0.249s、最大 0.917s、26 条 >0.12s**；
+> **18 正向 = 2.5 素材把邻镜头 ≤0.9s 带进卷轴（闪切）**、14 负向 = 少带 0.2~0.9s。读图 7/7 与符号同向对上。
+> ⇒ **补二十 的结论在四片上成立且更强：cap 既不是「过渡不流畅」的成因、也不是解药；单片覆盖边界已关闭。**
+> **C 盘占用查清**（只量不删）：`%TEMP%\rea-ghidra-*` **6.39GB = 竞品逆向那条线**（不是本项目）；
+> 产品数据根按设计落 C = `Roaming\Video Locator AI` 488MB（**包内验收就往这里写索引**）+
+> `Local\SourceVideoLocator` 448MB；`~\.qoder-cn` 735MB；工具链缓存 ~1.1GB（uv/pip/npm/electron，venv 在 D 但缓存在 C）；
+> PyInstaller `_MEI*` 残留 90MB；**我的探针/单测残留仅 14.8MB**（单测 `setUpClass` 的 mkdtemp 没配平清理）。
+> ⇒ 可动三项**都等他点头**：ⓐ 删 ghidra 工作区回收 6.4GB（代价 = 4GB 二进制的 Ghidra 分析要重跑，小时级）；
+> ⓑ 把验收 harness 的 `appdata_dir()` 指到 D（一行，回收 ~0.9GB 且以后不再往 C 写索引）；
+> ⓒ 单测补 `tearDownClass` 清 temp + 删 `_MEI*`。
+> **未结**：ⓐ **mac dispatch 仍待他一步**（令牌非交互取不到；判据已订正 = 凡 `mvp/src` 改动 mac 就要重出，
+> 现役 mac 包 ≈ r24 代）；ⓑ 第五道包内合并验收升不升常设；ⓒ 主线三样外部输入；ⓓ `og720-720` 挂账。
+> 明细 = STATE `Current Task` 补廿四 块；产物 `work/{r26_pkg,cdisk_20261018,cap15_film_20261018/}`。
 
 ## P1 — Next
 
