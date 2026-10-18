@@ -64,8 +64,32 @@
 > **P3 5 条（有峰被「3×邻域中位」杀；读图确认 2 条真切点：t=1831 屋顶→火焰 @t+1.2s、
 > t=6861 双人全景→遮挡近景 @t+0.4s）** / P1 1 条 / **?CLS腿应命中 1 条（cls_max 0.718 远高于门 0.30 却漏
 > ⇒ **疑似真缺陷，优先级最高**）**。
+> **▶ 2026-10-18（续65）— 结案「CLS 0.718 疑似缺陷」：是假缺陷；但挖出真漏检 + verdict 链结构缺陷 + 门扫参零和【现读这条】**
+> 口令「继续」。**全程只读**（`mvp/src` 零改动、索引未重建、无新依赖、未出包）。
+> **一、结论翻转**：t=3782 那条 **CLS 腿命中了、边界也产出了**（3780.0）——不是缺陷。
+> 探针 `work/boundary_20261018/cls718_probe.py` 逐环复刻生产链：CLS 峰 **0.7185 @t=3780.0**（local_peak、
+> ≥0.30、**gate 通过 dist=0.2531/dev=0.2527**）· 像素腿候选 **3780.3**（gate 通过）· 融合后两者同位置被 NMS
+> 合成一条 ⇒ `scenes.npy` 确有 **3780.0**。
+> **二、错在哪（两处都是我的，原话留档）**：① `t1_missed_attr.py` **判定窗 ±1.5s 窄于取峰窗 WIN=2.0s** ——
+> 边界落在 1.5~2.0s 之间时，脚本一边拿它当证据一边判它不存在；本案 3780 距 3782 = **恰 2.00s** ⇒ 被判 has_bound=False。
+> ② 该脚本 verdict 是 **if-elif 链，CLS 腿排最后** ⇒ 被像素腿否掉的条目**永远走不到 CLS 分支**，
+> 于是「52 条只 1 条标 CLS」被误读成「CLS 腿只对 1 条有信号」。独立复算（`cls_arm_coverage.py`）=
+> **局部极大且 ≥0.30 共 11 条**（非 1 条），过 gate 后 2 条**全部落在已有边界上** ⇒ 真实净漏 = **0**。
+> **三、目检坐标自己偏了 ~1.7s**：0.25fps 接触表（4s 一格取中点）在 5fps 细采样下显示真切点在 **3780.3**
+> （`fine_429_3782.png`：3777~3780.0 同一暗场景 → **3780.2~3780.4 切**；10fps 像素 `3780.3=0.1865` 为全窗第一，
+> 是第二名 2.3 倍）⇒ 生产边界 3780.0 误差 0.3s = **命中**，是**目检坐标偏晚**不是引擎漏。
+> **四、同批确有真漏检（兄弟条）**：`idx=429 t=3814` → 像素腿 ±2s **空集**（窗内最大 0.0838 < 绝对门 0.12）；
+> CLS 腿 **0.4411 @3816.0 通过**；**持续性门 dist=0.0973 < 0.10 差 0.0027 被否** ⇒ 不出边界。
+> 5fps 细采样确认真切点 **3815.6**（人物灰衣背影 → 暗处火焰）⇒ **信号对、是门杀的**。
+> **五、但放宽门是零和（可证伪检查已做）**：`gate_sweep.py` 生产同款判据扫参 —— 现役 0.842；
+> best **dist=0.06 → 0.845（+0.003 噪声级）**，且 ±0.5s 口径变差、边界数 +4%；**gate 全关 0.781（崩）**。
+> ⇒ **调门不是解**；要救这类只能给 CLS 腿**独立门**（判据改动，需单独立项拍板）。
+> **已落档**：`mvp/docs/FINDINGS_BOUNDARY_PRECISION_20261018.md` **§9**（自包含，含 6 条复跑命令）。
 > **未结项**：① 接 scn3（bump scn2→scn3 + 出包 r27 + mac 另走 dispatch）② 改相对门（P3 那 5 条，上限 4%）
-> ③ **查 CLS 0.718 异常** ④ 主线「过渡不流畅」三样外部输入 ⑤ 下次出包删 r24（precheck_delete_r23.py 改 EXPECT）。
+> ③ ~~查 CLS 0.718 异常~~ = **本节已结案（假缺陷）**，剩余「CLS 腿独立门」属新立项待拍板
+> ④ 主线「过渡不流畅」三样外部输入 ⑤ 下次出包删 r24。
+> **新教训（写进 §9.6 第 4 条）**：0.25fps 接触表成的坐标单条不确定度是 **±2s 级**，不能用它论证「精确到秒的漏检」；
+> §8.1 那条「判据窗口必须匹配样本精度」在**数据源侧**同样成立。
 
 > **▶ 2026-10-18（续63 补廿四）— r23 已删 + cap 1.5 结论从单片扩到四片（含两条对我自己上一轮的订正）+ C 盘占用查清【现读这条】**
 > 口令「删旧包吧，然后继续，然后查查为什么做你这个项目我的 C 盘老被占用空间，不是都在 D 盘吗」。
@@ -122,41 +146,6 @@
 >   ⓓ `og720-720` 相似度自相矛盾挂账。
 > **产物**：`work/r26_pkg/precheck_delete_r23.py`、`work/cap15_film_20261018/{four_cases.py,four_case_report.json,four_cases.log,sheets_four.py,sheets4/×7,sheets4_index.json}`、`work/cdisk_20261018/measure_c.py`。
 
-> **▶ 2026-10-18（续63 补廿三）— r26 出包（构建点 = 干净 commit `ad7cec4`）+ 包内新增第五道「合并腿」实测；mac dispatch 卡在令牌【现读这条】**
-> 口令「打包 r26 并在 mac 跑 dispatch」。**推远端已完成 = `e5b5d90..ad7cec4`（6 笔，fast-forward，无 force）**。
-> ⚠️ **mac dispatch 没做成（等他一步）**：非交互取令牌两条路都堵——`git credential fill` 返空；
-> `git credential-manager get` 首跑**挂死 60s**，加 `GCM_INTERACTIVE=never` 后明确报
-> `Cannot prompt because user interactivity has been disabled`（rc=255）⇒ 按规矩**停手不重试、不弹窗**。
-> 入口：仓库 `bsaizne/source-video-locator` → Actions → **H3 macOS MPS POC + MVP tests** → Run workflow
-> （ref=master，head 应为 `ad7cec4`）；或他本机交互跑一次 `git credential-manager get` 让令牌可用，我再 dispatch。
-> ⚠️ **顺带订正一条档案判据**（就在他要决定的这件事上）：补十九 块写的「`mvp/ui` 零改动 ⇒ mac 不需另走
-> dispatch」**只对了一半**——mac 包的 backend 由 CI 从检出 ref **现编**（workflow 有
-> `Build backend bundle (PyInstaller onedir…)`）⇒ **凡 `mvp/src` 改动 mac 就得重出**。
-> 所以现役 mac 包（10-16 dispatch，head `c789670` ≈ r24 代）**不含** r25 两笔（`e79d4ee` 音轨布局回退、
-> `36acc50` cap 1.5）也**不含**补廿一/补廿二。判据改为：**`mvp/src` 或 `mvp/ui` 任一改动 ⇒ mac 需 dispatch**。
-> **构建** = `mvp/ui/scripts/build-release.ps1` 四步 rc=0（`work/r26_pkg/build_r26.log`，[3/4] `Build complete!`）。
-> **五道包内验收串行、逐条取 rc（全 0）**：
-> · bundle **33 PASS / FAILED=0**（12 行 `locate leg=` 齐、跳格 48 分位口径对得上）
-> · render **FAILED=0**（64 段 / 136.344 vs 136.366s / h264_amf / wall 60.1s，与 r25 **逐字同**）
-> · 导出计划不变式 **FAILED=0**（4 片 × 4 通道）· 启动冒烟 **FAILED=0 / AFTER_KILL=0**
-> · **新增第五道 `work/r26_pkg/accept_packaged_merge.py` FAILED=0** = 真起包内 `backend.exe` + 包内 ffmpeg/ffprobe
->   打 `POST /api/source/merge`：M1 两个「6ch+未写布局」输入合并 `mode=transcode` 且产物 **`6/5.1`**、
->   夹具锁确为 `6/unknown`、M2 两种先后顺序产物布局**相同**（改前是 `6/5.1` vs `2/stereo`）、
->   M3 包内支持档出现 `source merge plan:` 留痕 ⇒ **补廿一 + 补廿二 的修复确认在分发包里生效**。
-> **zip 身份**（两把尺子读数逐字相同：`make_zip_r26.py` 与独立的 `work/r17_pkg/zip_identity.py`）
-> = `Video-Locator-win-x64-20261018r26.zip` **981,697,844B**（对 r25 **+4,239B**）/ 条目 **7,079**
-> （文件 6,993 + 空目录 86，与 r25 同）/ `testzip=None` / `root_form=flat` /
-> `backend.exe 77,502,636B sha16 9410f2e7baa948d6` **zip 内 == 磁盘**（对 r25 的 77,498,025B **+4,611B**，
-> 与本批源码改动面相容）/ `bridge.js 8,882B sha16 7d3e0427e3d3a4db` **与 r25 逐字相同**（本批零 JS 改动）/
-> **与 r25 文件名集合差集 = 0/0** / 渲染层含 `/api/tasks/export` 的资产仍命中 `index--VHmdytl.js`。
-> **覆盖边界（如实）**：① M1 那句"改前会 500"来自**源码树实测**（`pre_fix_report3.json` 的 RAISE），
-> **包内改前臂没跑**——r25 的 `win-unpacked` 已被本批构建覆盖，为补一条对照重解 981MB 包不值；
-> ② 第五道目前住在 `work/r26_pkg/`，**升不升为常设（`mvp/scripts/`）待他拍板**；
-> ③ 分发包现有**四档**（r26/r25/r24/r23）。
-> **待口令**：ⓐ mac dispatch（见上）；ⓑ 按「每出一代删最老」应删 **r23**——删前照例双验 r25/r24 逐字一致
-> （脚本 `work/r25_pkg/precheck_delete_r22.py` 改 EXPECT 即可复用）。
-> **产物**：`work/r26_pkg/{build_r26.log, accept_{bundle,render}_r26.log, invariants_r26.log, startup_r26.log,
-> accept_packaged_merge.py, accept_merge_r26.log, make_zip_r26.py, make_zip_r26.log, dispatch_mac.py}`。
 
 ## Completed
 
@@ -172,6 +161,13 @@
 ## Current Problem
 
 - ✅ **续64 边界线收口（2026-10-18）**: 见 Current Task 顶部块；B 线两窗口 AUC 0.555/0.553 判负；未接线、未出包、未提交。
+- ✅ **「CLS 0.718 疑似缺陷」已结案 = 假缺陷（续65，2026-10-18）**：边界早在 **3780.0**，CLS 腿与像素腿
+  都命中同一位置并被 NMS 合成一条。假象来源 = ① 归因脚本 `has_bound` 用 ±1.5s，**比取峰窗 WIN=2.0s 窄**
+  （本案恰差 2.00s）② verdict 是 if-elif，CLS 腿排在像素腿之后 ⇒ 被 P 腿否掉的条目永远走不到 CLS 分支。
+  独立复算 CLS 腿真实覆盖 **11 条**（非 1），过门后净漏 **0**。⚠️ 我未再改动 `mvp/src`。
+- ⚠️ **同批挖出的真漏检与零和结论**：`t=3814` 真切点 3815.6、CLS 峰 3816.0 通过，但持续性门
+  `dist=0.0973 < 0.10` **差 0.0027** 被否；扫参证明放宽门 = **F1 +0.003 而 ±0.5s 口径变差**（gate 全关崩到 0.781）
+  ⇒ 调门不是解，要救只能给 CLS 腿**独立门**（新立项，待拍板）。
 - ⚠️ 我第一版用 ±0.5s 窗口对 ±2~4s 精度的样本判负，**已作废重算**。
 - ✅ **r23 已删（2026-10-18 续63 补廿四，双验通过）**：磁盘三档 = **r26/r25/r24**，释放 ≈936MB。
 - ⚠️ **上一轮我自己两条读数被四片实测订正**：① 「test1/2/3 原片不在本地」= 我的 `sed` 把盘符 `D:`
@@ -349,7 +345,10 @@
 
 ## Next Actions
 
-> **▶ 交接指针（2026-10-18 续64）**: `archive/HANDOFF_20261018_boundary_precision.md`（读数索引、三处我自己的错、未结项 1~5、复跑命令）。
+> **▶ 交接指针（2026-10-18 续65）**: **先读** `Current Task` 顶部「续65」块 + `mvp/docs/FINDINGS_BOUNDARY_PRECISION_20261018.md`
+> **§9**（本节自包含：探针读数、两处口径错、目检偏移证据、真漏检、门扫参零和、6 条复跑命令）。
+> 大背景（分型/网格损失/scn3 预演/B 线判负）读 `archive/HANDOFF_20261018_boundary_precision.md`
+> —— ⚠️ 其 **§4 未结项 1「查 CLS 0.718」已由 续65 结案 = 假缺陷**，别再照着它去查。
 
 > 现役未结项以 `Current Task` 顶部「续63 补廿四」块 + 本表为准；**交接读这一份就够**：
 > `.agent/archive/HANDOFF_20261018_r26_closeout.md`（自包含：这一夜五批的读数索引、七条被打掉的旧结论、

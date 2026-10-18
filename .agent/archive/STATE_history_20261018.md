@@ -380,3 +380,39 @@
 > leftover_arms_pre.json,leftover_arms_post.json,test_leftover*.log,backend_suite3.log,api_suite3.log,invariants3.log}`。
 > **现役未结项**：主线「过渡不流畅」三样外部输入 · `og720-720` 挂账 · 下次出 r26 时删 r23 ·
 > ⚠️ 出包时 **mac 要另走 dispatch**（补廿一 + 本批都是纯后端 Python 改动）。
+
+> **▶ 2026-10-18（续63 补廿三）— r26 出包（构建点 = 干净 commit `ad7cec4`）+ 包内新增第五道「合并腿」实测；mac dispatch 卡在令牌【现读这条】**
+> 口令「打包 r26 并在 mac 跑 dispatch」。**推远端已完成 = `e5b5d90..ad7cec4`（6 笔，fast-forward，无 force）**。
+> ⚠️ **mac dispatch 没做成（等他一步）**：非交互取令牌两条路都堵——`git credential fill` 返空；
+> `git credential-manager get` 首跑**挂死 60s**，加 `GCM_INTERACTIVE=never` 后明确报
+> `Cannot prompt because user interactivity has been disabled`（rc=255）⇒ 按规矩**停手不重试、不弹窗**。
+> 入口：仓库 `bsaizne/source-video-locator` → Actions → **H3 macOS MPS POC + MVP tests** → Run workflow
+> （ref=master，head 应为 `ad7cec4`）；或他本机交互跑一次 `git credential-manager get` 让令牌可用，我再 dispatch。
+> ⚠️ **顺带订正一条档案判据**（就在他要决定的这件事上）：补十九 块写的「`mvp/ui` 零改动 ⇒ mac 不需另走
+> dispatch」**只对了一半**——mac 包的 backend 由 CI 从检出 ref **现编**（workflow 有
+> `Build backend bundle (PyInstaller onedir…)`）⇒ **凡 `mvp/src` 改动 mac 就得重出**。
+> 所以现役 mac 包（10-16 dispatch，head `c789670` ≈ r24 代）**不含** r25 两笔（`e79d4ee` 音轨布局回退、
+> `36acc50` cap 1.5）也**不含**补廿一/补廿二。判据改为：**`mvp/src` 或 `mvp/ui` 任一改动 ⇒ mac 需 dispatch**。
+> **构建** = `mvp/ui/scripts/build-release.ps1` 四步 rc=0（`work/r26_pkg/build_r26.log`，[3/4] `Build complete!`）。
+> **五道包内验收串行、逐条取 rc（全 0）**：
+> · bundle **33 PASS / FAILED=0**（12 行 `locate leg=` 齐、跳格 48 分位口径对得上）
+> · render **FAILED=0**（64 段 / 136.344 vs 136.366s / h264_amf / wall 60.1s，与 r25 **逐字同**）
+> · 导出计划不变式 **FAILED=0**（4 片 × 4 通道）· 启动冒烟 **FAILED=0 / AFTER_KILL=0**
+> · **新增第五道 `work/r26_pkg/accept_packaged_merge.py` FAILED=0** = 真起包内 `backend.exe` + 包内 ffmpeg/ffprobe
+>   打 `POST /api/source/merge`：M1 两个「6ch+未写布局」输入合并 `mode=transcode` 且产物 **`6/5.1`**、
+>   夹具锁确为 `6/unknown`、M2 两种先后顺序产物布局**相同**（改前是 `6/5.1` vs `2/stereo`）、
+>   M3 包内支持档出现 `source merge plan:` 留痕 ⇒ **补廿一 + 补廿二 的修复确认在分发包里生效**。
+> **zip 身份**（两把尺子读数逐字相同：`make_zip_r26.py` 与独立的 `work/r17_pkg/zip_identity.py`）
+> = `Video-Locator-win-x64-20261018r26.zip` **981,697,844B**（对 r25 **+4,239B**）/ 条目 **7,079**
+> （文件 6,993 + 空目录 86，与 r25 同）/ `testzip=None` / `root_form=flat` /
+> `backend.exe 77,502,636B sha16 9410f2e7baa948d6` **zip 内 == 磁盘**（对 r25 的 77,498,025B **+4,611B**，
+> 与本批源码改动面相容）/ `bridge.js 8,882B sha16 7d3e0427e3d3a4db` **与 r25 逐字相同**（本批零 JS 改动）/
+> **与 r25 文件名集合差集 = 0/0** / 渲染层含 `/api/tasks/export` 的资产仍命中 `index--VHmdytl.js`。
+> **覆盖边界（如实）**：① M1 那句"改前会 500"来自**源码树实测**（`pre_fix_report3.json` 的 RAISE），
+> **包内改前臂没跑**——r25 的 `win-unpacked` 已被本批构建覆盖，为补一条对照重解 981MB 包不值；
+> ② 第五道目前住在 `work/r26_pkg/`，**升不升为常设（`mvp/scripts/`）待他拍板**；
+> ③ 分发包现有**四档**（r26/r25/r24/r23）。
+> **待口令**：ⓐ mac dispatch（见上）；ⓑ 按「每出一代删最老」应删 **r23**——删前照例双验 r25/r24 逐字一致
+> （脚本 `work/r25_pkg/precheck_delete_r22.py` 改 EXPECT 即可复用）。
+> **产物**：`work/r26_pkg/{build_r26.log, accept_{bundle,render}_r26.log, invariants_r26.log, startup_r26.log,
+> accept_packaged_merge.py, accept_merge_r26.log, make_zip_r26.py, make_zip_r26.log, dispatch_mac.py}`。
