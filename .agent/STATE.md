@@ -150,6 +150,20 @@
 
 ## Current Problem
 
+- ✅ **真索引 `refresh_derived` 端到端已跑通（续70，2026-10-19）= 续67 未结项③结案**。
+  test1 真索引（8221s / 913 场景）全程 **398.6s（6.6 分钟）**，9 项核验 **FAILED=0**：
+  `features.npy` mtime 未变（**证没重抽 CLS**）· 场景数 913 不变 · `scene_strength` 落盘且长度==913、第 0 个==1.0 ·
+  `feature_version = ...+scn4+evt1` · `scene_feats/events/event_feats` 全部落盘。
+  🔥 **更强的一条：重建前后五张派生表 + `index.json` 逐字节 SHA256 完全一致** ⇒ `refresh_derived` 是**真幂等**的，
+  不是「碰巧跑过」。这同时证了 scn3 侧车写的值与首次构建完全同源。
+  ⚠️ **订正一条旧记录**：续66/67 写「真索引 refresh_derived 重扫 8221s@10fps >6min 且**无进度输出**，停掉了」——
+  **「无进度输出」是我的工具用法问题，不是代码缺陷**：当时用 `Tee-Object` 整段结束才落盘。
+  本次改用 `python -u` + 直接重定向 `>`，进度每 512 帧一行、可见到 99.5%。
+  ⚠️ **又一个坑（留档）**：首版脚本 `FeatureStore(config=cfg)` 构造报 TypeError ——
+  正确姿势是**复用生产 `SourceLocatorService(config=cfg).store`**，这样走的是生产的 24 字段注入路径。
+  自己 new + 手工复制 scene_* 字段**正是 scn4 漏接的那条路**（`locator_service.py:226-234` 的注释已警告过）。
+  产物：`work/boundary_20261018/{rerun_refresh_derived_test1.py,refresh_derived.log,refresh_derived_test1.json,idx_backup_pre_refresh/}`。
+
 - ✅ **scn5（TN 切原片侧）已跑并判负（续69，2026-10-19）**：假设=「原片侧换 TN 切点可否救 15 段漏切」。
   **结论：救不了。** TN 原片侧只出 **375 条**切点（我方 912）⇒ **TN 比我们更粗**，不是更细。
   15 段真漏切里 TN 段内切点 8 个，但 **9/10 落在已有边界 (<3s)** ⇒ **只有 1 个真·段内漏切**（`idx210@1962.33`，

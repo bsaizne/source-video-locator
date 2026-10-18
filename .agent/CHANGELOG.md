@@ -1,5 +1,73 @@
 # CHANGELOG
 
+## 2026-10-19（续70）— 真索引 refresh_derived 端到端跑通（6.6 分钟 / 9 项全 PASS / **逐字节幂等**）= 续67 未结项③结案
+
+口令「补吧」。**零 `mvp/src` 改动**；本批只跑探针 + 落档。
+
+### 1. 为什么补这一条
+
+scn3（10fps 原始边界）+ 侧车 `scene_strength` 的**链路**此前只用合成片证过（`verify_e2e_synth.py`），
+真索引侧只用 `verify_equiv.py` 分头证了等价性与精度 ⇒ **「真索引整链路一次跑通」一直没直接证据**。
+续66/67 记录的原因：「重扫 8221s@10fps 实测 >6min 且**无进度输出**，当时停掉了」。
+
+### 2. 结果：跑通，9 项核验 FAILED=0
+
+| 项 | 读数 |
+|---|---|
+| 墙钟 | **398.6s（6.6 分钟）** |
+| `features.npy` mtime | **未变**（1788632223.815 → 1788632223.815）⇒ **证没重抽 CLS** |
+| 场景数 | **913 不变** |
+| `scene_strength.npy` | 落盘 · 长度 **913 == 场景数** · 第 0 个 **1.0** |
+| `feature_version` | `handwritten_vits14_cls_384d@1_l2+**scn4**+evt1` |
+| `scene_feats` / `events` / `event_feats` | 全部落盘 |
+| pixel_scan 进度 | 0% → 99.5%，**每 512 帧一行** |
+
+### 3. 🔥 更强的一条：重建前后**逐字节一致**
+
+与跑前备份做 SHA256 对比：
+
+```
+scenes.npy          IDENTICAL  (7432 B)
+scene_feats.npy     IDENTICAL  (1402496 B)
+scene_strength.npy  IDENTICAL  (3780 B)
+events.npy          IDENTICAL  (2056 B)
+event_feats.npy     IDENTICAL  (370304 B)
+index.json          IDENTICAL
+```
+
+⇒ **`refresh_derived` 是真幂等的**，不是「碰巧跑过」；同时证明侧车写的值与首次构建**完全同源**。
+
+### 4. ⚠️ 两条订正/坑（留档）
+
+**订正①：「无进度输出」是我的工具用法问题，不是代码缺陷。**
+当时用 `Tee-Object` 写日志——它在长任务中整段结束才落盘。本次改用 `python -u` + 直接重定向 `>`，
+进度每 512 帧一行、一直看到 99.5%。**`_scan_pixel_boundaries` 里的 `IndexProgress("pixel_scan", done, total)` 一直是好的。**
+
+**坑②：`FeatureStore(config=cfg)` 构造报 TypeError。**
+正确姿势 = **复用生产 `SourceLocatorService(config=cfg).store`**，这样走的是生产的 24 字段注入路径。
+自己 new `FeatureStore` + 手工复制 `scene_*` 字段**正是 scn4 漏接的那条路**
+（`locator_service.py:226-234` 的注释已明确警告：「漏传这一条会让语义门静默退回 dataclass 默认值」）。
+⇒ 教训：**验配置链路时，必须复用生产的构造点，不要自己拼参数。**
+
+### 5. 回归
+
+后端全套 **705 tests OK (skipped=2)**，rc=0。
+
+### 6. 产物
+
+`work/boundary_20261018/rerun_refresh_derived_test1.py`（补跑脚本，含跑前/跑后快照与 9 项断言）·
+`refresh_derived.log` · `refresh_derived_test1.json`（含 stage 耗时与 checks）·
+`idx_backup_pre_refresh/`（跑前 6 个文件备份，可回滚）· `backend_suite_after_refresh.log`。
+
+复跑：
+
+```bash
+$env:PYTHONPATH='mvp/src;mvp'
+& 'D:\claudework\video-dedup-tool\.venv\Scripts\python.exe' -u work\boundary_20261018\rerun_refresh_derived_test1.py
+```
+
+---
+
 ## 2026-10-19（续69）— 竞品侧转向：TN 切原片侧（scn5）探针 → 判负，但否得有理有据 + 我一个方法错
 
 口令「可以试试」（承接「竞品侧还有什么可以逆向」→ 我判断「别继续挖竞品，该把 TN 接进原片侧」→ 用户同意试）。
