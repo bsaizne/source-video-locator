@@ -18,6 +18,9 @@ class IndexBundle:
     - ``scene_feats``：[S,384] float32 L2 场景指纹，与 scenes 行对齐；None 同上。
     - ``events``：[E,2] float32 事件单元起止秒（方向 A 完整阶段 2026-09-05）；None=旧索引无事件表。
     - ``event_feats``：[E,384] float32 L2 事件代表指纹，与 events 行对齐；None 同上。
+    - ``scene_strength``：[S] float32 场景**起始边界**的融合强度（scn3 侧车）；
+      None = 旧索引无侧车 ⇒ 下游必须按「强度未知」处理，行为与引入前逐字相同。
+      第 0 个恒为 1.0（文件起点不是切分）。用途：标注「此处可能有未识别的切换」（低置信边界）。
     """
 
     meta: IndexMeta
@@ -27,6 +30,7 @@ class IndexBundle:
     scene_feats: np.ndarray | None = None
     events: np.ndarray | None = None
     event_feats: np.ndarray | None = None
+    scene_strength: np.ndarray | None = None
 
     @property
     def num_frames(self) -> int:

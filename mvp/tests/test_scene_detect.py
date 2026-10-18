@@ -298,11 +298,111 @@ class BlockGateTest(unittest.TestCase):
                                              CFG_NOGATE, 1.0))
 
 
+class Scn3PrecisionTest(unittest.TestCase):
+    """scn3：判据一格未动，只把边界时刻从 1fps 网格换成像素腿 10fps 原始时刻。
+
+    验收核心是**两条互斥的要求同时成立**：
+      1. 不传新参数 ⇒ 与 scn2 逐字节相同（默认路径零风险）；
+      2. 传新参数 ⇒ 边界时刻真的离开网格，且三条不变式仍成立。
+    """
+
+    def _synth(self):
+        """2 秒 10fps 像素轴 + 3 帧 1fps CLS：叠一个在 1.37s 处的真实切换。
+
+        1.37s 刻意选在**网格中间**（1fps 网格点是 1.0/2.0）——若实现没生效，
+        边界会被吸到 1.0 或 2.0，断言立刻红。
+        """
+        fps = 1.0
+        times = np.arange(0, 3, dtype=np.float64)
+        feats = np.eye(3, 8, dtype=np.float32)
+        pix_t = np.arange(0.1, 3.0, 0.1)
+        pix_s = np.full(pix_t.size, 0.001)
+        k = int(np.argmin(np.abs(pix_t - 1.4)))
+        pix_s[k] = 0.9
+        hist = np.zeros((pix_t.size + 1, 32), dtype=np.float32)
+        for i in range(pix_t.size + 1):
+            hist[i, 0 if pix_t[min(i, pix_t.size - 1)] < 1.4 else 31] = 1.0
+        return feats, times, (pix_t, pix_s, hist), fps
+
+    def test_default_path_unchanged_and_scn3_opt_in_only(self):
+        """默认路径必须**确定性且未受影响**；scn3 只能通过显式出参启用。
+
+        ⚠️ 这里我第一次写错了断言（拿 scn3 结果当 baseline 去比 scn2），被这条测试自己抓到：
+        等价性要断的是「新增可选参数不改变默认输出」，所以基线必须再跑一次**默认调用**得到，
+        而不是把启用 scn3 的那次结果当基线。
+        """
+        feats, times, pixel, fps = self._synth()
+        cfg = SceneDetectConfig()
+        a, fa = build_scene_table(feats, times, pixel, cfg, fps)
+        b, fb = build_scene_table(feats, times, pixel, cfg, fps)
+        np.testing.assert_array_equal(a, b)       # 默认路径确定性
+        np.testing.assert_array_equal(fa, fb)
+        self.assertEqual(a.shape[1], 2)
+        # scn3 必须与默认不同（否则等于没接线）
+        sc3, _ = build_scene_table(feats, times, pixel, cfg, fps,
+                                   boundary_time_out={})
+        self.assertFalse(np.array_equal(a, sc3), "scn3 与默认路径相同 ⇒ 未接线")
+
+    def test_scn3_boundary_leaves_the_grid(self):
+        feats, times, pixel, fps = self._synth()
+        cfg = SceneDetectConfig()
+        scn2, _ = build_scene_table(feats, times, pixel, cfg, fps)
+        raw: dict = {}
+        scn3, _ = build_scene_table(feats, times, pixel, cfg, fps,
+                                    boundary_time_out=raw)
+        self.assertEqual(scn2.shape[0], scn3.shape[0])
+        moved = int((np.abs(scn3[:, 0] - scn2[:, 0]) > 1e-6).sum())
+        self.assertGreater(moved, 0, "scn3 未生效：边界仍在 1fps 网格上")
+        # 边界必须更接近真实切换 1.4s，而不是网格点
+        b2 = scn2[1:, 0]
+        b3 = scn3[1:, 0]
+        d2 = float(np.min(np.abs(b2 - 1.4))) if b2.size else 9.9
+        d3 = float(np.min(np.abs(b3 - 1.4))) if b3.size else 9.9
+        self.assertLessEqual(d3, d2 + 1e-6)
+
+    def test_scn3_keeps_three_invariants(self):
+        feats, times, pixel, fps = self._synth()
+        raw: dict = {}
+        stg: dict = {}
+        sc, fp = build_scene_table(feats, times, pixel, SceneDetectConfig(), fps,
+                                   boundary_time_out=raw, strength_out=stg)
+        self.assertEqual(sc.shape[1], 2)
+        self.assertGreaterEqual(sc.shape[0], 1)
+        for k in range(sc.shape[0] - 1):
+            self.assertEqual(float(sc[k, 1]), float(sc[k + 1, 0]),
+                             "连续覆盖不变式被破坏（浮点拆开）")
+        for k in range(sc.shape[0]):
+            self.assertLess(float(sc[k, 0]), float(sc[k, 1]))
+        self.assertAlmostEqual(float(sc[0, 0]), float(times[0]), places=4)
+        self.assertAlmostEqual(float(sc[-1, 1]), float(times[-1]) + 1.0 / fps,
+                               places=4)
+
+    def test_strength_channel_length_and_first_item(self):
+        feats, times, pixel, fps = self._synth()
+        stg: dict = {}
+        sc, _ = build_scene_table(feats, times, pixel, SceneDetectConfig(), fps,
+                                  strength_out=stg)
+        self.assertEqual(len(stg), sc.shape[0])
+        self.assertAlmostEqual(stg[0], 1.0, places=6)
+
+    def test_no_candidates_yields_empty_not_crash(self):
+        """无 CLS 峰、无像素候选 ⇒ 空表（不崩，也不返回 1 个假场景）。"""
+        feats = np.eye(3, 8, dtype=np.float32)
+        times = np.arange(0, 3, dtype=np.float64)
+        raw: dict = {}
+        sc, fp = build_scene_table(feats, times, None, SceneDetectConfig(), 1.0,
+                                   boundary_time_out=raw)
+        self.assertEqual(sc.shape[0], 1)   # 整片一个场景
+        self.assertEqual(float(sc[0, 0]), float(times[0]))
+
+
 class VersionTagTest(unittest.TestCase):
-    def test_scene_table_version_is_scn2_and_splitable(self):
-        self.assertEqual(FS.SCENE_TABLE_VERSION, "scn2")
+
+    def test_scene_table_version_is_scn3_and_splitable(self):
+        # scn3 = scn2 判据 + 10fps 原始边界时刻 + scene_strength 侧车（2026-10-18）
+        self.assertEqual(FS.SCENE_TABLE_VERSION, "scn3")
         fv = FS._feature_version(1.0)
-        self.assertIn("+scn2+", fv)
+        self.assertIn("+scn3+", fv)
         self.assertEqual(fv.split("+", 1)[0], FS._version_base(1.0))
         self.assertTrue(fv.endswith(FS._version_derived()))
 

@@ -42,13 +42,18 @@ ProgressFn = Callable[[IndexProgress], None]
 
 # --- 场景表（Phase 21 召回扩展层,索引侧派生缓存）---
 # scn1 = 旧口径：纯 CLS 局部 z-score 切分（边界尺子实测召回 0.232，见 FINDINGS_SHOT_DETECTION_A1）。
-# scn2 = 现口径：像素/颜色通道 + CLS 证据融合（同尺 P 0.70 / R 0.92 / F1 0.796）。
+# scn2 = 像素/颜色通道 + CLS 证据融合（同尺 P 0.70 / R 0.92 / F1 0.796）。
+# scn3 = scn2 判据**一格未动**，只是把边界时刻从 1fps 网格换成像素腿的 10fps 原始时刻
+#   （+ 场景起始边界强度侧车表 ``scene_strength.npy``）。为什么：现役吸附实测有符号位移中位
+#   +0.215s、绝对中位 0.28s；同批候选唯一变量=是否 snap ⇒ abs_med 0.250→0.050、le0.12 27.6%→77.9%
+#   （FINDINGS_BOUNDARY_PRECISION §2/§3）。下游 exporters.snap_clips_to_scenes 直接吃这张表 ⇒
+#   精度提升会落到成片端点。判定口径未变，所以场景数与 scene_feats 与 scn2 逐字节相同。
 #   参数与判据实现见 ``engine/segment/scene_detect.py``；换判据必须重过边界尺子。
 SCENE_CUT_ABS = 0.15       # （scn1 旧参数，仅 refresh 失败兜底路径与历史测试引用）
 SCENE_Z_THRESH = 1.5
 SCENE_MIN_SHOT_S = 3.0
 SCENE_SMOOTH = 1
-SCENE_TABLE_VERSION = "scn2"
+SCENE_TABLE_VERSION = "scn3"
 # --- 事件表（方向 A 完整阶段, 2026-09-05 用户拍板立项; 探针 POSITIVE）---
 # 场景 -> 事件单元归并: 时序近邻(中心时间差<=EVENT_T_GAP_S) + 场景指纹相似(>=EVENT_S_SIM)
 # 联合连通分量。参数固化在探针网格最优区(60-120s / 0.55-0.60)取 60s/0.60 保守值。
@@ -150,6 +155,7 @@ class FeatureStore:
         scenes, scene_feats = self._build_scene_table(feats, times, pixel=pixel)
         np.save(d / "scenes.npy", scenes)
         np.save(d / "scene_feats.npy", scene_feats)
+        self._save_scene_strength(d, scenes)
         events, event_feats = self._build_event_table(scenes, scene_feats)
         np.save(d / "events.npy", events)
         np.save(d / "event_feats.npy", event_feats)
@@ -244,18 +250,70 @@ class FeatureStore:
             "pixel boundary scan failed, scene table falls back to CLS evidence only: %s: %s",
             type(exc).__name__, exc)
 
+    def _save_scene_strength(self, d: Path, scenes: np.ndarray) -> None:
+        """落盘 ``scene_strength.npy``（scn3 侧车）。**失败只降级不留毒**。
+
+        侧车是**可选信息**：写不出来就当没有（下游按「未知强度」处理），绝不因为一个附属表
+        让整次建索引失败。长度必须与 scenes 行数严格对齐，否则同样丢弃——
+        下游依赖「有侧车 ⇒ 长度相等」这条约定（``load_index`` 会校验）。
+        """
+        try:
+            stg = getattr(self, "_last_scene_strength", None) or {}
+            n = int(scenes.shape[0])
+            if n == 0:
+                return
+            arr = np.ones(n, dtype=np.float32)
+            for k, v in stg.items():
+                if 0 <= int(k) < n:
+                    arr[int(k)] = float(v)
+            np.save(d / "scene_strength.npy", arr)
+        except Exception as exc:                     # noqa: BLE001
+            import logging
+            logging.getLogger("engine.feature_store").warning(
+                "scene_strength sidecar skipped (non-fatal): %s: %s",
+                type(exc).__name__, exc)
+
+    @staticmethod
+    def _load_scene_strength(d: Path, scenes: np.ndarray | None) -> np.ndarray | None:
+        """读 ``scene_strength.npy`` 侧车；**任何不一致都返回 None**（= 强度未知）。
+
+        为什么宁可丢也不修：侧车是可选信息，错位的强度比没有强度更危险——
+        下游会拿它去标「低置信边界」，长度/类型不对就等于把强度贴到错的场景上。
+        约定（与 ``_save_scene_strength`` 对齐）：有侧车 ⇒ 长度严格等于 scenes 行数。
+        """
+        p = d / "scene_strength.npy"
+        if not p.exists() or scenes is None or getattr(scenes, "size", 0) == 0:
+            return None
+        try:
+            arr = np.load(p)
+            n = int(scenes.shape[0])
+            if arr.ndim != 1 or int(arr.shape[0]) != n:
+                return None
+            return arr.astype(np.float32, copy=False)
+        except Exception:                            # noqa: BLE001
+            return None
+
     def _build_scene_table(self, feats: np.ndarray, times: np.ndarray,
                            pixel: tuple[np.ndarray, np.ndarray] | None = None,
                            ) -> tuple[np.ndarray, np.ndarray]:
-        """从索引特征派生场景表（scn2：像素 + CLS 证据融合）。
+        """从索引特征派生场景表（scn3：scn2 判据 + 10fps 原始边界时刻 + 强度侧车）。
 
         - ``scenes.npy``：[S,2] float32（场景起止秒；start 闭 / end 开，覆盖全部帧）。
         - ``scene_feats.npy``：[S,384] float32 L2，与 scenes 行对齐（与 features.npy 同 schema）。
+        - ``scene_strength.npy``（scn3 新增，侧车）：[S] float32 每个场景**起始边界**的融合强度；
+          第 0 个恒为 1.0（文件起点不是切分）。缺失时下游行为必须与本表未引入时逐字相同。
         场景切分为派生缓存（确定性），失败不阻塞索引构建（返回单场景兜底）。
+        ``self._last_scene_strength`` = 最近一次派生的强度表（供落盘侧车用，避免改返回值签名）。
         """
         fps = self.sampling_fps
+        raw: dict[int, float] = {}
+        stg: dict[int, float] = {}
+        self._last_scene_strength = {}
         try:
-            return build_scene_table(feats, times, pixel, self.scene_cfg, float(fps))
+            scenes, fp = build_scene_table(feats, times, pixel, self.scene_cfg, float(fps),
+                                           boundary_time_out=raw, strength_out=stg)
+            self._last_scene_strength = {int(k): float(v) for k, v in stg.items()}
+            return scenes, fp
         except Exception:
             pass
         # 兜底一：旧 scn1 口径（纯 CLS 局部 z-score），至少不是「整片一个场景」
@@ -279,6 +337,7 @@ class FeatureStore:
             scenes[k, 0] = float(times[a])
             scenes[k, 1] = float(times[b - 1]) + 1.0 / float(fps)
             rows.append(feats[a:b].mean(axis=0))
+        self._last_scene_strength = {k: 1.0 for k in range(len(spans))}
         fp = np.vstack(rows).astype(np.float32)
         fp = fp / np.maximum(np.linalg.norm(fp, axis=1, keepdims=True), 1e-8)
         return scenes, fp
@@ -365,6 +424,7 @@ class FeatureStore:
         events, event_feats = self._build_event_table(scenes, scene_feats)
         np.save(d / "scenes.npy", scenes)
         np.save(d / "scene_feats.npy", scene_feats)
+        self._save_scene_strength(d, scenes)
         np.save(d / "events.npy", events)
         np.save(d / "event_feats.npy", event_feats)
         meta.feature_version = self.feature_version
@@ -390,8 +450,10 @@ class FeatureStore:
         scene_feats = np.load(d / "scene_feats.npy") if (d / "scene_feats.npy").exists() else None
         events = np.load(d / "events.npy") if (d / "events.npy").exists() else None
         event_feats = np.load(d / "event_feats.npy") if (d / "event_feats.npy").exists() else None
+        scene_strength = self._load_scene_strength(d, scenes)
         return IndexBundle(meta, feats, times, scenes=scenes, scene_feats=scene_feats,
-                           events=events, event_feats=event_feats)
+                           events=events, event_feats=event_feats,
+                           scene_strength=scene_strength)
 
     # ------------------------------------------------------------------ #
     # Validate / invalidate

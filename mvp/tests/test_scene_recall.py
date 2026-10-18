@@ -213,11 +213,17 @@ class SceneTableLifecycleTest(unittest.TestCase):
     def test_build_writes_scene_table_and_validates(self):
         with tempfile.TemporaryDirectory() as td:
             store = FeatureStore(self.ffmpeg, td)
-            self.assertIn("+scn2", store.feature_version)
+            # 派生版本位随实现升级（scn2 -> scn3，2026-10-18），断言用常量而不是字面量
+            from engine.feature_store import feature_store as FS
+            self.assertIn("+" + FS.SCENE_TABLE_VERSION, store.feature_version)
             meta = store.create_index(SYNTH, FakeBackend())
             d = store.index_dir(SYNTH)
             self.assertTrue((d / "scenes.npy").exists())
             self.assertTrue((d / "scene_feats.npy").exists())
+            # scn3 侧车：强度表必须与场景表同批落盘且长度对齐
+            self.assertTrue((d / "scene_strength.npy").exists())
+            stg = np.load(d / "scene_strength.npy")
+            self.assertEqual(stg.shape, (np.load(d / "scenes.npy").shape[0],))
             scenes = np.load(d / "scenes.npy")
             scene_feats = np.load(d / "scene_feats.npy")
             times = np.load(d / "times.npy")

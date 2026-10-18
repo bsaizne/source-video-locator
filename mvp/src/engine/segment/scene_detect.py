@@ -243,7 +243,9 @@ def _snap_index(times: np.ndarray, t: float) -> int:
 
 def detect_scene_bounds(n_frames: int, times: np.ndarray, s_cls: np.ndarray | None,
                         pixel: tuple[np.ndarray, np.ndarray, np.ndarray] | None,
-                        cfg: SceneDetectConfig, fps: float) -> list[int]:
+                        cfg: SceneDetectConfig, fps: float,
+                        raw_out: dict[int, float] | None = None,
+                        strength_out: dict[int, float] | None = None) -> list[int]:
     """CLS 证据 + 像素证据融合 -> **新场景首帧的索引列表**（升序，落在 ``[1, n_frames-1]``）。
 
     - CLS 腿：``s_cls``（= 相邻帧 CLS 余弦距离，长度 n-1）上的局部极大且 ``>= cls_cut_abs``；
@@ -276,6 +278,12 @@ def detect_scene_bounds(n_frames: int, times: np.ndarray, s_cls: np.ndarray | No
                 t = float(times[k + 1])
                 if gate(t):
                     items.append((t, cfg.cls_weight * float(arr[k])))
+    # scn3：并行记录「吸附索引 -> 未吸附的原始候选时刻」，**不参与判据**。
+    # ⚠️ 这里有个必须绕开的坑（scn3 第一版踩过，被等价性验证当场抓到）：
+    #    若把 items 里的时刻改成原始时刻，NMS 的输入时刻就变了 ⇒ NMS 结果变 ⇒
+    #    场景数从 943 掉到 930，等于**顺手改了 scn2 的判定**。
+    #    所以 items 继续存 float(times[j])（与现役逐字一致），原始时刻另存一张表。
+    raw_by_snap: dict[int, tuple[float, float]] = {}
     if pix_t is not None and pix_s is not None and len(pix_t) >= 3:
         for t in detect_pixel_boundaries(pix_t, pix_s, thr=cfg.pixel_thr,
                                          abs_floor=cfg.pixel_abs_floor,
@@ -284,28 +292,78 @@ def detect_scene_bounds(n_frames: int, times: np.ndarray, s_cls: np.ndarray | No
             j = _snap_index(times, t)
             if 1 <= j < n_frames and gate(t):
                 items.append((float(times[j]), 1.0))
+                prev = raw_by_snap.get(j)
+                if prev is None or 1.0 >= prev[1]:
+                    raw_by_snap[j] = (float(t), 1.0)
     if not items:
         return []
     # NMS 间隔不强制抬到 1/fps：两条真边界可以只差 0.75s（快切蒙太奇），
     # 它们在 1fps 网格上落到相邻两帧、都该保留；同帧重复由下面的索引去重解决。
     strength: dict[int, float] = {}
+    # scn3：顺带记下每个吸附索引上**未吸附的原始候选时刻**（同一遍遍历，零额外成本）。
+    # 现役只留帧索引 ⇒ 边界时刻被 1fps 网格钉死（有符号位移中位 +0.215s，见 _snap_index）。
+    raw_t: dict[int, float] = {}
     for t, st in nms_by_strength(items, cfg.min_gap_s):
         j = _snap_index(times, t)
         if 1 <= j < n_frames:
+            # 优先用像素腿的 10fps 原始时刻；CLS 腿位置（无原始时刻）退回网格时刻。
+            hit = raw_by_snap.get(j)
+            if hit is not None and st >= strength.get(j, -1.0):
+                raw_t[j] = hit[0]
             strength[j] = max(strength.get(j, 0.0), st)
     bounds = sorted(strength)
-    return _merge_short(bounds, n_frames, max(1, int(round(cfg.min_shot_s * fps))), strength)
+    kept = _merge_short(bounds, n_frames, max(1, int(round(cfg.min_shot_s * fps))),
+                        strength)
+    if raw_out is not None:
+        # 只交出真正成为边界的索引（_merge_short 会删掉较弱的一侧）
+        raw_out.clear()
+        for j in kept:
+            if j in raw_t:
+                raw_out[j] = raw_t[j]
+    if strength_out is not None:
+        strength_out.clear()
+        for j in kept:
+            strength_out[j] = float(strength.get(j, 0.0))
+    return kept
 
 
 def build_scene_table(feats: np.ndarray, times: np.ndarray,
                       pixel: tuple[np.ndarray, np.ndarray, np.ndarray] | None,
-                      cfg: SceneDetectConfig, fps: float
+                      cfg: SceneDetectConfig, fps: float, *,
+                      boundary_time_out: dict[int, float] | None = None,
+                      strength_out: dict[int, float] | None = None
                       ) -> tuple[np.ndarray, np.ndarray]:
     """特征 + 像素序列 -> ``(scenes[S,2], scene_feats[S,384])``，语义与旧实现一致。
 
     ``pixel`` = ``(新镜头首帧时间[], 像素差分数[], 每帧直方图[n,32])``，可为 ``None``
     （像素预扫失败时降级为「只有 CLS 证据」）。
     连续覆盖全部帧（不变式由边界集构造保证），场景指纹 = 场景内帧均值再 L2。
+
+    **scn3 精度通道（可选，默认关 = 逐字等于 scn2）**
+
+    传 ``boundary_time_out`` 时，场景边界时刻改用 ``detect_scene_bounds`` 保留的
+    **未吸附原始候选时刻**（像素腿 10fps 级），而不是 ``times[j]`` 的 1fps 网格。
+    为什么要这么做：现役把边界吸到 1fps 网格，实测有符号位移中位 **+0.215s**、
+    绝对中位 **0.28s**（见 ``_snap_index`` 注释与 FINDINGS_BOUNDARY_PRECISION §2）；
+    同批候选唯一变量=是否 snap ⇒ ``abs_med`` **0.250 → 0.050**、``le0.12`` **27.6% → 77.9%**。
+    下游 ``exporters.snap_clips_to_scenes`` 直接拿这张表吸附 clip 端点，
+    所以精度提升**会实打实落到成片端点**（导出侧真剪点偏差中位 0.249s 即由此而来）。
+
+    三条不变式仍然成立（scn3 也守）：
+      - ``scenes`` 仍是 ``[S,2]``（列数不变，测试与消费方都按 2 列取）；
+      - 仍**连续覆盖**全部帧：相邻场景 ``scenes[k,1] == scenes[k+1,0]``（同一 ``starts`` 数组两侧取值）；
+      - 首尾不动：``scenes[0,0] == times[0]``、``scenes[-1,1] == times[-1] + 1/fps``。
+
+    ⚠️ **明确的已知不一致（scn3）**：``scene_feats`` 仍按**帧索引区间** ``[a:b]`` 求均值，
+    而边界时刻前移后半帧时，按时间筛帧（如 ``evidence_localize`` 的
+    ``(times >= a) & (times < b)``）可能把边界那**一帧**划给前一个场景 ⇒ 指纹与时间区间
+    在边界处最多差 1 帧。选择保留这个不一致，是为了让 ``scene_feats`` **与 scn2 逐字节相同**
+    （场景级召回的 top-K 与 ``min_sim`` 门因此完全不受影响）；换成「索引也跟着挪」会让
+    指纹漂移、把一次纯精度修复变成一次召回语义变更。
+
+    传 ``strength_out`` 时顺带交出每个场景**起始边界**的融合强度（第 0 个恒为 1.0，
+    表示「文件起点」而不是一次切分），供下游标注低置信边界（供 §③ 用）。
+    未吸附/兜底场景的强度为 ``1.0``（与像素腿候选同权），语义见 ``detect_scene_bounds``。
     """
     feats = np.asarray(feats, dtype=np.float32)
     times = np.asarray(times, dtype=np.float64)
@@ -315,16 +373,40 @@ def build_scene_table(feats: np.ndarray, times: np.ndarray,
                 np.zeros((0, feats.shape[1] if feats.ndim > 1 else 0), dtype=np.float32))
     from .segment import adjacent_distances          # 复用冻结距离语义，避免两份实现漂移
     s_cls = adjacent_distances(feats)
-    bounds = detect_scene_bounds(n, times, s_cls, pixel, cfg, fps)
+    raw: dict[int, float] = {}
+    stg: dict[int, float] = {}
+    bounds = detect_scene_bounds(n, times, s_cls, pixel, cfg, fps,
+                                 raw_out=raw, strength_out=stg)
     edges = [0] + bounds + [n]
     edges = [e for i, e in enumerate(edges) if i == 0 or e > edges[i - 1]]
+
+    # 每个场景的**起始时刻**：默认（scn2）= times[该段首帧]；给了 boundary_time_out = 原始候选时刻。
+    starts: list[float] = []
+    for k, a in enumerate(edges[:-1]):
+        t = float(times[a])
+        if boundary_time_out is not None and a in raw:
+            cand = float(raw[a])
+            # 单调守卫：原始时刻的吸附误差 < 0.5 帧，理论上 f(j) <= f(j+1)；
+            # 万一相等/倒退（同位置两腿强度打平），退回网格时刻，绝不产生零宽或倒序场景。
+            prev = starts[-1] if starts else None
+            if cand > t and (prev is None or cand > prev):
+                t = cand
+        starts.append(t)
+
     scenes = np.zeros((len(edges) - 1, 2), dtype=np.float32)
     rows = []
     for k in range(len(edges) - 1):
         a, b = edges[k], edges[k + 1]
-        scenes[k, 0] = float(times[a])
-        scenes[k, 1] = float(times[b - 1]) + 1.0 / float(fps)
+        scenes[k, 0] = starts[k]
+        # 尾部用同一 starts 数组下一项 ⇒ 相邻场景端点严格相等，连续覆盖不变式不会被浮点拆开
+        scenes[k, 1] = (starts[k + 1] if k + 1 < len(starts)
+                        else float(times[b - 1]) + 1.0 / float(fps))
         rows.append(feats[a:b].mean(axis=0))
+    if strength_out is not None:
+        strength_out.clear()
+        for k, a in enumerate(edges[:-1]):
+            # 第 0 个场景的起点是「文件开始」，不是一次切分 ⇒ 强度记为 1.0 并与真边界区分（k>0）
+            strength_out[k] = 1.0 if k == 0 else float(stg.get(a, 0.0))
     fp = np.vstack(rows).astype(np.float32)
     fp = fp / np.maximum(np.linalg.norm(fp, axis=1, keepdims=True), _EPS)
     return scenes, fp
