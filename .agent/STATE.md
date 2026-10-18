@@ -384,7 +384,14 @@
 
 ## Next Actions
 
-> **▶ 交接指针（2026-10-18 续65）**: **先读** `Current Task` 顶部「续65」块 + `mvp/docs/FINDINGS_BOUNDARY_PRECISION_20261018.md`
+> **▶ 交接指针（2026-10-18 续67，最新）**: **先读** `.agent/archive/HANDOFF_20261018_scn34_closeout.md`
+> （自包含：scn3+scn4 全记录、硬验收双通过读数、**六个错 + 两条技术性漏接**、复跑命令、Windows 坑）。
+> **唯一剩下的主线 = 出包 r27 + mac 另走 dispatch**（代码已完成并推远端 `ad7cec4..a00231c`）。
+>
+> 上一份 `HANDOFF_20261018_boundary_precision.md`（续64）已被它取代，其 §4 未结项 1「查 CLS 0.718」
+> 早已结案 = 假缺陷，别再照着它查。更早的（续65）指针原文如下，仅作留档：
+>
+> ~~**▶ 交接指针（2026-10-18 续65）**: **先读** `Current Task` 顶部「续65」块 + `mvp/docs/FINDINGS_BOUNDARY_PRECISION_20261018.md`
 > **§9**（本节自包含：探针读数、两处口径错、目检偏移证据、真漏检、门扫参零和、6 条复跑命令）。
 > 大背景（分型/网格损失/scn3 预演/B 线判负）读 `archive/HANDOFF_20261018_boundary_precision.md`
 > —— ⚠️ 其 **§4 未结项 1「查 CLS 0.718」已由 续65 结案 = 假缺陷**，别再照着它去查。
@@ -619,4 +626,4 @@
 
 ## Last Updated
 
-2026-10-18 16:41
+2026-10-18 21:55（scn3+scn4 落地完成 · 4 片硬验收双通过 · 已推远端 `ad7cec4..a00231c`；待出包 r27）
