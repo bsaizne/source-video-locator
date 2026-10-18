@@ -166,7 +166,23 @@ class PipelineConfig:
     scene_block_skip: int = 2
     scene_block_dist_thr: float = 0.10   # 前后块直方图距离下限（真的换了画面）
     scene_block_dev_thr: float = 0.30    # 后块内部最大偏离上限（新状态要落定）
-    scene_cls_cut_abs: float = 0.30       # CLS 证据腿距离门（不再用局部 z-score）
+    # CLS 证据腿距离门。**与下面 scene_cls_sem_* 是耦合的一对**（2026-10-18 全片实测）：
+    #   · 只提 cut_abs 0.30->0.40（语义门关）：尺子 TP 109->112 但 FP 25->38（纯亏）
+    #   · 只在 0.30 加语义门：尺子只 +3 FP 但**全片边界 942->1045（+10.9%）**，导出段数涨一成
+    #   · 两者同时（A2）：尺子 TP 111 / FP 25 / FN 14，全片 942->912（−3.2%）
+    #   ⇒ cut_abs 的 0.40 在这里的作用是**替语义门做粗筛**（挡弱峰），单独调它只会放长假阳。
+    scene_cls_cut_abs: float = 0.40
+    # --- CLS 腿独立语义门（scn4，立项② 方案 A2）----------------------------------
+    # 为什么：`scene_block_*` 那套门吃**灰度直方图**，对「正反打换人」几乎无感
+    # （同场景/暗调/两人衣着色近）⇒ CLS 腿强信号被像素腿设计的门误杀。
+    # 读图证 test1 5411.46 / 5415.46（红毛衣女子↔灰衣男子）：旧门最近边界 2.85s/6.85s，新门 0.46s。
+    # ⚠️ 门是「像素门 **OR** 语义门」不是替换——换成纯语义门会丢 test2 4573.3 / test3 6682.4 两处图证真切点。
+    scene_cls_sem_gate: bool = True       # CLS 腿启用独立语义门（与像素门取 OR）
+    scene_cls_sem_pre_s: float = 4.0      # 语义门前块秒数
+    scene_cls_sem_post_s: float = 4.0     # 后块秒数
+    scene_cls_sem_skip_s: float = 2.0     # 后块跳过秒数
+    scene_cls_sem_dist: float = 0.05      # 前后块语义余弦距离下限
+    scene_cls_sem_dev: float = 0.20       # 后块内部到块均值余弦距离上限
     scene_cls_weight: float = 0.6         # 融合时 CLS 候选强度系数（像素优先）
     scene_min_gap_s: float = 0.5          # 融合后 NMS 间隔
     scene_min_shot_s: float = 1.0         # 最短场景（旧 scn1 是 3.0，快切片上会并掉真镜头）

@@ -222,7 +222,16 @@ class SourceLocatorService:
                     block_post=int(pc.scene_block_post),
                     block_skip=int(pc.scene_block_skip),
                     block_dist_thr=float(pc.scene_block_dist_thr),
-                    block_dev_thr=float(pc.scene_block_dev_thr)))
+                    block_dev_thr=float(pc.scene_block_dev_thr),
+                    # scn4：CLS 腿独立语义门（立项② 方案 A2）。漏传这一条会让语义门
+                    # 静默退回 dataclass 默认值、与 config 脱钩——2026-10-18 我第一次
+                    # 接线就漏了这里，实测 `scene_cls_cut_abs` 仍是旧 0.30、语义门未生效。
+                    cls_sem_gate=bool(pc.scene_cls_sem_gate),
+                    cls_sem_pre_s=float(pc.scene_cls_sem_pre_s),
+                    cls_sem_post_s=float(pc.scene_cls_sem_post_s),
+                    cls_sem_skip_s=float(pc.scene_cls_sem_skip_s),
+                    cls_sem_dist=float(pc.scene_cls_sem_dist),
+                    cls_sem_dev=float(pc.scene_cls_sem_dev)))
         return self._store
 
     # ------------------------------------------------------------------ #
