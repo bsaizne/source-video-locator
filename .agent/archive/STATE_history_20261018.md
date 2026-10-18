@@ -348,3 +348,35 @@
 > 探针/日志（不入库）`work/merge_layout_20261018/{attribute_pre.py, attribute_pre2.py(自身缺陷判废),
 > attribute_pre3.py, pre_fix_report3.json, post_fix_report3.json, measure_collapse.py(余弦法因未对齐不作证据),
 > spectral_semantics.py, test_source_merge*.log, backend_suite*.log, api_suite.log, invariants.log}`。
+
+> **▶ 2026-10-18（续63 补廿二）— 两项遗留收口：开不了的编码器不再白试/不再报假故障 + copy 判据补布局 + 一条会让补廿一静默失效的加固【现读这条】**
+> 口令「接着修那两项遗留问题」。**改了产品代码，未出包** ⇒ 用户手上仍是 r25，补廿一 + 本批两条修复他都没有。
+> **① 编码器白跑（前提被实测改写了两次，别照档案原话做）**
+> - **时间不是主项**：微型探测本身同价（本机每条死编码器 ≈0.57s、探测 7 条 = 2.82s）⇒ **没有引入任何探测子进程**。
+> - 真正的缺陷是**用户可见的假故障**：改前每次合并向进度流播报
+>   `硬件编码器 hevc_nvenc 执行失败，已回退到 hevc_qsv` + `…hevc_qsv 执行失败，已回退到 hevc_amf`
+>   （本机无 NVIDIA/Intel 属正常态）。实测两臂各 6 条消息、其中 **2 条是假故障**。
+> - 实装 = **结构性判据**「一帧都没编出来」（不匹配 stderr 文案）⇒ 开场即败者进**进程内黑名单**
+>   （按 ffmpeg 路径分键；`libx265` CPU 兜底**永不拉黑**），下次直接跳过并留一条日志；
+>   **编到一半死**（参数/素材问题）仍照常播报，两种失败不混。
+> - 双臂读数：改后 run1 假故障 **0 条**（仍付一次发现成本，wall 5.06s）、run2 **1.77s**（改前同臂 4.98s
+>   ⇒ 同进程内后续每次省 ≈3.3s）。
+> **② copy 腿布局**
+> - 签名加**补名后**的布局：`6ch/unknown` 与 `6ch/5.1` 同序 ⇒ **仍判可流复制**（不把分集原片从秒级 copy
+>   拖进几十分钟转码）；`5.1(side)` 别名归一到 `5.1` 同理（FFmpeg ≥7.1 区分二者，只差下混系数不差声道顺序）。
+> - ⚠️ **收紧面在 MP4 上实测不可观测**：`hexagonal` 编进 MP4 后 ffprobe 也只报 `6/unknown`
+>   ⇒ 造不出"两路都写明且顺序不同"的 MP4 对照（`leftover_arms.json` 四对全 copy）。
+>   真实收益 = 容器**确实声明了**不同布局的情况（MKV `5.1` vs `hexagonal`、`stereo` vs `dual_mono`）不再误判可流复制。
+> - copy 腿另加 `copy_layout_note()` 留痕：实测 `-c copy` 配 `-channel_layout 5.1 -ac 6` **仍写 unknown**
+>   ⇒ 改不了元数据，只能如实记「产物音轨按第一段声明解释其余段」。
+> **③ 顺带堵掉一个会让补廿一整套归因静默失效的洞**
+> `declared_layout` 原先把字面 `"unknown"` 当"已写明"——ffprobe 的 **csv 视图给 `unknown`、json 视图缺字段**，
+> 现役恰好靠 json 才没出事（换个取数方式就整条链路静默退回旧行为）。现在两种都算未解析，
+> 并有锁 `test_literal_unknown_from_ffprobe_is_still_unnamed`。
+> **验收**：新锁 **6 项**（`LeftoverFixTest` 5 + `DeadEncoderSkipE2ETest` 1）；
+> 后端 **Ran 694 OK (skipped=2)**（补廿一 688）· API **Ran 150 OK** · 导出计划不变式 **FAILED=0**，三条 rc 均 0。
+> **产物**：代码笔 `mvp/src/media/ffmpeg/source_merge.py` + `mvp/tests/test_source_merge.py`；
+> 探针/日志（不入库）`work/merge_layout_20261018/{leftover_probe.py,leftover_probe.json,leftover_arms.py,
+> leftover_arms_pre.json,leftover_arms_post.json,test_leftover*.log,backend_suite3.log,api_suite3.log,invariants3.log}`。
+> **现役未结项**：主线「过渡不流畅」三样外部输入 · `og720-720` 挂账 · 下次出 r26 时删 r23 ·
+> ⚠️ 出包时 **mac 要另走 dispatch**（补廿一 + 本批都是纯后端 Python 改动）。
