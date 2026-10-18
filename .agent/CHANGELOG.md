@@ -1,5 +1,87 @@
 # CHANGELOG
 
+## 2026-10-19（续71）— 挖竞品原片侧切分：**他们也没有独立的**，就是 TransNetV2（四条参数级硬证据）
+
+口令「挖一下看看，可能当时挖的时候也没注意到这些」。**全程只读**（竞品仓零写入、`mvp/src` 零改动）。
+材料 = `D:\claudework\cutmatch-analysis\data\{competitor_profile_v1.json, nuitka_dict_constants.json}`。
+
+### 0. 结论
+
+**竞品原片侧没有独立的切分算法 —— 他们的原片场景表就是 TransNetV2 的产物，与我们昨天测的完全同一套。**
+所以「竞品在**原片侧**能精确确定边界」这个假设**不成立**；他们的优势只在编辑侧（解说片）成立。
+
+### 1. 四条硬证据
+
+**① 全 profile 只有一套切分模型，不区分原片/编辑**：
+
+```
+scene_detection.model                  = "TransNetV2"   (确证)
+scene_detection.decode.width/height    = 48 / 27
+scene_detection.decode.window/stride   = 100 / 50       (官方口径)
+scene_detection.predictions.threshold  = 0.5            (官方口径)
+scene_detection.predictions.min_gap    = 8
+```
+
+**② 参数命名：切分类全是 `commentary_*`，原片侧只有两个「位移/守卫」参数**。
+从 `pipeline.options`（180 个叶子参数）筛 `source|boundary|scene`：
+
+| 参数 | 值 | 归属 |
+|---|---|---|
+| `commentary_scene_*` / `commentary_boundary_refine_*` | 全族 26 项 | **编辑侧** |
+| `source_boundary_guard_frames` | **0** | 原片侧，**关着** |
+| `source_boundary_refine_max_shift` | **2** 帧 | 原片侧，**只允许挪 2 帧** |
+| `respect_source_scene_end` | **false** | 原片侧，**不遵守场景末尾** |
+
+`nuitka_dict_constants.json` 计数对照：`commentary_scene` **26** 次 vs `source_scene` **3** 次，
+而那 3 次全是**阶段名/ETA 表/数据类名**，**没有一个是边界判据参数**。
+
+**③ 原片侧切分是独立但无参数的阶段，成本与编辑侧完全相同**（`processing.progress.tracker` ETA 表）：
+
+```
+["source_scene",     {"gpu": 220, "cpu": 75}]
+["commentary_scene", {"gpu": 220, "cpu": 75}]
+["source_features",  {"gpu": 30,  "cpu": 8}]
+```
+
+⇒ **同值 220/75 = 同一个模型跑两遍**，不是一个更重的原片侧方案；且 `source_scene` 在 `source_features` **之前**
+⇒ 原片场景表确实是**切分出来的**，不是特征聚合出来的。
+
+**④ 原片侧「精修」存在但被限死在 2 帧**：`source_boundary_refine_max_shift=2`（编辑侧 `max_move_frames=16`）。
+⇒ 他们对原片边界只做 **±2 帧（约 0.08s）微调**，**不做补漏切**。
+
+### 2. 这解释了昨天的 scn5 探针结果
+
+| 我们的发现（scn5） | 竞品证据 | 自洽 |
+|---|---|---|
+| TN 原片侧只出 **375** 切点（我方 912） | `threshold=0.5`、无原片侧补充判据 | ✅ |
+| 15 段真漏切只救 1 个 | `guard_frames=0`、`max_shift=2` | ✅ |
+| TN 对「同场景多机位」不敏感 | 他们同样无解，只能靠 `offset_refine` 下游补 | ✅ |
+
+**他们把功夫下在别处**：`offset_refine_*` 全族（DTW/topk rerank/start_window，12 参数）+
+`long_scene_*` 全族（自适应采样/探测窗，7 参数）⇒ **「场景切得粗，但定位对了再精修」**。
+这与 G5/G6 旧结论一致，现在有了**参数级确证**。
+
+### 3. 对我方路线的影响
+
+**「原片侧切分不如竞品」这个担忧彻底关闭。** 不是「我们没挖到」，是**他们也没有**。
+⇒ 这 15 段漏切是**共性问题**，不是我们落后；要解只能引入新信息源（主体/人脸/音频），不能靠对标竞品。
+
+**订正旧档案**：`FINDINGS_TRANSNETV2_SEGMENTATION.md` §6.1 写「未测 TN 用于原片侧（竞品可能在原片侧用它）」
+—— 现在答案 = **他们确实只用它**，那个「可能」已关闭，结论是**双方原片侧等价**。
+
+### 4. 未做 / 未能证（如实）
+
+- **没有跑竞品产品**（授权需卡密 + 模型走服务器 lease），所有结论基于静态常量/profile。
+- `source_scene` 阶段用的**具体阈值是否与编辑侧相同**（都 0.5）无法从常量区分——只有一份配置。
+- `scene_detection.detect_defaults.*`（sensitivity=18 / sample_stride=3 / max_width=320 / proxy_height=720）
+  是**检测入口默认值**，与 `predictions.threshold` 的关系**未定论**；两者是否共同作用于原片侧，**未证**。
+
+### 5. 产物
+
+`mvp/docs/FINDINGS_COMPETITOR_SOURCE_SCENE_20261019.md`（自包含，含可复现代码片段）。
+
+---
+
 ## 2026-10-19（续70）— 真索引 refresh_derived 端到端跑通（6.6 分钟 / 9 项全 PASS / **逐字节幂等**）= 续67 未结项③结案
 
 口令「补吧」。**零 `mvp/src` 改动**；本批只跑探针 + 落档。

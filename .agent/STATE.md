@@ -150,6 +150,17 @@
 
 ## Current Problem
 
+- 🔥 **竞品原片侧切分已挖清（续71，2026-10-19）= 「竞品原片侧更准」这个假设被推翻**。
+  **他们也没有独立的原片侧切分方案**，就是 TransNetV2 同一套。四条硬证据：
+  ① `scene_detection.model = "TransNetV2"`，**全 profile 只有一份配置，不区分原片/编辑**；
+  ② `nuitka_dict_constants` 计数：`commentary_scene` **26** 次 vs `source_scene` **3** 次（3 次全是阶段名/ETA，**无边界参数**）；
+  ③ ETA 表 `source_scene` 与 `commentary_scene` **同为 220s GPU/75s CPU** ⇒ 同一个模型跑两遍；
+  ④ 原片侧精修被限死：`source_boundary_refine_max_shift=2` 帧（编辑侧 16）、`source_boundary_guard_frames=0`、
+  `respect_source_scene_end=false`。
+  ⇒ **他们把功夫下在 `offset_refine_*`（12 参数）+ `long_scene_*`（7 参数）=「切得粗，定位对了再精修」**。
+  ⇒ **订正旧档案**：`FINDINGS_TRANSNETV2_SEGMENTATION.md` §6.1 的「竞品可能在原片侧用 TN」= **现在确认：确实只用它**。
+  落档 `mvp/docs/FINDINGS_COMPETITOR_SOURCE_SCENE_20261019.md`。**这条线到此彻底关闭。**
+
 - ✅ **真索引 `refresh_derived` 端到端已跑通（续70，2026-10-19）= 续67 未结项③结案**。
   test1 真索引（8221s / 913 场景）全程 **398.6s（6.6 分钟）**，9 项核验 **FAILED=0**：
   `features.npy` mtime 未变（**证没重抽 CLS**）· 场景数 913 不变 · `scene_strength` 落盘且长度==913、第 0 个==1.0 ·
@@ -443,11 +454,10 @@
 
 ## Next Actions
 
-> **▶ 交接指针（2026-10-18 续68，最新）**: r27 **已出包且五道全绿**，剩下只有两件 —— **mac 包**
-> （非交互取令牌两条路全堵，需用户给 token 或手动点 Actions dispatch）与**删 r24**（等口令）。
-> 包身份与验收读数见 `Current Task` 顶部「续68」块，明细在 `work/r27_pkg/`。
-> 上一份 `.agent/archive/HANDOFF_20261018_scn34_closeout.md`（续67）**仍然有效**——它讲的是 scn3/scn4 代码本身
-> 与硬验收（结论没变）；**只需读它的 §5「六个错」与 §6 读数口径**，§1~§3 可跳过。
+> **▶ 交接指针（2026-10-19 续71，最新）**: **先读** `.agent/archive/HANDOFF_20261019_boundary_convergence.md`
+> （自包含：今夜六件事、三方交叉验证结论、竞品原片侧四条硬证据、**我犯的五个错**、复跑命令、Windows 坑）。
+> **一句话**：边界线（长镜头漏切）已四条路径查到底 = **信号弱是素材性质**；竞品原片侧**也没有更强方案**。
+> **唯一阻塞 = 产品口径未裁**：「同场景内正反打算不算一个镜头」—— 这个不定，任何新方向都无法验收。
 
 > 现役未结项以 `Current Task` 顶部「续68」块 + 本表为准；**交接读这一份就够**：
 > `.agent/archive/HANDOFF_20261018_r26_closeout.md`（自包含：这一夜五批的读数索引、七条被打掉的旧结论、
