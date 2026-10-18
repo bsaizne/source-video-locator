@@ -1,5 +1,67 @@
 # CHANGELOG
 
+## 2026-10-18（续68）— 出包 r27（首次含 scn3/scn4）+ 五道包内验收全绿；mac dispatch 被令牌堵住
+
+口令「继续这个项目」。**本批只出包，`mvp/src` 零改动**；推远端前 `git rev-list --left-right --count origin/master...HEAD` = `0 0`（可 fast-forward）。
+
+### 为什么必须重出（硬前提，不是例行）
+
+r26 的 `win-unpacked` 构建于 **2026-10-18 01:37**（`backend.exe` 的 `LastWriteTime`），而 scn3/scn4 三笔代码
+（`5bb8089` 17:42 · `b6e9113` 18:44 · `a00231c` 21:39）**都在它之后** ⇒ **r26 里根本不含 scn3/scn4**。
+用户手上那一版的边界时刻仍是 1fps 网格 + 旧 CLS 像素门。
+
+### 构建
+
+`powershell -ExecutionPolicy Bypass -File mvp/ui/scripts/build-release.ps1`，四步全走完，`BUILD_RC=0`；
+日志 `work/r27_pkg/build_r27.log`。产物 `backend.exe` 77,509,036 B（对 r26 **+6,400 B**）。
+
+### 五道包内验收（串行，逐条取 rc，全部 rc=0）
+
+| 道 | 读数 |
+|---|---|
+| `accept_packaged_bundle.py` | **33 PASS / FAILED=0**；12 行 `locate leg=` 齐、`legs` 刻度 `[6,9,42,44,44,44,44,48,48,48,48,48]`、DirectML 生效、冒烟 **35.2s ≤ 75s** |
+| `accept_packaged_render.py` | **8 PASS / FAILED=0**；64 段、成片 136.366 vs Σclip 136.344s、`h264_amf`、渲染走隔离子进程、wall 60s |
+| `check_export_plan_invariants.py` | **FAILED=0**；4 片 × 4 通道五条不变式全绿（2mkv 70 / test1 44 / test2 46 / test3 69 段） |
+| `work/r17_pkg/startup_smoke.py` | **FAILED=0**；Electron 4 进程 + backend 1 个、30s 存活、`AFTER_KILL=0` |
+| `work/r26_pkg/accept_packaged_merge.py` | **6 PASS / FAILED=0**；包内 `backend.exe` + 包内 ffmpeg 真跑合并腿 |
+
+### zip 身份（两把尺子读数逐字相同）
+
+`work/r27_pkg/make_zip_r27.py`（由 r26 版派生，含三道结构硬断言）与独立 `work/r17_pkg/zip_identity.py`：
+
+```
+Video-Locator-win-x64-20261018r27.zip  981,703,562 B（对 r26 +5,718 B）
+条目 7,079 = 文件 6,993 + 空目录 86   testzip=None   root_form=flat
+zip 内 backend.exe 77,509,036 B sha16 fbba9d9870b2fcab == 磁盘（matches_disk_build=True）
+zip 内 bridge.js     8,882 B sha16 7d3e0427e3d3a4db（与 r26 逐字同 ⇒ 本批零 JS 改动）
+与 r26 文件集合差集 = 0 / 0
+渲染层含 /api/tasks/export 的资产 = index--VHmdytl.js（与 r26 同）
+```
+
+### 未结项（如实）
+
+1. **mac dispatch 没做成**：非交互取令牌两条路都堵 —— `git credential fill` rc=128、`git credential-manager get` rc=255，
+   在 `GCM_INTERACTIVE=never` 下均报 `Cannot prompt because user interactivity has been disabled`；
+   环境无 `GH_TOKEN` / `GITHUB_TOKEN` / 任何 token 文件。按既定规矩**停手不重试、不弹窗**。
+   入口 = Actions → `H3 macOS MPS POC + MVP tests` → Run workflow（ref=master，head 应为 `e1abea4`）。
+2. **未删 r24**：按「每出一代删最老」，r27 出门后应删 r24（现四档 r27/r26/r25/r24），**等口令**，删前照例双验。
+3. 真索引 `refresh_derived` 端到端仍未跑完（沿用续67 未结项）。
+4. 立项③「下游按阈值标注」未做（侧车数据已备好）。
+
+### 档案
+
+`Current Task` 的「续63 补廿四」块逐字迁 `.agent/archive/STATE_history_20261018.md`；
+`TODO.md` P0 的「续65」块逐字迁 `.agent/archive/TODO_history_20261018b.md`（迁前断言块首/块尾、迁后断言 Current Task 块数 = 3）。
+
+### ⚠️ 本轮我自己踩的一个坑（留档防复发）
+
+用 `read` 工具读 `CHANGELOG.md`（4017 行）只拿回 **481 行**（工具默认上限），我据此 `write` 写回 ⇒
+**4021 → 234 行，后 3591 行被静默抹掉**；`STATE.md`/`TODO.md` 同批也被截断（628→130、93→?）。
+`git checkout --` 三次恢复。**教训：改写长文件必须先验证「读到的行数 == `totalLines`」，否则一律不许写回；
+或在 `run_code` 里用 `node:fs` 整读整写（本次已验证 fs 读 4017 行完整）。**
+
+---
+
 ## 2026-10-13（续63 补十七）— B 方案导出异步化：`POST /api/tasks/export` 带进度与可取消，UI 切任务通道
 
 - **触发**：用户口令「开始 B 方案导出异步化」（上一条给出的六步顺序，第 1~4 步本批做完；

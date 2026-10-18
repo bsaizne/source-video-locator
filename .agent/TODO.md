@@ -9,22 +9,26 @@
 
 ## P0 — Current
 
-> **▶ 2026-10-18（续65）— 「CLS 0.718 疑似缺陷」结案 = 假缺陷；同批捞出真漏检 + verdict 链缺陷 + 门扫参零和【现读这条】**
-> 口令「继续」。**全程只读**（`mvp/src` 零改动、索引未重建、无新依赖、未出包、未接线）。
-> **结论翻转**：t=3782 那条 **CLS 腿命中了、边界也产出了**（3780.0，CLS 峰 0.7185 @3780.0 gate 通过 +
-> 像素腿 3780.3 gate 通过，NMS 合成一条）⇒ **不是缺陷**。
-> **两处错都是我的**：① `has_bound` 判定窗 **±1.5s 窄于取峰窗 WIN=2.0s**，本案恰差 **2.00s** ⇒ 误判漏检；
-> ② verdict 是 **if-elif 且 CLS 腿排像素腿之后** ⇒ 被 P 腿否掉的永远走不到 CLS 分支，
-> 于是「52 条只 1 条标 CLS」被误读成「CLS 只覆盖 1 条」。独立复算 = **11 条**（过门 2、净漏 **0**）。
-> **目检坐标偏 ~1.7s**：5fps 细采样真切点 **3780.3**，10fps 像素 0.1865 为全窗第一（第二名 2.3 倍）。
-> **真有漏检（兄弟条 t=3814）**：真切点 3815.6、CLS 峰 3816.0 通过，但持续性门 `dist=0.0973 < 0.10`
-> **差 0.0027** 被否 ⇒ 不出边界。**放宽门是零和**（扫参 best +0.003 且 ±0.5s 变差、gate 全关崩到 0.781）
-> ⇒ 调门不是解，要救只能给 CLS 腿**独立门**（新立项待拍板）。
-> **落档**：`mvp/docs/FINDINGS_BOUNDARY_PRECISION_20261018.md` **§9**（含 6 条复跑命令）。
-> **未结**：① 接 scn3（bump + 出包 r27 + mac 另走 dispatch）
-> ② ~~改相对门（P3 5 条，上限 4%）~~ = **已结案 = 不做**（§10：可达仅 3 条、尺子对这 5 条无话可说、
-> 放宽 R 恒 0.872 而 P 滑坡、全片 +68~150 条）⇒ `pixel_rel_mult=3.0` = **实测最优档，不再待改**
-> ③ ~~查 CLS 0.718~~ = **已结案**；剩余「CLS 腿独立门」待拍板 ④ 主线三样外部输入 ⑤ 下次出包删 r24。
+> **▶ 2026-10-18（续68）— ✅ 出包 r27 + 五道包内验收全绿 + zip 身份双尺一致；mac dispatch 被令牌堵住【现读这条】**
+> 口令「继续这个项目」。**本批只出包，`mvp/src` 零改动**（构建点 = 干净 commit `e1abea4`，与 origin/master 同步）。
+> **一、为什么必须重出**：r26 的 `win-unpacked` 构建于 **2026-10-18 01:37**，而 scn3/scn4 三笔代码
+> （`5bb8089` 17:42 / `b6e9113` 18:44 / `a00231c` 21:39）都在它之后 ⇒ **r26 里不含 scn3/scn4**。
+> **二、包身份（两把尺子读数逐字相同）**：`Video-Locator-win-x64-20261018r27.zip` **981,703,562 B**
+> （对 r26 **+5,718 B**）· 条目 **7,079**（文件 6,993 + 空目录 86）· `testzip=None` · root_form=flat ·
+> zip 内 `backend.exe` **77,509,036 B / sha16 `fbba9d9870b2fcab`** == 磁盘（`matches_disk_build=True`）·
+> `bridge.js` 8,882 B / sha16 `7d3e0427e3d3a4db`（与 r26 逐字同 ⇒ 本批零 JS 改动）· 与 r26 文件集合差集 **0 / 0**。
+> **三、五道包内验收全绿（逐条 rc=0）**：bundle **33 PASS / FAILED=0** · render **8 PASS / FAILED=0**
+> （64 段 / 136.366 vs 136.344s / `h264_amf` / 隔离在位 / wall 60s）· 导出计划不变式 **FAILED=0**
+> （4 片 × 4 通道五条全绿：2mkv 70 · test1 44 · test2 46 · test3 69 段）· 启动冒烟 **FAILED=0 / AFTER_KILL=0** ·
+> 合并腿 **6 PASS / FAILED=0**（包内 backend + 包内 ffmpeg 真跑）。
+> **四、⚠️ mac dispatch 没做成（如实）**：非交互取令牌两条路都堵 —— `git credential fill` rc=128、
+> `git credential-manager get` rc=255（`GCM_INTERACTIVE=never` 下均报 `Cannot prompt ... disabled`），
+> 环境无 `GH_TOKEN`/`GITHUB_TOKEN`/token 文件。按规矩**停手不重试、不弹窗**。
+> 入口 = Actions → `H3 macOS MPS POC + MVP tests` → Run workflow（ref=master，head 应为 `e1abea4`）。
+> **五、未结**：① **mac 包**（需用户给 token 或手动 dispatch）② **删 r24**（等口令，双验后删）
+> ③ 真索引 `refresh_derived` 端到端仍未跑完 ④ 立项③「下游按阈值标注」未做。
+> **六、⚠️ 本轮我踩的坑**：`read` 工具读长文件被截断（CHANGELOG 4017→481 行）后直接 `write` 写回，
+> 抹掉 3591 行；`git checkout --` 三次恢复。**改写长文件必须先验「读到的行数 == totalLines」**（详见 CHANGELOG 续68 §坑）。
 
 ## P1 — Next
 

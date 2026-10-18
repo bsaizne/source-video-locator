@@ -42,6 +42,33 @@
 
 ## Current Task
 
+> **▶ 2026-10-18（续68）— 出包 r27：五道包内验收全绿 + zip 身份双尺一致；mac dispatch 被令牌堵住【现读这条】**
+> 口令「继续这个项目」。**本批只出包，`mvp/src` 零改动**（构建点 = 干净 commit `e1abea4`，与 origin/master 同步 `0 0`）。
+> **一、为什么必须重出（硬前提，不是例行）**：r26 的 `win-unpacked` 构建于 **2026-10-18 01:37**，
+> 而 scn3/scn4 三笔代码（`5bb8089` 17:42 · `b6e9113` 18:44 · `a00231c` 21:39）**都在它之后**
+> ⇒ **r26 里根本不含 scn3/scn4**，用户手上那版边界时刻仍是 1fps 网格 + 旧 CLS 像素门。
+> **二、包身份（`work/r27_pkg/make_zip_r27.py` 与独立 `work/r17_pkg/zip_identity.py` 两把尺子读数逐字相同）**：
+> `Video-Locator-win-x64-20261018r27.zip` · **981,703,562 B**（对 r26 **+5,718 B**）· 条目 **7,079**（文件 6,993 + 空目录 86）·
+> `testzip=None` · root_form=flat · zip 内 `backend.exe` **77,509,036 B / sha16 `fbba9d9870b2fcab`** == 磁盘（`matches_disk_build=True`）·
+> `bridge.js` 8,882 B / sha16 `7d3e0427e3d3a4db`（与 r26 逐字同 ⇒ 本批零 JS 改动）· 与 r26 文件集合差集 **0 / 0**。
+> **三、五道包内验收全绿（串行逐条取 rc，全部 rc=0）**：
+> ① `accept_packaged_bundle.py` **33 PASS / FAILED=0**（12 行 `locate leg=` 齐、`legs` 刻度 `[6,9,42,44,44,44,44,48,48,48,48,48]`、DirectML 生效、冒烟 **35.2s ≤ 75s**、导出任务通道 completed）；
+> ② `accept_packaged_render.py` **8 PASS / FAILED=0**（64 段 / 成片 136.366 vs Σclip 136.344s / `h264_amf` / 渲染走隔离子进程 / wall 60s）；
+> ③ `check_export_plan_invariants.py` **FAILED=0**（4 片 × 4 通道五条不变式全绿；2mkv 70 · test1 44 · test2 46 · test3 69 段）；
+> ④ `work/r17_pkg/startup_smoke.py` **FAILED=0**（Electron 4 进程 + backend 1 个、30s 存活、`AFTER_KILL=0` 无残留）；
+> ⑤ `work/r26_pkg/accept_packaged_merge.py` **6 PASS / FAILED=0**（包内 `backend.exe` + 包内 ffmpeg 真跑合并腿：`(6,'unknown')` 夹具、产物 `6/5.1`、两种顺序同布局、留痕命中）。
+> **四、⚠️ mac dispatch 没做成（如实交代，不是遗漏）**：非交互取令牌两条路都堵 ——
+> `git credential fill` rc=128 与 `git credential-manager get` rc=255，在 `GCM_INTERACTIVE=never` 下均报
+> `Cannot prompt because user interactivity has been disabled`；环境里也无 `GH_TOKEN` / `GITHUB_TOKEN` / 任何 token 文件。
+> 按既定规矩**停手不重试、不弹窗**。入口 = Actions → `H3 macOS MPS POC + MVP tests` → Run workflow（ref=master，head 应为 `e1abea4`）。
+> 判据（补廿三 1b 已订正）：**`mvp/src` 或 `mvp/ui` 任一有改动 ⇒ mac 必须另走 dispatch**，因为 mac 包的后端由 CI 现编。
+> **五、⚠️ 本轮我自己踩的一个坑（留档防复发）**：用 `read` 工具读 `CHANGELOG.md`（4017 行）只拿回 **481 行**（工具默认上限），
+> 我据此整文件 `write` 写回 ⇒ **4021 → 234 行，后 3,591 行被静默抹掉**；`STATE.md`/`TODO.md` 同批也被截断。
+> 三次 `git checkout --` 恢复，改用 `node:fs` 整读整写（已验证 fs 读到完整 4017 行）。
+> **教训：改写长文件前必须先断言「读到的行数 == totalLines」，否则一律不许写回。**
+> **六、未结**：① **mac 包**（需用户给 token 或手动 dispatch）② **删 r24**（等口令，双验后删）
+> ③ 真索引 `refresh_derived` 端到端仍未跑完 ④ 立项③「下游按阈值标注」未做。
+> 明细：`work/r27_pkg/{build_r27.log,accept_bundle_r27.log,accept_render_r27.log,invariants_r27.log,startup_r27.log,accept_merge_r27.log,make_zip_r27.log,zip_identity_r27.log,make_zip_r27.py}`。
 
 > **▶ 2026-10-18（续67）— 立项② 方案 A2 落地：scn4 = CLS 腿独立语义门（像素门 OR 语义门，代码笔 `b6e9113`）【现读这条】**
 > 口令：口径裁 **B（剪辑镜头）** → 「按你的计划来」→「跑 a 吧」→「那就 a 吧」→「先出来再定」→「走吧」。**本批动了 `mvp/src`**。
@@ -99,61 +126,6 @@
 > ③ ②-0 产品口径仍待裁 ④ 立项③ 的「下游按阈值标注」未做（要等口径）⑤ 下次出包删 r24。
 > 明细：`mvp/docs/IMPL_SCN3_20261018.md`（含踩坑与偏差）；计划 `mvp/docs/PLAN_BOUNDARY_ALIGNMENT_20261018.md`。
 
-> **▶ 2026-10-18（续63 补廿四）— r23 已删 + cap 1.5 结论从单片扩到四片（含两条对我自己上一轮的订正）+ C 盘占用查清【现读这条】**
-> 口令「删旧包吧，然后继续，然后查查为什么做你这个项目我的 C 盘老被占用空间，不是都在 D 盘吗」。
-> **一、删旧包**：按「每出一代删最老」删 **r23**（释放 981,687,209B ≈ 936MB）。删前
-> `work/r26_pkg/precheck_delete_r23.py` 双验（期望值从 197 份 `.agent` 文本里抓、读数从 zip 里取）：
-> **r26 现役 / r25 / r24 三档与档案逐字一致、`testzip=None`**，r23 自身身份留痕
-> = 981,687,209B / 7,078 条目 / backend.exe 77,493,384B sha16 `537bcca18760de77`。⇒ 磁盘三档 = **r26/r25/r24**。
-> **二、⚠️ 订正我上一轮写的两条（都是我的错，原话留在档案里不悄悄改，只加订正）**
-> ① **「test1/2/3 原片不在本地 ⇒ 单片结论」= 错**。四片原片**全在本地 D 盘**：
->   `D:\video\2.mkv` + `D:\ProjectXIXI\test{1,2,3}\test{n}-om.*`（逐个 `os.path.exists` 已验）。
->   错因 = 我自己那条 grep 管道里的 `sed 's/.*: *//'` **把盘符 `D:` 一起吃掉了**，
->   于是 `D:\ProjectXIXI\...` 显示成 `\ProjectXIXI\...`，我据此判成"UNC 不可达"。
->   ⇒ 教训同族但形态新：**shell 文本处理能造出"看起来像证据"的假读数**；路径存在性一律用
->   `os.path.exists` 逐条判，不要用 sed/grep 的输出反推。
-> ② **「cap1.5 逐 clip == 关闭扩宽」+「1.5 档卷轴区间 == 成片通道区间」= 只在 3/4 片成立**。
->   test3 有 **1 条 clip 在 1.5 档仍被扩宽**（`clip62` core=[2939.000, 2943.167] 4.17s → 1.5 档
->   [2939.000, 2945.000] 6.0s = **1.44×，正好在 1.5 阈内**），⇒ 该片的"卷轴 == 成片"不成立。
->   口径改为：**cap 1.5 ≈ 关闭扩宽**（四片 234 条 clip 里 1 条仍扩宽），不是"等于关闭"。
-> **三、四片实测（`work/cap15_film_20261018/{four_cases.py,four_case_report.json,sheets_four.py,sheets4/}`）**
-> | 片 | clips | 两档不同 | cap 归因 | 至少一边不在切点 1.5/2.5 | Σ素材宽 2.5/1.5/core | 1.5==core | 1.5 卷轴==成片 |
-> |---|---|---|---|---|---|---|---|
-> | 2mkv | 72 | 12 | 10 | 47 / 37 | 161.2 / 135.4 / 135.4 | ✓ | ✓ |
-> | test1 | 45 | 7 | 7 | 42 / 35 | 103.0 / 84.6 / 84.6 | ✓ | ✓ |
-> | test2 | 47 | 9 | 8 | 25 / 17 | 92.2 / 76.7 / 76.7 | ✓ | ✓ |
-> | test3 | 70 | 11 | 9 | 37 / 28 | 142.7 / 125.0 / **123.2** | **✗ 1 条** | **✗** |
-> | **合计** | **234** | **39** | **34** | 151 / 117 | 499.1 / 421.7 / 419.9 | 3/4 片 | 3/4 片 |
-> 真剪点偏差（四片合并，44 个扩宽边界、±1.0s 窗逐帧自算像素差）：**32/44 有显著剪点，
-> 中位 |Δ| 0.249s、最大 0.917s，26/32 偏 >0.12s、11/32 >0.30s**；按符号 **18 正向 = 2.5 素材把邻镜头
-> ≤0.9s 带进卷轴（闪切）**、14 负向 = 少带 0.2~0.9s 本镜头内容。
-> 读图 **7/7 张**（新增三片各取头/尾最长两条 + test3 那条 1.5 仍扩宽的）：
-> test1 出点时两人扭打未完（丢 4.0s 收尾）／test2 出点丢掉守卫转身收尾 2.0s／test3 入点从精灵特写中段开始
-> （丢 2.0s）；2.5 侧 test3_clip33 素材头 **带进上一条镜头 ~0.4-0.8s**（与 18 条正向偏差同向对上）；
-> test3_clip62 的 1.5 档出点 2944.72 距真剪点 ~2944.9 只差一两帧 ⇒ **1.5 不是"砍掉收尾"，是"只允许到 1.44×"**。
-> **⇒ 补二十 的结论在四片上全部成立且更强**：cap **既不是「过渡不流畅」的成因、也不是解药**
-> （cap 归因 34/234 条，而"切口落在镜头中间"两档都有 117~151 条）；单片覆盖边界**已关闭**。
-> **四、C 盘占用查清（`work/cdisk_20261018/measure_c.py`，只量不删）**
-> | 写入点 | 量 | 谁写的 |
-> |---|---|---|
-> | `%TEMP%\rea-ghidra-*`（两个目录） | **6.39 GB** | **竞品逆向那条线**（Ghidra headless 工作区，10-17 00:12 / 02:14，内含 428MB 目标 exe 副本 + 分析缓存）⇒ 不是本项目 |
-> | `%APPDATA%\Video Locator AI` | 488 MB（`data` 377 + `Cache` 95） | **分发包数据根** + 包内验收（`attr_packaged_headless.appdata_dir()` 就指这里：index 116 + edited_cache 126 + models 88 + isc 30 + merged 11） |
-> | `~\.qoder-cn` | 735 MB | CLI 自身（会话/记忆/快照） |
-> | `%LOCALAPPDATA%\SourceVideoLocator` | 448 MB（edited_cache 228 + index 102 + models 88） | **源码树/探针态数据根**（`paths.app_data_dir()` = LOCALAPPDATA） |
-> | 工具链缓存 | ~1.1 GB | uv 406 + pip 386 + npm 191 + electron 116（venv 在 D，**缓存目录默认在 C**） |
-> | `%TEMP%\_MEI000022f02` | 90 MB | PyInstaller 解包残留（10-11，非正常退出留下的） |
-> | 我的探针/单测残留 | **仅 14.8 MB**（163 项） | `svl_*`/`tmp.*`；`tempfile.mkdtemp` 在单测 `setUpClass` 里**没有配平清理** ⇒ 每跑一次全套留 ~10 个目录（量小但在长） |
-> ⇒ **结论：代码与产物确实在 D，吃 C 的是"数据根按设计落 AppData"+"一次性逆向工作区 6.39GB"+"工具链缓存"**。
-> **处置 = 用户裁决（2026-10-18）：三项都不做、不入待办、以后勿再提议。**
-> **五、现役未结项**：ⓐ ~~mac dispatch 待他一步~~ = **已闭合**（run `39060341032` 全程 22.5min，
->   三 job 全 success；`macos-package` 11.5min、21 步全绿，含
->   **`Accept packaged mac bundle (gate publish)` success** 与 **`Publish to mac-alpha` success**；
->   回读资产 = `Video-Locator-mac-arm64.zip` **917,013,005B @ 2026-10-17T19:19:39Z**，
->   对旧值 916,840,558B @ 10-13 **+172,447B 且时间戳变** ⇒ 包确实换了，**mac 侧已含 r25+r26 全部后端修复**）；
->   ⓑ 第五道包内合并验收**升不升为常设**；ⓒ 主线「过渡不流畅」三样外部输入；
->   ⓓ `og720-720` 相似度自相矛盾挂账。
-> **产物**：`work/r26_pkg/precheck_delete_r23.py`、`work/cap15_film_20261018/{four_cases.py,four_case_report.json,four_cases.log,sheets_four.py,sheets4/×7,sheets4_index.json}`、`work/cdisk_20261018/measure_c.py`。
-
 ## Completed
 
 - 历史完成项见 `.agent/archive/STATE_history_20261007.md`（Current Task 退休块续14~续61）、
@@ -164,8 +136,20 @@
   包内日志缺失缺陷 + 抓到并回滚了自己引入的「时间线通道误扩宽」回归）；**续63 补二**
   成片通道包内实测（并升为常设 `accept_packaged_render.py`）+ 修掉渲染侧漏传的
   `isolated`（渲染此前从未隔离）+ 卷轴去紧邻同素材重复（默认开）+ ①③ 的 UI 接线。
+- **r27 出包（2026-10-18 续68）**：`Video-Locator-win-x64-20261018r27.zip` 981,703,562 B / 7,079 条目 /
+  `testzip=None` / zip 内 `backend.exe` 77,509,036 B sha16 `fbba9d9870b2fcab` == 磁盘；
+  **五道包内验收全绿**（bundle 33 PASS · render 8 PASS · 不变式 FAILED=0 · 启动冒烟 AFTER_KILL=0 · 合并腿 6 PASS）；
+  **首次把 scn3+scn4 带进包**（r26 构建于当天 01:37，早于 17:42/18:44/21:39 三笔代码）。
+- **档案迁移**：`Current Task` 的「续63 补廿四」块逐字迁 `.agent/archive/STATE_history_20261018.md`；
+  `TODO.md` P0 的「续65」块逐字迁 `.agent/archive/TODO_history_20261018b.md`。
 
 ## Current Problem
+
+- ✅ **r27 已出包（续68，2026-10-18）**：五道包内验收全绿 + zip 身份双尺一致；**首次把 scn3/scn4 带进包**
+  （r26 构建于当天 01:37，早于三笔代码笔）⇒ 用户手上的包此前**不含**边界精度提升。
+  待办只剩两件：**mac 包**（非交互取令牌两条路全堵，需用户给 token 或手动 dispatch）、**删 r24**（等口令）。
+- ⚠️ **本轮我踩的坑**：`read` 工具对长文件有默认上限（CHANGELOG 4017 行只返回 481 行），我据此整写回 ⇒
+  抹掉 3,591 行；`git checkout --` 三次恢复。**教训：改写长文件前先断言「读到的行数 == totalLines」。**
 
 - ✅ **续64 边界线收口（2026-10-18）**: 见 Current Task 顶部块；B 线两窗口 AUC 0.555/0.553 判负；未接线、未出包、未提交。
 - ✅ **scn4 出包前硬验收已完成（续67 补一，2026-10-18）**：4 片导出实得 + 导出计划不变式**双双通过**。
@@ -383,19 +367,13 @@
 
 ## Next Actions
 
-> **▶ 交接指针（2026-10-18 续67，最新）**: **先读** `.agent/archive/HANDOFF_20261018_scn34_closeout.md`
-> （自包含：scn3+scn4 全记录、硬验收双通过读数、**六个错 + 两条技术性漏接**、复跑命令、Windows 坑）。
-> **唯一剩下的主线 = 出包 r27 + mac 另走 dispatch**（代码已完成并推远端 `ad7cec4..a00231c`）。
->
-> 上一份 `HANDOFF_20261018_boundary_precision.md`（续64）已被它取代，其 §4 未结项 1「查 CLS 0.718」
-> 早已结案 = 假缺陷，别再照着它查。更早的（续65）指针原文如下，仅作留档：
->
-> ~~**▶ 交接指针（2026-10-18 续65）**: **先读** `Current Task` 顶部「续65」块 + `mvp/docs/FINDINGS_BOUNDARY_PRECISION_20261018.md`
-> **§9**（本节自包含：探针读数、两处口径错、目检偏移证据、真漏检、门扫参零和、6 条复跑命令）。
-> 大背景（分型/网格损失/scn3 预演/B 线判负）读 `archive/HANDOFF_20261018_boundary_precision.md`
-> —— ⚠️ 其 **§4 未结项 1「查 CLS 0.718」已由 续65 结案 = 假缺陷**，别再照着它去查。
+> **▶ 交接指针（2026-10-18 续68，最新）**: r27 **已出包且五道全绿**，剩下只有两件 —— **mac 包**
+> （非交互取令牌两条路全堵，需用户给 token 或手动点 Actions dispatch）与**删 r24**（等口令）。
+> 包身份与验收读数见 `Current Task` 顶部「续68」块，明细在 `work/r27_pkg/`。
+> 上一份 `.agent/archive/HANDOFF_20261018_scn34_closeout.md`（续67）**仍然有效**——它讲的是 scn3/scn4 代码本身
+> 与硬验收（结论没变）；**只需读它的 §5「六个错」与 §6 读数口径**，§1~§3 可跳过。
 
-> 现役未结项以 `Current Task` 顶部「续63 补廿四」块 + 本表为准；**交接读这一份就够**：
+> 现役未结项以 `Current Task` 顶部「续68」块 + 本表为准；**交接读这一份就够**：
 > `.agent/archive/HANDOFF_20261018_r26_closeout.md`（自包含：这一夜五批的读数索引、七条被打掉的旧结论、
 > 包身份与五道验收读数、未结项 1~5、复跑命令、我自己四处错的形态与 Windows 坑）；
 > 上一份 `.agent/archive/HANDOFF_20261017_r25_closeout.md` 已被它取代（其 §5 开放项 1/2 均已闭合）；
@@ -625,4 +603,4 @@
 
 ## Last Updated
 
-2026-10-18 21:52
+2026-10-18 22:20
