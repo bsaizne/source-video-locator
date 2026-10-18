@@ -48,12 +48,19 @@ ProgressFn = Callable[[IndexProgress], None]
 #   +0.215s、绝对中位 0.28s；同批候选唯一变量=是否 snap ⇒ abs_med 0.250→0.050、le0.12 27.6%→77.9%
 #   （FINDINGS_BOUNDARY_PRECISION §2/§3）。下游 exporters.snap_clips_to_scenes 直接吃这张表 ⇒
 #   精度提升会落到成片端点。判定口径未变，所以场景数与 scene_feats 与 scn2 逐字节相同。
+# scn4 = scn3 + **CLS 腿独立语义门**（立项② 方案 A2，2026-10-18）：CLS 腿的持续性门从
+#   灰度直方图 ``block_*`` 改为「像素门 **OR** 语义门」。为什么：正反打换人时直方图几乎不变，
+#   旧门把它误杀（读图证 test1 5411.46/5415.46：红毛衣女子↔灰衣男子，现役偏差 2.85s/6.85s，
+#   新门 0.46s 命中）。门取 OR 不取换——换成纯语义门会丢 test2 4573.3/test3 6682.4 两处图证真切点。
+#   尺子：TP 109→111、FP 25 持平、FN 16→14；全片边界 942→912（−3.2%，导出不膨胀）。
+#   ⚠️ ``cls_cut_abs`` 0.30→0.40 是**与语义门耦合**的一对：只提 cut_abs 会让尺子 FP 25→38；
+#   只在 0.30 加语义门会让**全片边界 +10.9%**。两者必须一起改（见 SceneDetectConfig 注释）。
 #   参数与判据实现见 ``engine/segment/scene_detect.py``；换判据必须重过边界尺子。
 SCENE_CUT_ABS = 0.15       # （scn1 旧参数，仅 refresh 失败兜底路径与历史测试引用）
 SCENE_Z_THRESH = 1.5
 SCENE_MIN_SHOT_S = 3.0
 SCENE_SMOOTH = 1
-SCENE_TABLE_VERSION = "scn3"
+SCENE_TABLE_VERSION = "scn4"
 # --- 事件表（方向 A 完整阶段, 2026-09-05 用户拍板立项; 探针 POSITIVE）---
 # 场景 -> 事件单元归并: 时序近邻(中心时间差<=EVENT_T_GAP_S) + 场景指纹相似(>=EVENT_S_SIM)
 # 联合连通分量。参数固化在探针网格最优区(60-120s / 0.55-0.60)取 60s/0.60 保守值。

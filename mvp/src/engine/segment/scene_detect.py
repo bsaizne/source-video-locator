@@ -63,6 +63,29 @@ class SceneDetectConfig:
     block_skip: int = 2              # 后块跳过的前导帧数（给转场/运动模糊留余量）
     block_dist_thr: float = 0.10     # 前后块直方图距离下限（真的换了画面）
     block_dev_thr: float = 0.30      # 后块内任一帧到块均值的 L1 距离上限（新状态要稳）
+    # --- CLS 腿独立语义门（scn4，2026-10-18 立项② 方案 A2）-------------------------
+    # 为什么需要它：`block_*` 那套门吃的是**灰度直方图**，对「正反打换人」几乎无感——
+    # 同一场景、暗调、两人衣着色近 ⇒ 直方图几乎不动，CLS 腿的强信号被像素腿设计的门误杀。
+    # 读图确证（test1 5411.46 / 5415.46，v2_test1_5413.png）：红毛衣女子 ↔ 灰衣男子对切，
+    # 是真切点；现役最近边界 2.85s / 6.85s（都没命中），语义门补回后 0.46s 命中。
+    # ⚠️ **门是「或」不是「换」**：像素门 OR 语义门。两类真切点机制不同，单门必漏一类——
+    #   正反打（直方图不变）只有语义门能放；快速蒙太奇换景（语义峰弱）只有像素门能放。
+    #   实测：换成纯语义门会丢掉 test2 4573.3 / test3 6682.4 两处已读图确认的真切点。
+    #
+    # ⚠️ **cls_cut_abs 与本门是耦合的一对，不能只改一个**（2026-10-18 全片实测）：
+    #   · 只提 cut_abs 0.30->0.40（语义门关）：尺子 TP 109->112 但 FP 25->38（纯亏）
+    #   · 只在 0.30 上加语义门（A1）：尺子看着只 +3 FP，但**全片边界 942->1045（+10.9%）**
+    #     ⇒ 导出侧 `split_clips_at_boundaries` 按边界拆段，段数会涨一成，不可接受
+    #   · 两者同时（A2，本默认值）：尺子 TP 111 / FP 25 / FN 14（现役 109/25/16），
+    #     且**全片边界 942->912（-3.2%）** ⇒ 唯一「两个口径都不亏」的档
+    #   所以 cut_abs 的 0.40 在这里的作用是**替语义门做粗筛**（挡掉弱峰），
+    #   单独调它只会把假阳放进来。
+    cls_sem_gate: bool = True        # CLS 腿启用独立语义门（与像素门取 OR）
+    cls_sem_pre_s: float = 4.0       # 语义门前块秒数（换算成 CLS 网格帧数）
+    cls_sem_post_s: float = 4.0      # 后块秒数
+    cls_sem_skip_s: float = 2.0      # 后块跳过秒数（给转场留余量）
+    cls_sem_dist: float = 0.05       # 前后块**语义余弦距离**下限（新状态真的不同）
+    cls_sem_dev: float = 0.20        # 后块内部到块均值的余弦距离上限（新状态要落定）
 
 
 def to_gray(frame_bgr: np.ndarray) -> np.ndarray:
@@ -224,7 +247,60 @@ def block_gate_ok(hist: np.ndarray, k: int, cfg: SceneDetectConfig) -> bool:
     return dist >= cfg.block_dist_thr and dev <= cfg.block_dev_thr
 
 
+def semantic_block_stats(feats: np.ndarray, times: np.ndarray, t: float,
+                         pre_s: float, post_s: float,
+                         skip_s: float) -> tuple[float, float]:
+    """CLS 腿的**语义侧**持续性读数：``(前后块余弦距离, 后块内部最大偏离)``。
+
+    与 :func:`block_stats` 同构（同样「切过去且落定」的语义），但吃的不是灰度直方图
+    而是 DINOv2 语义向量 —— 这正是它能在「直方图不变但换了人」的地方生效的原因。
+
+    ⚠️ **按绝对时刻定位**（``t`` -> ``searchsorted(times, t)``），不能拿调用方的 CLS 峰
+    下标当行号：第一版探针就是这么错的（拿 k+1 直接索引 feats），索引错位导致算的根本
+    不是那一段，还把两处真切点杀掉、差点据此误判立项② 为负。
+
+    pre/post/skip 都是**秒**（在 CLS 网格上换算成帧数），与配置字段同名对应。
+    """
+    feats = np.asarray(feats, dtype=np.float32)
+    times = np.asarray(times, dtype=np.float64)
+    n = int(feats.shape[0])
+    if n == 0 or times.size < 2:
+        return 0.0, 9.9
+    fps = 1.0 / float(np.median(np.diff(times))) if times.size > 1 else 1.0
+    pre = max(1, int(round(pre_s * fps)))
+    post = max(1, int(round(post_s * fps)))
+    skip = max(0, int(round(skip_s * fps)))
+    k = int(np.searchsorted(times, t, side="left"))
+    a0, a1 = max(0, k - pre), max(1, k)
+    b0, b1 = min(max(n - 1, 1), k + skip), min(n, k + skip + post)
+    if a1 <= a0 or b1 <= b0 + 1:
+        return 0.0, 9.9
+    before = feats[a0:a1].mean(axis=0)
+    after = feats[b0:b1]
+    cen = after.mean(axis=0)
+
+    def _cosd(x, y) -> float:
+        nx = float(np.linalg.norm(x))
+        ny = float(np.linalg.norm(y))
+        if nx < _EPS or ny < _EPS:
+            return 0.0
+        return 1.0 - float(np.dot(x, y)) / (nx * ny)
+
+    return _cosd(before, cen), max(_cosd(r, cen) for r in after)
+
+
+def semantic_gate_ok(feats: np.ndarray, times: np.ndarray, t: float,
+                     cfg: SceneDetectConfig) -> bool:
+    """CLS 腿独立语义门（**与像素门取 OR**，不是替换）。生产与尺子共用这一个入口。"""
+    if not cfg.cls_sem_gate or feats is None or getattr(feats, "ndim", 0) != 2:
+        return False
+    dist, dev = semantic_block_stats(feats, times, t, cfg.cls_sem_pre_s,
+                                     cfg.cls_sem_post_s, cfg.cls_sem_skip_s)
+    return dist >= cfg.cls_sem_dist and dev <= cfg.cls_sem_dev
+
+
 def _snap_index(times: np.ndarray, t: float) -> int:
+
     """把任意时刻**就近**吸附到 ``times`` 网格的帧索引（不是向上取整）。
 
     ⚠️ 这里不能用 ``searchsorted(..., side="left")``：那是「第一个不早于它的帧」= 永远往后
@@ -245,7 +321,8 @@ def detect_scene_bounds(n_frames: int, times: np.ndarray, s_cls: np.ndarray | No
                         pixel: tuple[np.ndarray, np.ndarray, np.ndarray] | None,
                         cfg: SceneDetectConfig, fps: float,
                         raw_out: dict[int, float] | None = None,
-                        strength_out: dict[int, float] | None = None) -> list[int]:
+                        strength_out: dict[int, float] | None = None,
+                        cls_feats: np.ndarray | None = None) -> list[int]:
     """CLS 证据 + 像素证据融合 -> **新场景首帧的索引列表**（升序，落在 ``[1, n_frames-1]``）。
 
     - CLS 腿：``s_cls``（= 相邻帧 CLS 余弦距离，长度 n-1）上的局部极大且 ``>= cls_cut_abs``；
@@ -272,11 +349,16 @@ def detect_scene_bounds(n_frames: int, times: np.ndarray, s_cls: np.ndarray | No
 
     if s_cls is not None and len(s_cls):
         arr = np.asarray(s_cls, dtype=np.float64)
+        feats_for_sem = cls_feats
+        times_for_sem = times
         for k in np.flatnonzero(local_peaks(arr) & (arr >= cfg.cls_cut_abs)):
             k = int(k)
             if k + 1 < n_frames:
                 t = float(times[k + 1])
-                if gate(t):
+                # ★ scn4：像素门 **或** 语义门。两类真切点机制不同，单门必漏一类：
+                #   正反打换人 ⇒ 灰度直方图几乎不变（像素门杀）、语义变了（语义门放）；
+                #   快速蒙太奇换景 ⇒ 语义峰可能不够强（语义门杀）、像素差大（像素门放）。
+                if gate(t) or semantic_gate_ok(feats_for_sem, times_for_sem, t, cfg):
                     items.append((t, cfg.cls_weight * float(arr[k])))
     # scn3：并行记录「吸附索引 -> 未吸附的原始候选时刻」，**不参与判据**。
     # ⚠️ 这里有个必须绕开的坑（scn3 第一版踩过，被等价性验证当场抓到）：
@@ -376,7 +458,7 @@ def build_scene_table(feats: np.ndarray, times: np.ndarray,
     raw: dict[int, float] = {}
     stg: dict[int, float] = {}
     bounds = detect_scene_bounds(n, times, s_cls, pixel, cfg, fps,
-                                 raw_out=raw, strength_out=stg)
+                                 raw_out=raw, strength_out=stg, cls_feats=feats)
     edges = [0] + bounds + [n]
     edges = [e for i, e in enumerate(edges) if i == 0 or e > edges[i - 1]]
 

@@ -21,6 +21,7 @@ import numpy as np
 from domain import IndexValidationStatus
 from engine.feature_store import feature_store as FS
 from engine.segment.scene_detect import (PixelStream, SceneDetectConfig, block_gate_ok,
+                                         semantic_block_stats, semantic_gate_ok,
                                          block_stats, build_scene_table,
                                          detect_pixel_boundaries, detect_scene_bounds,
                                          gray_hist, to_gray, _snap_index)
@@ -396,13 +397,86 @@ class Scn3PrecisionTest(unittest.TestCase):
         self.assertEqual(float(sc[0, 0]), float(times[0]))
 
 
+class SemanticGateTest(unittest.TestCase):
+    """scn4：CLS 腿独立语义门（像素门 OR 语义门）。
+
+    要证的只有两件事：① 语义门按**绝对时刻**取块（v1 探针就是错在拿帧索引当行号）；
+    ② 门是 **OR** 不是替换 —— 像素门放行的候选不因语义门否掉而消失。
+    """
+
+    def _seq(self, n_side: int = 12):
+        """造一段「语义明确变化」的序列：前半一类、后半另一类（各 ``n_side`` 帧）。
+
+        ⚠️ 我第一版只用 3+3 帧，结果测试自己红了 —— 不是实现错，是**夹具太短**：
+        pre/post 各 4s（=4 帧）在 6 帧序列上必然横跨切换点，`dev` 被拉高、安静段 `dist`
+        反而有 0.1056。真实索引是 1fps 数千帧，块永远落在同一侧。
+        这里按真实形态给足 12+12 帧。
+        """
+        t = np.arange(0.0, 2.0 * n_side, 1.0)
+        a = np.array([1.0, 0.0, 0.0], dtype=np.float32)
+        b = np.array([0.0, 1.0, 0.0], dtype=np.float32)
+        f = np.vstack([np.tile(a, (n_side, 1)), np.tile(b, (n_side, 1))])
+        f = f / np.linalg.norm(f, axis=1, keepdims=True)
+        return f, t
+
+    def test_distinguishes_semantic_change(self):
+        f, t = self._seq()
+        # 真正的切换点在 t=3.0（第 4 帧起是另一类）
+        dist, dev = semantic_block_stats(f, t, 12.0, 3.0, 3.0, 0.0)
+        self.assertGreater(dist, 0.9)      # 正交单位向量 => 余弦距离 = 1
+        self.assertLess(dev, 0.1)          # 后块内部稳定
+
+    def test_quiet_region_has_no_semantic_change(self):
+        f, t = self._seq()
+        dist, dev = semantic_block_stats(f, t, 6.0, 3.0, 3.0, 0.0)
+        self.assertLess(dist, 0.2)         # 同侧同类 => 几乎不变（12 帧同类，残差来自块均值与单帧的差）
+        self.assertLess(dev, 0.01)
+
+    def test_uses_absolute_time_not_row_index(self):
+        """v1 的 bug：拿 k+1 当 feats 行号。这里让时刻与行号错开，必须仍取对。"""
+        f, t = self._seq()
+        # t=3.0 恰好是行 3；把时刻整体平移 100s，行号不变 => 结果必须一致
+        t2 = t + 100.0
+        d1 = semantic_block_stats(f, t, 12.0, 3.0, 3.0, 0.0)
+        d2 = semantic_block_stats(f, t2, 112.0, 3.0, 3.0, 0.0)
+        self.assertAlmostEqual(d1[0], d2[0], places=6)
+        self.assertAlmostEqual(d1[1], d2[1], places=6)
+
+    def test_gate_respects_config_switch(self):
+        f, t = self._seq()
+        on = SceneDetectConfig(cls_sem_gate=True)
+        off = SceneDetectConfig(cls_sem_gate=False)
+        self.assertTrue(semantic_gate_ok(f, t, 12.0, on))
+        self.assertFalse(semantic_gate_ok(f, t, 12.0, off))
+
+    def test_gate_rejects_when_feats_missing(self):
+        """像素预扫失败/无特征时必须安全返回 False（不能让 OR 门把一切都放行）。"""
+        f, t = self._seq()
+        cfg = SceneDetectConfig()
+        self.assertFalse(semantic_gate_ok(None, t, 12.0, cfg))
+        self.assertFalse(semantic_gate_ok(f, np.array([]), 12.0, cfg))
+
+    def test_or_gate_keeps_pixel_feature_candidate(self):
+        """OR 语义：语义门否掉的候选，只要像素门放行，仍必须进 items。"""
+        f, t = self._seq()
+        # 构造一个语义上「无明显变化」的位置，但像素门会放行
+        strict = SceneDetectConfig(cls_sem_gate=True,
+                                   cls_sem_dist=0.99)   # 高到语义门必否
+        self.assertFalse(semantic_gate_ok(f, t, 6.0, strict))
+        # 若把语义门参数放松，同一位置应被语义门接住 => 证明参数确实起作用
+        loose = SceneDetectConfig(cls_sem_gate=True, cls_sem_dist=0.0,
+                                  cls_sem_dev=9.9)
+        self.assertTrue(semantic_gate_ok(f, t, 6.0, loose))
+
+
 class VersionTagTest(unittest.TestCase):
 
-    def test_scene_table_version_is_scn3_and_splitable(self):
-        # scn3 = scn2 判据 + 10fps 原始边界时刻 + scene_strength 侧车（2026-10-18）
-        self.assertEqual(FS.SCENE_TABLE_VERSION, "scn3")
+
+    def test_scene_table_version_is_scn4_and_splitable(self):
+        # scn4 = scn3 + CLS 腿独立语义门（2026-10-18 立项② 方案 A2）
+        self.assertEqual(FS.SCENE_TABLE_VERSION, "scn4")
         fv = FS._feature_version(1.0)
-        self.assertIn("+scn3+", fv)
+        self.assertIn("+" + FS.SCENE_TABLE_VERSION, fv)
         self.assertEqual(fv.split("+", 1)[0], FS._version_base(1.0))
         self.assertTrue(fv.endswith(FS._version_derived()))
 
