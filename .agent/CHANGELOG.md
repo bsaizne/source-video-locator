@@ -4011,3 +4011,7 @@ zip 内 bridge.js     8,882 B sha16 7d3e0427e3d3a4db == 磁盘   （与 r25 逐�
 - **未结**：① **出包 r27 + mac 另走 dispatch**（唯一主线）② 真索引 `refresh_derived` 整链路一次跑通仍无直接证据
   ③ 立项③「下游按阈值标注」未做 ④ 下次出包删 r24。
 - **状态**：工作树干净、无未提交改动。
+
+### Notes
+
+- Created `checkpoint-2026-10-18-2152.md` checkpoint (1 modified/untracked file(s)).
