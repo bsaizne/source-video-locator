@@ -25,6 +25,8 @@
 > `git credential-manager get` rc=255（`GCM_INTERACTIVE=never` 下均报 `Cannot prompt ... disabled`），
 > 环境无 `GH_TOKEN`/`GITHUB_TOKEN`/token 文件。按规矩**停手不重试、不弹窗**。
 > 入口 = Actions → `H3 macOS MPS POC + MVP tests` → Run workflow（ref=master，head 应为 `e1abea4`）。
+> 现状硬读数（无令牌可查）：最新 mac run = `39060341032` / head `ad7cec41a` / success（2026-10-17）⇒ 现役 mac 包连 r26 都没有。
+> **r24 双验已 PASS 但我没删**（`work/r27_pkg/precheck_delete_r24.py`，四档逐字一致、`testzip=None`）——删包不可逆，等你口令。
 > **五、未结**：① **mac 包**（需用户给 token 或手动 dispatch）② **删 r24**（等口令，双验后删）
 > ③ 真索引 `refresh_derived` 端到端仍未跑完 ④ 立项③「下游按阈值标注」未做。
 > **六、⚠️ 本轮我踩的坑**：`read` 工具读长文件被截断（CHANGELOG 4017→481 行）后直接 `write` 写回，

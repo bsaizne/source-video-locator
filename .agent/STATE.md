@@ -62,6 +62,11 @@
 > `Cannot prompt because user interactivity has been disabled`；环境里也无 `GH_TOKEN` / `GITHUB_TOKEN` / 任何 token 文件。
 > 按既定规矩**停手不重试、不弹窗**。入口 = Actions → `H3 macOS MPS POC + MVP tests` → Run workflow（ref=master，head 应为 `e1abea4`）。
 > 判据（补廿三 1b 已订正）：**`mvp/src` 或 `mvp/ui` 任一有改动 ⇒ mac 必须另走 dispatch**，因为 mac 包的后端由 CI 现编。
+> **mac 包的硬读数（无令牌也能查）**：`GET /repos/bsaizne/source-video-locator/actions/workflows/h3-macos-mps.yml/runs` http=200，
+> 最新一次 = run `39060341032` / head **`ad7cec41a`** / `workflow_dispatch` / completed success（2026-10-17T18:57Z）⇒
+> **现役 mac 包停在 10-17，连 r26 那两笔都没有**，更不含 scn3/scn4。
+> **r24 双验已 PASS、但我没删**：`work/r27_pkg/precheck_delete_r24.py`（期望值从 255 份 `.agent/**/*.md` 文本里抓、读数从 zip 里取）
+> 四档 r27/r26/r25/r24 全部与档案逐字一致、`testzip=None`。删包不可逆 ⇒ **等你的口令**。
 > **五、⚠️ 本轮我自己踩的一个坑（留档防复发）**：用 `read` 工具读 `CHANGELOG.md`（4017 行）只拿回 **481 行**（工具默认上限），
 > 我据此整文件 `write` 写回 ⇒ **4021 → 234 行，后 3,591 行被静默抹掉**；`STATE.md`/`TODO.md` 同批也被截断。
 > 三次 `git checkout --` 恢复，改用 `node:fs` 整读整写（已验证 fs 读到完整 4017 行）。
