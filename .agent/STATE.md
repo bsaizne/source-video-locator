@@ -153,6 +153,21 @@
 
 ## Current Problem
 
+- 🔥 **长镜头内部定位粒度：我方 vs 竞品（续75，2026-10-19）= 找到真实缺口，但不是原先以为的那个**：
+  竞品应对「切分不可靠」的策略 = `long_scene_*`（承认切得粗，长镜头内用探针窗找起点）。逐参数对比后：
+  · **无缺口**：精排采样 **10fps 平手**（`offset_refine_dtw_sample_interval_seconds=0.1` vs `dense_recheck_fps=10`）；
+    精排窗**我方更宽**（±4s vs 竞品 DTW 起点窗 ±30 帧 ≈±1s）；增益门 **0.04 逐字相同**。
+  · ⭐ **真实缺口 = TopK 重排**：竞品 `offset_refine_dtw_topk_rerank_enabled=True` / `max_candidates=10` /
+    `min_scene_coverage=0.8`；我方 `_apply_dense_start_recheck` 是**单点精排**（只对已定位起点 ±4s 重排一次，位移 ≤2s）。
+  · 次缺口 = **长镜头局部 probe**（`long_scene_min_seconds=6.0` / `keyframe_interval=1.0` / `max_keyframes=16` /
+    `probe_window=3.0` / `probe_stride=1.5`）我方无对应物。但**缺口性质不同**：竞品原片侧不切镜头，必须靠 probe 造检索单元；
+    我方已有 1fps 全片 `features.npy` + 场景表，**单元本来就在，只是 `evidence_localize` 只按场景池召回**。
+  · **缺口规模（四片实测）**：≥6s 长场景 **1180/7555（15.6%）**，却覆盖 **约一半原片时长**（test1 达 82.2%）。
+  ⇒ 建议优先 **① TopK 重排**（纯算法、不增索引/磁盘/解码，可先离线验证）② 帧级滑窗召回（用现成 features.npy）
+  ③ **不建议**照抄常驻 probe（竞品自己也只在低内存模式按需生成）。**零 `mvp/src` 改动**。
+  落档 `mvp/docs/FINDINGS_LONG_SCENE_GRANULARITY_20261019.md`；探针 `work/probe_ls{2,3}.py`。
+  ⚠️ 边界：「我方没有这层」**不等于「加上就有效」**，收益必须离线实测；未做。
+
 - 🔥 **「同场景内正反打算同一镜头」= 口径已裁，但三条判据通道全判负（续74，2026-10-19）**：
   用户裁定「前者」= 剪辑事实保留、只影响导出层怎么拆段。**动码前承重测量已做完，结论是不该动**。
   · **通道一 强度阈值**：纯正反打 17 条里 **14 条（82%）强度顶格 1.00**，与换景不可分（用 <0.60 只抓 3/17、误伤 2/88）。
@@ -737,4 +752,4 @@
 
 ## Last Updated
 
-2026-10-19 21:00
+2026-10-19 21:18

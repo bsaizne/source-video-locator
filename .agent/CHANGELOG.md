@@ -4630,3 +4630,44 @@ zip 内 bridge.js     8,882 B sha16 7d3e0427e3d3a4db == 磁盘   （与 r25 逐�
 ### Notes
 
 - Created `checkpoint-2026-10-19-201140.md` checkpoint (1 modified/untracked file(s)).
+## 2026-10-19（续75）· 长镜头内部定位粒度：我方 vs 竞品（只读对比，零代码改动）
+
+### Changed
+
+- 回应「竞品怎么解决切分不可靠」：逐参数对比竞品 `long_scene_*` / `offset_refine_*` 与我方精排链路。
+- **结论：真实缺口不是「细度」，是「候选覆盖」。**
+
+### Findings
+
+| 项 | 竞品 | 我方 | 判定 |
+|---|---|---|---|
+| 精排采样率 | 0.1s（10fps） | `dense_recheck_fps=10` | **平手** |
+| 精排窗 | DTW start window ±30 帧（≈±1s） | `dense_recheck_margin_s=±4s` | **我方更宽** |
+| 增益门 | `..._min_improvement=0.04` | `dense_recheck_min_gain=0.04` | **逐字相同** |
+| **TopK 重排** | `topk_rerank_enabled=True` / `max_candidates=10` / `min_scene_coverage=0.8` | **无（单点精排）** | ⭐ **真实缺口** |
+| 长镜头 probe | `min_seconds=6.0` / `keyframe_interval=1.0` / `max_keyframes=16` / `probe_window=3.0` / `probe_stride=1.5` | 无对应物 | 次缺口，性质不同 |
+
+- **缺口规模（四片真索引实测）**：≥6s 长场景 **1180/7555（15.6%）**，但覆盖约**一半原片时长**
+  （2mkv 43.8% / test1 **82.2%** / test2 28.6% / test3 43.3%）。
+- **缺口性质澄清**：竞品原片侧**不切镜头**，所以必须靠 probe 造检索单元；我方已有 1fps 全片
+  `features.npy` + 场景表，**单元本来就在** —— 缺口在 `evidence_localize` **只按场景池召回**，不是「没有细单元」。
+
+### Added
+
+- `mvp/docs/FINDINGS_LONG_SCENE_GRANULARITY_20261019.md`（双参数表 + 缺口规模 + 三条约束 + 建议 + 边界）。
+- 探针 `work/probe_ls2.py`（读真实生效配置）/ `probe_ls3.py`（量长场景占比）。
+
+### Notes
+
+- **零 `mvp/src` 改动**。
+- ⚠️ 竞品参数值取自 `cutmatch_param_values.json` 的 **options 字典实测值**，语义取自 docstring，
+  均为**静态面**，未做动态验证。
+- ⚠️ **「我方没有这层」不等于「加上就有效」**：TopK 重排的收益**本轮未实测**，
+  §5 建议 1（先离线验证）就是为此而设。**不要在没测之前当作已立项。**
+- 建议优先级：① TopK 重排（纯算法、不增索引/磁盘/解码）② 帧级滑窗召回（用现成 features.npy）
+  ③ **不建议**照抄常驻 probe（竞品自己也只在低内存模式按需生成）。
+
+
+### Notes
+
+- Created `checkpoint-2026-10-19-201140.md` checkpoint (1 modified/untracked file(s)).
