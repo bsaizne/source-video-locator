@@ -106,6 +106,28 @@
 ⚠️ **A 的边界**：这是「如实告诉用户不确定性」，**不是提高精度**。三指标（严格/主 span/场景）**不会因此变好**，
 `measure_shot_recall.py` 读数不变。**不要拿它当精度改进报数。**
 
+## 5.5 口径核对：我的探针读数能不能直接搬到生产？（补做，§5 建议 A 的前提）
+
+§5 建议 A 的前提是「生产里拿得到这个信号」。但我的探针和生产的取帧方式**并不相同**：
+
+| | 取帧方式 |
+|---|---|
+| 我的探针 | 整片连续解码 @8fps，再按 GT 时间窗**筛帧** |
+| 生产 `_embed_dense_query`（`locator_service.py:1823`） | **带 `start`/`end` 分段重采样** @`seq_align.edit_fps` |
+
+ffmpeg seek 后相位可能不同，帧数也不同。实测对照（test1，DML）：
+
+| id | 帧数 A/B | max_d 整片口径 | max_d 生产口径 | 差 | 判定是否一致 |
+|---|---|---|---|---|---|
+| t1r02 | 33/32 | 0.850 | 0.850 | 0.000 | ✅ |
+| t1r08a | 25/24 | 0.824 | 0.824 | 0.000 | ✅ |
+| t1r14e | 18/18 | 0.799 | 0.799 | 0.000 | ✅ |
+| t1r11 | 13/12 | 0.026 | 0.026 | 0.000 | ✅ |
+| t1r04 | 21/20 | 0.059 | **0.045** | 0.014 | ✅ |
+
+⇒ **两种取样方式下 max_d 一致到 0.014 以内，跨镜头判定无一处翻转**（`work/qcut_caliber.py`）。
+**生产阈值 `subshot_cut_thresh = 0.50` 与我的 0.10/0.50 都是同一个量**，可以放心对照。
+
 ## 6. 复现
 
 ```powershell
@@ -120,6 +142,7 @@ cd D:\claudework\benchmark
 & $PY -u work\qcut_stakes.py     # 值多少 + AUC
 & $PY -u work\qcut_thresh.py     # 阈值口径 vs 生产 subshot_cut_thresh=0.50
 & $PY -u work\qcut_verify.py     # 随机基线 + 留一片交叉验证 + 分层
+& $PY -u work\qcut_caliber.py    # 我的整片口径 vs 生产分段重采样口径
 ```
 
 缓存：`work/qcut_20261019/edit_{test2,test3}_8.npz`（test1 复用 `work/topk_rerank_20261019/edit_test1_8.npz`）。
