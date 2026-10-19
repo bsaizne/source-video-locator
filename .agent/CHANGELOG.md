@@ -4888,3 +4888,31 @@ zip 内 bridge.js     8,882 B sha16 7d3e0427e3d3a4db == 磁盘   （与 r25 逐�
 ### Notes
 
 - Created `checkpoint-2026-10-19-201140.md` checkpoint (1 modified/untracked file(s)).
+
+### Notes
+
+- Created `checkpoint-2026-10-19-221539.md` checkpoint (1 modified/untracked file(s)).
+
+## 2026-10-19（续80）— 查询段跨镜头：三片验证 + 挖出 confidence 无判别力
+
+- **零 `mvp/src` 改动、未出包、未提交代码面。** 起因 = 给续79 的承重前提补可证伪检查
+  （原结论只用 test1 一片、只逐帧看 3 段、阈值 0.10 是拍的、未排时长混杂、未查置信度）。
+- **新读数（三片 N=95）**：Spearman(段内 max CLS 距离, |err|) = **+0.487**；
+  随机基线 2000 次 **p<0.0005**；**留一片交叉验证三折全同向**（+0.631 / +0.367 / +0.394）；
+  剥掉段内帧数偏相关 **+0.399**、剥掉时长 **+0.398**；段长分层内仍成立（+0.333 / +0.444 / +0.525）。
+- **值多少**：`max_d>0.50` 的 **44 段（46%）吃掉 66% 总误差**（7073s/10728s）；
+  大错（|err|>10s）22 段，生产阈值 0.50 抓到 **20 段（召回 91% / 精确率 45%）** ⇒ 现成阈值够用。
+- **⭐ 新真缺口**：现役 `confidence` 对跨镜头**完全无判别力** —— AUC(conf_score→≤2s) **0.544**、
+  AUC(conf_score→大错) **0.486**（对照 AUC(max_d→大错) **0.823**）。
+  「段中跨镜头 + 报 HIGH」39 段里 **11 段是大错**，`t1r14e` **错 379s 报 HIGH 0.934**、`t2r05b` 错 108s 报 HIGH 0.865。
+- **订正一条预期**：我先写了「阈值升到 0.50 召回会塌」，实测 **召回 91%、精确率升到 45%** —— 未塌。
+- **订正一条档案**：r27 建造点 `e1abea4` **已含** `06e7a64`/`e3d5d44` 两笔 `source_merge`
+  ⇒ 交接件「r28 有 source_merge 真实内容可打」**不成立**（r28 纯文档批）。
+- **建议（未动手，需拍板）**：A 加独立字段 `query_cross_cut` + UI 提示，`confidence` 一格不动（公式冻结是护栏）；
+  ⚠️ 只是如实说清不确定性，**不是提精度**，三指标读数不会变。
+- **产物**：`mvp/docs/FINDINGS_QUERY_CROSS_CUT_VALIDATED_20261019.md`；
+  探针 `work/qcut_{embed23,err,confound,conf,three,stakes,thresh,verify}.py`；
+  缓存 `work/qcut_20261019/edit_{test2,test3}_8.npz`。
+- **档案迁移**：`STATE.md` Current Task 的「续68」块 **33 行逐字**迁 `.agent/archive/STATE_history_20261019.md`；
+  `TODO.md` P0 的「续79」块**逐字**迁 `.agent/archive/TODO_history_20261019c.md`（块数 3→3 / 1→1 已断言）。
+- **环境坑**：test2 编辑片文件名是 **`tset2-ed.mp4`**（盘上就叫这个，不是笔误）。
