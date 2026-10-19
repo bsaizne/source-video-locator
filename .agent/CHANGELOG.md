@@ -4862,3 +4862,29 @@ zip 内 bridge.js     8,882 B sha16 7d3e0427e3d3a4db == 磁盘   （与 r25 逐�
 ### Notes
 
 - Created `checkpoint-2026-10-19-201140.md` checkpoint (1 modified/untracked file(s)).
+## 2026-10-19（续79 交接）· 今夜七条线收口 + 交接件
+
+### Added
+
+- `.agent/archive/HANDOFF_20261019_locator_precision.md`（自包含 9 节：七条线结论 / 核心读数 / **四条别再试清单** /
+  未结项 / **我犯的四个错** / 环境坑 / 复跑命令 / 产物索引 / 建议下一步）。
+
+### Changed
+
+- `STATE.md` `Current Task` 新增**续79** 块（九段：七条线 + 四个错 + 未结 + 别再试），旧「续67」块 24 行**逐字**迁
+  `.agent/archive/STATE_history_20261018.md`（块数 3→3 已断言，11 章节唯一在位）。
+- `STATE.md` `Next Actions` 交接指针改指新交接件。
+- `STATE.md` `Completed` 补记今夜七条线 + 档案迁移。
+- `TODO.md` `P0` 换为续79 短块，旧「续73」块 22 行**逐字**迁 `.agent/archive/TODO_history_20261019b.md`（P0 块数 1→1）。
+
+### Notes
+
+- **`mvp/src` 今夜零改动、未出包**（用户明确未授权出包）。
+- 工作树干净、`origin/master...master` = `0 0`。
+- 未结项三条**全部需口令**：mac 包 / 出 r28 / 立项③。
+- ⚠️ 推送走 `ssh.github.com:443`（22 端口今夜被重置，重试 3 次无效）。
+
+
+### Notes
+
+- Created `checkpoint-2026-10-19-201140.md` checkpoint (1 modified/untracked file(s)).
