@@ -425,6 +425,13 @@ def main() -> int:
                 "index_state_before_run": index_warm,
                 "device": device,
                 "segments": len(result.get("results", [])),
+                # 跨镜头标注契约面（建议 A，2026-10-22）：包内后端产出的每条结果都必须带这个键
+                # （值可以是 null）。PyInstaller 把 Python 源码存进压缩 PYZ ⇒ 搜明文字符串必然
+                # False，只有「跑一次真分析、看产物 JSON」才算证据（同 r24 那条订正）。
+                "cross_cut_key_present": (bool(result.get("results")) and all(
+                    "query_cross_cut" in r for r in result.get("results", []))),
+                "cross_cut_annotated": sum(1 for r in result.get("results", [])
+                                           if r.get("query_cross_cut")),
                 "export_http": export_http,          # UI 路径：不先 load 直接导出
                 "export_path": export_path,
                 "jianying_http": jianying_http,      # 剪映通道：真的跑 write_jianying_draft

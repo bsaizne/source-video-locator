@@ -260,6 +260,21 @@ def main() -> int:
         else:
             check("支持档存在（腿边界埋点判据依赖它）", False, str(support))
 
+        # ---- 跨镜头标注进包锁（建议 A，2026-10-22 续81）---------------------- #
+        # 后端契约新增 `query_cross_cut`（段内含画面跳变时给 {max_d, at, n_jumps}，否则 null）。
+        # 这条锁证明**分发包里的后端**会产出该键 —— 源码树全绿不代表包里有（r26 那代就是这么被抓的）。
+        # ⚠️ 打在 r27 及更早的包上**首跑应为红**（那代后端没这个键）= 锁真咬，不是脚本缺陷。
+        check("跨镜头标注进包（每条结果都带 query_cross_cut 键）",
+              summary.get("cross_cut_key_present") is True,
+              "annotated=%s（r27 及以前无此键=预期红）" % summary.get("cross_cut_annotated"))
+        # 渲染层：字段名与提示文案编译进 dist 资产（磁盘上是明文 JS，可直搜；
+        # 后端那份走压缩 PYZ 搜不到，所以两侧判据不同形）。
+        dist_dir = RES / "app" / "dist" / "assets"
+        hit_q = [a.name for a in (sorted(dist_dir.glob("*.js")) if dist_dir.exists() else [])
+                 if "query_cross_cut" in a.read_text(encoding="utf-8", errors="replace")]
+        check("跨镜头提示已编译进渲染层（UI 真的会显示）",
+              len(hit_q) >= 1, "%d 个资产命中 %s" % (len(hit_q), hit_q[:3]))
+
     else:
         check("冒烟产物可读", False, str(summary_path))
 
