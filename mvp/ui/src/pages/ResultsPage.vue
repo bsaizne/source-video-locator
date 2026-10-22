@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import { useResultsStore } from '@/stores/results'
 import { useRenderMovie } from '@/composables/useRenderMovie'
 import { useExportTask } from '@/composables/useExportTask'
-import { formatOriginal } from '@/utils/format'
+import { formatEdited, formatOriginal } from '@/utils/format'
 import { reasonText } from '@/utils/reasons'
 import ResultTable from '@/components/ResultTable.vue'
 import VideoComparisonPlayer from '@/components/VideoComparisonPlayer.vue'
@@ -274,6 +274,11 @@ const renderSummary = computed(() => {
           </p>
           <p v-if="selected.montage_flag" class="rd__notice rd__notice--warn">
             疑似混剪——这段对应原片的多个片段，导出时会全部包含。
+          </p>
+          <p v-if="selected.query_cross_cut" class="rd__notice rd__notice--warn">
+            这段剪辑自身含 {{ selected.query_cross_cut.n_jumps }} 处画面跳变
+            （约 {{ formatEdited(selected.query_cross_cut.at) }} 处切换）——
+            一个起点未必对得上整段，当前定位可能只覆盖其中一部分，请预览确认。
           </p>
           <p v-if="selected.failure_reason" class="rd__notice rd__notice--err">
             未定位：{{ reasonText(selected.failure_reason) }}

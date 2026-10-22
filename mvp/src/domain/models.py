@@ -160,6 +160,26 @@ class IndexProgress:
         return {"stage": self.stage, "done": self.done, "total": self.total}
 
 
+@dataclass(frozen=True)
+class QueryCrossCut:
+    """查询段内含的画面跳变（2026-10-22 建议 A：**只标注不确定性，不改定位、不改置信度**）。
+
+    ``at`` 是跳变后那一帧在**编辑片**上的时刻（不是原片），``n_jumps`` 是段内超过阈值的
+    跳变处数——一处与十三处（快剪蒙太奇）对用户的提示话术不该一样。
+    """
+
+    max_d: float
+    at: float
+    n_jumps: int
+
+    def to_dict(self) -> dict:
+        return {"max_d": self.max_d, "at": self.at, "n_jumps": self.n_jumps}
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "QueryCrossCut":
+        return cls(max_d=float(d["max_d"]), at=float(d["at"]), n_jumps=int(d["n_jumps"]))
+
+
 @dataclass
 class Result:
     """一条最终结果（含 auto/manual 双轨，不因手动覆盖丢失自动结果）。
@@ -185,6 +205,7 @@ class Result:
     frame_precision: bool = False   # 帧级 moment 精修产出单答案时 True（seq_align）
     not_in_source: bool = False     # 编辑段判定为非源片内容(文字卡/logo/转场),不做定位
     excluded: bool = False          # 用户手动排除:不进 NLE 导出(结果页可切换,反馈四轮 r16)
+    query_cross_cut: QueryCrossCut | None = None   # 段内含画面跳变(只标注,不影响定位/置信度)
 
     def to_dict(self) -> dict:
         """产品契约 JSON（MVP_PRODUCT_SPEC §5 / §27）。"""
@@ -209,6 +230,7 @@ class Result:
             "frame_precision": self.frame_precision,
             "not_in_source": self.not_in_source,
             "excluded": self.excluded,
+            "query_cross_cut": self.query_cross_cut.to_dict() if self.query_cross_cut else None,
         }
         if self.manual_override:
             d["manual_timestamp"] = self.manual_timestamp
@@ -239,6 +261,8 @@ class Result:
             frame_precision=bool(d.get("frame_precision", False)),
             not_in_source=bool(d.get("not_in_source", False)),
             excluded=bool(d.get("excluded", False)),
+            query_cross_cut=(QueryCrossCut.from_dict(d["query_cross_cut"])
+                             if d.get("query_cross_cut") else None),
             auto_result=cls.from_dict(d["auto_result"]) if manual and d.get("auto_result") else None,
         )
 

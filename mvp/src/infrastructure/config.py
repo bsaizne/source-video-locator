@@ -346,6 +346,11 @@ class PipelineConfig:
     subshot_enabled: bool = False
     subshot_min_sub: int = 3
     subshot_retry_min_sim: float = 0.62
+    # --- 查询段跨镜头标注（建议 A，2026-10-22：只标注、不改定位、不改置信度）---
+    # 段内相邻帧 CLS 距离阈值。0.50 = 与 subshot_cut_thresh 同值，续81 在 17 段逐帧读图上实测
+    # 召回 80% / 精确率 100%（**半开区间口径**，见 FINDINGS_QUERY_CROSS_CUT_CALIBER_20261022 §2/§4）。
+    # 已知会漏标「同色调/暗场」的真跨镜头（读数只有 0.21~0.29）⇒ UI 文案不得承诺检全。
+    query_cross_cut_thresh: float = 0.5
     # --- 编辑侧分析持久缓存（A4 性能优化 2026-09-05）---
     # 缓存两级切分产物 + 每段 8fps 密帧特征到 app data（键=文件身份+feature_version+管线配置+
     # 设备数值口径）。同一编辑片重复定位免重切分/重 embed; 任一口径变化自动失效。纯缓存零语义。

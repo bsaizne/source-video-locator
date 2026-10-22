@@ -21,8 +21,8 @@ import numpy as np
 
 from device import DeviceBackend, directml_available, mps_available, pick_best_available
 from domain import (Confidence, ConfidenceLevel, IndexValidation,
-                    IndexValidationStatus, OriginalSegment, Result, ResultBatch,
-                    ResultSource, TimeSpan)
+                    IndexValidationStatus, OriginalSegment, QueryCrossCut, Result,
+                    ResultBatch, ResultSource, TimeSpan)
 from app.edited_cache import EditedCache, fingerprint as edited_cache_fingerprint
 from functools import partial
 from concurrent.futures import ThreadPoolExecutor
@@ -1532,6 +1532,9 @@ class SourceLocatorService:
                             prev_mid)
                 assessment = ConfidenceEngine(cfg.confidence).assess_evidence(evidence)
                 results.append(self._result_from_evidence(shot, evidence, assessment))
+                # 跨镜头标注挂在装配之后：此时定位/置信度/时间线先验都已定案，
+                # 本行只加一个旁路字段，不参与任何判据（建议 A 的边界）。
+                results[-1].query_cross_cut = self._query_cross_cut(shot, dense, cfg)
                 if tl_switched:
                     _rc = results[-1].confidence
                     results[-1].confidence = Confidence(
@@ -1860,6 +1863,30 @@ class SourceLocatorService:
             except Exception:
                 pass
         return dense
+    def _query_cross_cut(self, shot, dense, cfg):
+        """段内画面跳变标注（建议 A，2026-10-22）。**只读 dense，不回写任何东西。**
+
+        必须直接用主链路算好的 dense：`_embed_dense_query` 走 `-ss start` + `-t (end-start)`，
+        窗口天然是**半开区间 [start,end)**。若在这里按时间重筛一次帧（闭区间），会把与下一段
+        共享的边界帧算进来 ⇒ 造出「段尾切点 = 段内跨镜头」的假阳
+        （实测两条：0.859 vs 生产 0.153，FINDINGS_QUERY_CROSS_CUT_CALIBER_20261022 §2）。
+        """
+        if dense is None:
+            return None
+        feats, times = dense[0], dense[1]
+        if feats.shape[0] < 3:
+            return None                     # ≤2 帧分不出「段内切」与「整段都不同」
+        thr = float(getattr(cfg, "query_cross_cut_thresh", 0.5))
+        q = feats[:-1] / np.maximum(np.linalg.norm(feats[:-1], axis=1, keepdims=True), 1e-8)
+        r = feats[1:] / np.maximum(np.linalg.norm(feats[1:], axis=1, keepdims=True), 1e-8)
+        d = 1.0 - np.sum(q * r, axis=1)
+        k = int(np.argmax(d))
+        if float(d[k]) <= thr:
+            return None
+        return QueryCrossCut(max_d=round(float(d[k]), 4),
+                             at=float(times[k + 1]),
+                             n_jumps=int((d > thr).sum()))
+
     def _subshot_relocalize(self, shot, bundle, dense, cfg):
         """Targeted subshot fallback when whole-segment localization fails/weak."""
         if dense is not None:

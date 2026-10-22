@@ -7,7 +7,7 @@
 from .enums import ConfidenceLevel, IndexValidationStatus, ResultSource
 from .index import ExtractorConfig, IndexMeta, IndexValidation
 from .models import (Alternative, Candidate, Confidence, IndexProgress, OriginalSegment,
-                     Result, ResultBatch, TimeSpan)
+                     QueryCrossCut, Result, ResultBatch, TimeSpan)
 
 __all__ = [
     "ConfidenceLevel",
@@ -24,4 +24,5 @@ __all__ = [
     "ResultBatch",
     "TimeSpan",
     "IndexProgress",
+    "QueryCrossCut",
 ]

@@ -125,6 +125,7 @@ function mkResult(p: ResultSeed): ResultJson {
     extracted_path: p.extracted_path ?? null,
     failure_reason: p.failure_reason ?? null,
     not_in_source: p.not_in_source ?? false,
+    query_cross_cut: p.query_cross_cut ?? null,
     manual_timestamp: p.manual_timestamp,
     auto_result: p.auto_result,
   }
@@ -152,6 +153,8 @@ export function mockResultBatch(): ResultBatchJson {
       ed: [95.4, 118.9], og: [4100, 4124],
       confidence: 'MEDIUM', confidence_score: 0.58, candidate_rank: 2, montage_flag: true,
       reasons: ['possible_montage', 'low_candidate_margin'],
+      // 真实形态取自续81 读图样本（t2r05a：9.8s 内 ≥10 个镜头，max_d 0.950）
+      query_cross_cut: { max_d: 0.95, at: 99.875, n_jumps: 13 },
       alternatives: [
         mkAlternative(6021, 6045, 'LOW', 0.39),
         mkAlternative(8100, 8124, 'LOW', 0.33),

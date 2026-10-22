@@ -69,6 +69,15 @@ export interface OriginalSegmentJson {
   from_event_pool?: boolean
 }
 
+export interface QueryCrossCutJson {
+  /** 段内相邻帧最大视觉距离（> 阈值才产出本对象） */
+  max_d: number
+  /** 跳变后那一帧在「编辑片」上的时刻（不是原片） */
+  at: number
+  /** 段内超过阈值的跳变处数：一处与十三处（快剪蒙太奇）话术不同 */
+  n_jumps: number
+}
+
 export interface ResultJson {
   result_id: string
   edited_segment: TimeSpanJson
@@ -86,6 +95,8 @@ export interface ResultJson {
   failure_reason: string | null
   not_in_source: boolean
   excluded?: boolean
+  /** 段内含画面跳变（只提示不确定性，不影响定位与置信度）；无跳变时后端给 null */
+  query_cross_cut?: QueryCrossCutJson | null
   manual_timestamp?: string | null
   auto_result?: ResultJson | null
 }

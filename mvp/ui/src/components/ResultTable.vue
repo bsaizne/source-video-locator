@@ -40,6 +40,13 @@ const emit = defineEmits<{ (e: 'select', id: string): void }>()
       <span class="rt__flags">
         <StatusBadge v-if="r.not_in_source" label="非源片" tone="warn" icon="warn" />
         <StatusBadge v-if="r.montage_flag && !r.not_in_source" label="疑似蒙太奇" tone="warn" icon="warn" />
+        <StatusBadge
+          v-if="r.query_cross_cut"
+          :label="r.query_cross_cut.n_jumps > 2 ? `内含 ${r.query_cross_cut.n_jumps} 处跳变` : '段内含跳变'"
+          tone="warn"
+          :title="`这段剪辑内部有画面切换（编辑片 ${r.query_cross_cut.at.toFixed(2)}s 附近，`
+            + `视觉距离 ${r.query_cross_cut.max_d.toFixed(2)}），当前定位可能只覆盖其中一段`"
+        />
         <StatusBadge v-if="r.source === 'manual'" label="手动" tone="accent" />
         <StatusBadge
           v-if="r.failure_reason"
