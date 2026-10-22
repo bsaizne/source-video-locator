@@ -74,9 +74,24 @@
 > （它在解说片头 3.5~4.0s、0.5s 长，可能是片头/预告素材 ⇒ 若 GT 该行不成立，全批 Σ|err| 分母还要再降）。
 > **八、档案**：`mvp/docs/FINDINGS_QUERY_CROSS_CUT_CALIBER_20261022.md`（含复现命令与 4 条新环境坑）；
 > 探针 `work/qcut_{pick,sheets,sheets_ext,intmax,intmax2,halfopen,prodcaliber}.py`；图 `work/qcut_review_20261022/`（19 张 + `ext/` 14 张）。
-> **九、未结（一条没动，都需口令）**：① **mac 包**（现役 run `39135662432`/head `09aac9ef2`，已含 scn3/scn4 + source_merge；
-> **本批零代码 ⇒ 无需重出**）② **出 r28**（本批 + 续80 只有 FINDINGS/探针，**无 `mvp/src` 内容**）
-> ③ **立项③ / 建议 A**（本批把 A 的实现前提核清了，**等拍板才动码**）④ 长镜头 GT 5 条待用户抽样复核。
+> **九、未结（2026-10-23 更新：三件已下两件）**：① ✅ **建议 A 已落地**（代码笔 `ca29194`
+> = 8 后端锁 + 4 UI 锁；包侧锁另笔 `71698f2`）。② ✅ **r28 已出**
+> （`Video-Locator-win-x64-20261022r28.zip` 981,705,760B / 7,079 条目 / `testzip=None` /
+> backend.exe 77,510,686B sha16 `de4458207adb2b26` **zip 内 == 磁盘** / bridge.js 与 r27 同值
+> （本批没动 Electron 主进程，符合预期）；**五道包内验收全绿** = bundle **35 PASS**（r27=33，
+> 多的两条正是新加的「标注进包 + 渲染层编译」锁，非空锁已由 r27 时代产物无该键证）·
+> render R1 wall=63s · 不变式 FAILED=0 · 冒烟 AFTER_KILL=0 · 合并腿 FAILED=0；
+> 与 r27 文件集合差集 13/13 **全是 vite content-hash 轮换**（去 hash 后对称差 0）⇒ 无增无丢）。
+> ③ ⛔ **mac 包卡在交互授权**：`git push` 已到 `71698f2`（含 A），但 `git credential-manager get`
+> **两次都在 240s 被 timeout 杀掉**（rc=124、日志 0 字节 = 一行没打出来），
+> 匿名读 runs 证实 **total 仍 43、最新仍是 10-18 的 `39135662432`** ⇒ **dispatch 没发出去过**。
+> 桌面上可能挂着两个 GCM 登录窗（PID 19488 / 9872，是我这两次尝试起的）。
+> **按规矩停手不重试** ⇒ 交还用户：在那个窗口里完成登录，或直接在 Actions 页手动 Run
+> `h3-macos-mps.yml`（ref=master）。⚠️ **用户手上现在是 r28，但 mac 侧停在 `09aac9ef2` 代 ⇒ 不含建议 A**。
+> ④ 长镜头 GT 5 条待用户抽样复核。⑤ **删 r25**（分发包现四档 r28/r27/r26/r25，按「最新+上一档+一档历史」
+> 该删 r25，**等口令**，删前先验回滚档 r27/r26 逐字一致）。
+> 明细 `mvp/docs/FINDINGS_QUERY_CROSS_CUT_CALIBER_20261022.md`（§7 落地三条硬约束已全部照做）；
+> 出包产物 `work/r28_pkg/`；探针 `work/qcut_*.py`；图 `work/qcut_review_20261022/`（19 张 + `ext/` 14 张）。
 > 续73 块已**逐字**迁 `.agent/archive/STATE_history_20261019.md`（Current Task 块数 3→2→3 已断言）。
 
 > **▶ 2026-10-19（续80）— 给续79 的「查询段跨镜头」补承重检查：结论成立且更值钱，但多挖出一个真缺口【已退休，见上；其 §四「66% 误差」与 §五阈值口径已被续81 订正】**
@@ -135,6 +150,14 @@
 > 明细：`.agent/archive/HANDOFF_20261019_locator_precision.md`（自包含）；六份 FINDINGS 在 `mvp/docs/`。
 ## Completed
 
+- **建议 A 落地 + r28 出包（2026-10-22 续81 同批，口令「开始这三件吧」）**：
+  `query_cross_cut` 独立字段（`{max_d, at, n_jumps}`，阈值 `config.query_cross_cut_thresh=0.5`）
+  接在主链路已算好的 dense 上 ⇒ **零新增解码/推理**；`confidence` 一格未动。
+  代码笔 `ca29194`（后端 4 文件 + 8 项后端锁 + UI 4 文件 + 4 项 UI 锁）、包侧锁笔 `71698f2`。
+  **惰性由锁保证而非口头**：阈值开满 vs 关死，除本字段外结果 JSON 逐键相同。
+  门禁 = 后端 **713 OK(skipped=2)** · API **150 OK** · vitest **166** · 双 typecheck rc=0 ·
+  不变式 **FAILED=0**；**r28 五道包内验收全绿**（bundle 35 PASS / render wall=63s / 不变式 / 冒烟 / 合并腿）。
+  ⚠️ **mac 侧未更**（dispatch 卡在交互授权，见 Current Task §九③）⇒ mac 包停在 `09aac9ef2` 代、**不含建议 A**。
 - **查询段跨镜头：读图扩到 17 段 + 查出探针口径缺陷（2026-10-22 续81）**：建议 A 的承重前提全部核到调用点
   （`locator_service.py:1448` 每段无条件算 dense、生产 settings 只覆盖 device）⇒ **运行时零新增解码/推理**；
   真 DML + 真 `iter_frames` 实测**生产口径 = 半开区间 `[e0,e1)`**，续80 那两条假阳（`t2r01c`/`t3r04c`）
@@ -533,18 +556,25 @@
   （脚本「同名先删再传」⇒ 三份删了重传），又 kill 掉大文件那一发 ⇒ ISC `.data` 在服务器上缺了≈25 分钟。
   ⇒ 教训：**长上传的进度判据 = 服务端 asset 列表，不是本机 `tasklist` 里 curl 的驻留内存**。
   公开性事实（他已选定，不再重提）：`mac-alpha` 是公开 prerelease ⇒ 权重随公开包一同公开，ISC 为 NC 许可。
-- Windows 现役包 = **r24**- Windows 现役包 = **r25**（`Video-Locator-win-x64-20261017r25.zip`，**干净 commit `c3a17e5` 构建**，= 音轨未知布局回退 + `clip_present` 判据收一 + 取材扩宽护栏 1.5；包内 bundle 33/0 · render 0 · 不变式 0 · 冒烟 AFTER_KILL=0；zip 981,693,605B / 条目 7,079（文件 6,993 + 空目录 86）/ `testzip=None` / backend.exe 77,498,025B sha16 `ae04274989342708` == 磁盘 / bridge.js sha16 `7d3e0427e3d3a4db` == 磁盘 / **与 r24 文件名集合差集 0/0**）。
+- Windows 现役包 = **r28**（`Video-Locator-win-x64-20261022r28.zip`，**干净 commit `ca29194` 树构建**，
+  = 建议 A 跨镜头标注（后端契约 + UI 提示）；zip 981,705,760B / 条目 7,079（文件 6,993 + 空目录 86）/
+  `testzip=None` / backend.exe 77,510,686B sha16 `de4458207adb2b26` == 磁盘 / bridge.js 8,882B
+  sha16 `7d3e0427e3d3a4db` == 磁盘（本批未动 Electron 主进程 ⇒ 与 r25/r27 同值，符合预期）/
+  对 r27 = +2,198B、文件集合差集 13/13 全是 vite content-hash 轮换（去 hash 对称差 0）；
+  **五道包内验收全绿**：bundle **35 PASS**/0（r27=33，多的两条 = 新加的「标注进包 + 渲染层编译」锁）·
+  render R1 wall=63s/0 · 不变式 0 · 冒烟 AFTER_KILL=0 · 合并腿 0。
+  ~~上一档 r27~~（`20261018r27.zip`，`e1abea4` 构建，首次带 scn3/scn4）、r26（`ad7cec4`）、r25（`c3a17e5`）。
+  ~~Windows 现役包 = **r24**- Windows 现役包 = **r25**（`Video-Locator-win-x64-20261017r25.zip`，**干净 commit `c3a17e5` 构建**，= 音轨未知布局回退 + `clip_present` 判据收一 + 取材扩宽护栏 1.5；包内 bundle 33/0 · render 0 · 不变式 0 · 冒烟 AFTER_KILL=0；zip 981,693,605B / 条目 7,079（文件 6,993 + 空目录 86）/ `testzip=None` / backend.exe 77,498,025B sha16 `ae04274989342708` == 磁盘 / bridge.js sha16 `7d3e0427e3d3a4db` == 磁盘 / **与 r24 文件名集合差集 0/0**）。
   上一档 r24（`Video-Locator-win-x64-20261013r24.zip`，**干净 commit `811932e` 构建**，
   含导出任务通道 + 取消残留可见；包内 bundle 33/0 · render 0 · 不变式 0 · 冒烟 0，身份读数见 Current Task 补十七）。
   上一档 r23（`Video-Locator-win-x64-20261012r23.zip`，**干净 commit `a84119d` 构建**，
   含 Electron 桥接层 300s 头超时修复 + 非 2xx 错误体透传；身份与四道包内验收读数见 Current Task 补十六 ⑥）。
   ~~上一档 r22~~（`Video-Locator-win-x64-20261012r22.zip`，干净 commit `36dec63`，backend.exe 77,493,384B sha16 `f0d00f10c4123813`）**已于 2026-10-17 删除**（删前双验：自身 `testzip=None` / 7,078 条目 / 尺寸+sha16 与档案逐字一致，身份已留痕）；更早 r21（`09714ab`，含 A2 scn2 + 剪映导出崩修复 + 第十三轮导出框 UI 修复）、
   r20（未提交工作树构建，backend.exe 77,474,898B sha16 `63987715436d5e31`）。
-  **分发包现三档 = r25 现役 + r24 + r23**（r22 已删 2026-10-17，删前双验逐字一致，释放 ≈936MB；r21 已删 2026-10-14）（2026-10-12 出 r22、2026-10-13 出 r23；**r19 已删（2026-10-12，
-  删前双验：回滚档 r20 与 r19 自身均 `testzip=None` / 7,078 条目 / sha16 与档案逐字一致）**；
-  **r20 已删（2026-10-13，同样先验回滚档 r21 = `fa3c394567cc17d2` 逐字一致）**；更早 r18 于 2026-10-11 删、
-  r17 于 2026-10-10 删、r15/r16 于 2026-10-09 删）。⇒ 维持「三档 = 最新 + 上一档 + 一档历史」的节奏，
-  下次出 r26 时按同规矩删 r23。
+  **分发包现四档 = r28 现役 + r27 + r26 + r25**（2026-10-22 出 r28 后未删 ⇒ **按规矩该删 r25，等口令**；
+  历史上 r19/r20/r21/r22/r23/r24 已分别于 10-09~10-18 按「删前双验回滚档逐字一致」的规矩删掉）。
+  ⇒ 维持「三档 = 最新 + 上一档 + 一档历史」的节奏，下次出 r29 时按同规矩删到 r27。
+  ~~旧行「分发包现三档 = r25 现役 + r24 + r23」~~ = 该句**已过期**（r23/r24 后续已删，见上）。
   ~~补九/补十/补十一 ... **第十二轮 exporters 修复未提交**~~ = 该句**已过期**（第十二轮~补十六
   全部代码笔+档案笔均已提交并 push；截至 2026-10-13 00:3x，origin/master = `4fe0d96`）。
   => 腿边界埋点与支持档降噪**已在包内支持档实测生效**（Windows 见 Current Task 补十 块；

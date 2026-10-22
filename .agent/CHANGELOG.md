@@ -5029,6 +5029,87 @@ zip 内 bridge.js     8,882 B sha16 7d3e0427e3d3a4db == 磁盘   （与 r25 逐�
   「跳变在第 N 格」的标记会指到表外）；GBK 控制台里含中文列名的 `printf` 表头，
   占位符数与参数数不等时报错信息会被 mojibake 掩盖 ⇒ **表头一律 ASCII**。
 
+## 2026-10-22（续82）· 建议 A 落地 + r28 出包 + mac 卡在交互授权（口令「开始这三件吧」）
+
+三件的顺序按代价排：**先动 A 的代码 → 再出 r28（含 A）→ 最后 mac dispatch（含 A）**。
+反过来会连出两个包、r28 立刻作废。
+
+### 1. 建议 A 已落地（代码笔 `ca29194`）
+
+| 面 | 改动 |
+|---|---|
+| 域模型 | 新增 `QueryCrossCut(max_d, at, n_jumps)` + `Result.query_cross_cut`，`to_dict`/`from_dict` 对称，旧 JSON 缺键 → None |
+| 判据 | `_query_cross_cut(shot, dense, cfg)` —— **只吃主链路已算好的 dense**，docstring 写明「不许在这里重筛帧」 |
+| 挂点 | `results.append(_result_from_evidence(...))` **之后**一行（定位/置信度/时间线先验都已定案） |
+| 配置 | `config.query_cross_cut_thresh = 0.5`（注释里写清 17 段读图实测的召回/精确率与「不承诺检全」） |
+| UI | 结果表徽章（>2 处显示「内含 N 处跳变」）+ 详情区提示一句；`types.ts` / `mockData.ts` 接契约 |
+
+⚠️ `confidence` 一格未动（公式冻结是护栏）；导出层零改动（不变式实测 clip 数与基线逐片一致）。
+
+### 2. 门禁与包内验收（全部取真实 rc，不用 `| tail` 洗码）
+
+| 项 | 读数 |
+|---|---|
+| 后端全套 | **Ran 713 OK (skipped=2)**（续80 记录 705，+8 = 本批新锁） |
+| API 全套 | **Ran 150 OK** |
+| 前端 vitest | **166 passed (21 files)**（+4 契约锁） |
+| 双 typecheck | `typecheck` rc=0 · `typecheck:desktop` rc=0 |
+| 导出计划不变式 | **FAILED=0**，clip 70/44/46/69 与基线一致 |
+| 包内 bundle | **35 PASS / FAILED=0**（r27 = 33，多的两条是本批新锁） |
+| 包内 render | R1 completed wall=63s · FAILED=0 |
+| 启动冒烟 | AFTER_KILL=0 |
+| 包内合并腿 | FAILED=0 |
+
+**r28 包身份** = `Video-Locator-win-x64-20261022r28.zip` 981,705,760B / 7,079 条目（6,993 文件 + 86 空目录）/
+`testzip=None` / backend.exe 77,510,686B sha16 `de4458207adb2b26` **zip 内 == 磁盘** /
+bridge.js 8,882B sha16 `7d3e0427e3d3a4db` == 磁盘（**与 r25/r27 同值** = 本批没动 Electron 主进程，符合预期）/
+对 r27 = +2,198B。与 r27 文件集合差集 13/13，**全部落在 `dist/assets`、去掉 vite content-hash 后对称差 0**
+⇒ 纯 hash 轮换，无增无丢（脚本自己要求「逐条解释后才能发」，已解释）。
+
+### 3. 两条新包侧锁（锁笔 `71698f2`）
+
+- **(a) 后端契约面**：包内真跑一次分析 ⇒ 断言每条结果都带 `query_cross_cut` 键。
+  **不能搜明文** —— PyInstaller 把 Python 源码存进压缩 PYZ，搜路由串必然 False（r24 那条订正同族）。
+- **(b) 渲染层编译面**：`dist/assets/*.js` 里搜得到 `query_cross_cut`（磁盘上是明文 JS，可直搜）
+  ⇒ 实测命中 2 个资产（`ResultsPage-*.js` + `index-*.js`）。
+- **非空锁已证**：r27 时代留下的 `work/pkg_attr/headless_syn.summary.json`（2026-10-18 22:01）
+  其结果的 17 个键里**没有** `query_cross_cut` ⇒ 这两条打在 r27 上必红。
+- ⚠️ 覆盖边界（如实）：包内冒烟用合成夹具，`annotated=0` ⇒ 本锁证「契约面 + 编译面进包」，
+  **不证「真素材上真标得出来」**（那面由 17 段读图 + 8 项后端锁背书）。
+
+### 4. mac dispatch = 未发出，卡在交互授权
+
+- `git push origin master` = `0458020..71698f2` 成功（remote 走 SSH）。
+- `git credential-manager get` **两次都在 240s 被 timeout 杀掉**（rc=124，日志 **0 字节** =
+  脚本第一行 print 都没出来，说明卡在取令牌那一步）。
+- 匿名读 `api.github.com` 证实 **dispatch 从未发生**：workflow runs `total_count` 仍 43，
+  最新一条仍是 2026-10-18 的 `39135662432`。
+- 桌面上现在可能挂着两个 GCM 登录窗（PID 19488 / 9872，是我这两次尝试起的）。
+  **按规矩停手不重试**（10-18 那次也是这里红的），交还用户：完成登录窗，或在 Actions 页手动 Run
+  `h3-macos-mps.yml`（ref=master）。
+- ⚠️ **后果**：Windows 现役 r28 含建议 A，**mac 包停在 `09aac9ef2` 代 ⇒ 不含**。凡 `mvp/src` 改动 mac 都要重出。
+
+### 5. 我本轮犯的错（留档）
+
+- **⭐ 迁移脚本把档案结构咬坏了一口**：`work/qcut_migrate_20261022.py` 里
+  `text[:i].rstrip('\n') + '\n' + text[j:].lstrip('\n')` 的 **`lstrip` 吃掉了分隔空行**，
+  导致 `TODO.md` 的 `## P1 — Next` 被粘到上一行末尾（**章节数 4→3**）。
+  我当时的断言是「每一非空行都还在」——**粘连不丢行，所以断言全绿却没抓到**。
+  已修回并复核（TODO 4 章节 / P0 1 块，STATE 11 章节，两文件粘连行 = 0）。
+  **教训：逐字迁移的断言必须含「目标文件章节数/块数不变」，光比行内容不够。**
+- **`| tail` 洗 rc 差点重犯**：第一次 dispatch 用 `... 2>&1 | tail -12; echo rc=$?`，
+  拿到的是 `tail` 的 0，日志也被吞没（档案 §复跑命令原文就警告过「别用 | tail 把 rc 洗成假 0」）。
+  第二次改成先落盘再取 rc，才看见真值 124。
+- **测试夹具用 `as const`** 把整个对象变 readonly，撞 `vue-tsc`（`reasons` readonly vs `string[]`）。
+  改显式标注 `ResultJson` 后过。
+- **`ffmpeg` 是只读 property**，测试里直接赋值抛 `AttributeError` ⇒ 应写 `_ffmpeg`（懒构建点）。
+
+### 6. 未结（更新）
+
+① ✅ 建议 A 落地 ② ✅ r28 已出 ③ ⛔ mac（见 §4，交还用户）
+④ 长镜头 GT 5 条待用户抽样复核 ⑤ **删 r25**（分发包现四档 r28/r27/r26/r25，按三档规矩该删，**等口令**）
+
+
 ## 2026-10-22
 
 ### Added
