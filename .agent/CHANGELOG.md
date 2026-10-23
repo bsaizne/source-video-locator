@@ -5260,3 +5260,7 @@ CLS / patch-token 稠密 / 局部描述子（ALIKED+LightGlue）在核心难例�
 ### Notes
 
 - Created `checkpoint-2026-10-22-224811.md` checkpoint (1 modified/untracked file(s)).
+
+### Notes
+
+- Created `checkpoint-2026-10-23-2252.md` checkpoint (1 modified/untracked file(s)).
