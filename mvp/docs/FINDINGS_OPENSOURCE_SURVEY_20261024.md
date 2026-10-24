@@ -86,3 +86,31 @@ ByteTrack 关联模块（暗光漏检鲁棒的 Norfair 替换件）；dtaidistan
   必须先在 scn5 短素材（15 段真漏切窗口）上测速+召回，不能直接全片；③ 代码获取走 github 443 阻断，
   改 api tarball。
 - **结论**：亲核通过、试点价值维持；实测（装包+权重+短素材）为试点级动作，**待口令**。
+
+## 6. OmniShotCut 试点实测（2026-10-24 续91，24 段真值对照）——段级存在性远胜 TN、帧级定位粗、CPU 可跑
+
+**环境落地**（三道门槛全过）：代码 = api tarball（27MB，codeload 经 api 重定向可达）；权重 = hf-mirror
+（`OmniShotCut_ckpt.pth` 211,261,519B，直连 HF 不通镜像通）；CUDA = **上游 `engine.py:66/266` 硬编码
+`.to("cuda")`，CPU torch 开箱即炸**——对本地副本打两行补丁 `cuda→cpu` 后可跑（改动留痕可审计，
+未推上游）；另需 ffmpeg+ffprobe 进 PATH（tools/ + static_ffmpeg）。依赖链干净：runtime 只用
+torch/torchvision/numpy/cv2/ffmpeg-python/hf_hub（requirements 里的 transformers/gradio 是训练/demo 件，
+无需安装），venv 零新增包。
+
+**真值设计**（test1-om，续68 补三的两组）：15 真漏切段（召回组，其中 5 条有精确认切点 ±0.1s）+
+9 单镜头段（精度组）；每段剪 clip（≤120s）重编码；切点 = shot 起点帧/fps+段起点，inter 标签非
+New_Start/Padding。产物 `work/omnishotcut_20261024/{probe_all.py,out_probe.json,clips/}`。
+
+**结果**：
+- **段级存在性 9/15**（漏检 197/198/299/693/756/784）——同素材 TransNetV2 原生仅 **1/15**（续69），
+  对「同场景多机位」漏切族的敏感度优势兑现；
+- **帧级定位粗**：精确认切点命中(±1s)仅 **1/5**（idx210 Δ+0.07；idx426 +5.19 / idx692 −6.77 /
+  idx791 +1.17 / idx198 漏）——「知道有切换、指不准位置」，与我方 CLS「存在性 AUC 0.919、定位
+  AUC 0.553 判负」**同构**（FINDINGS_SCN5_TN_ORIGINAL 已定性该形态）；
+- **内部假切 0/9**：精度组 3 个检出（idx303@段尾+0.03、idx508@段尾−0.06、idx45@段头+0.54）全部贴
+  clip 截断边界——段边界本是真实切换，判截断伪影；**段内部零假切**；
+- **CPU 速度 4.4× 实时**（1313s 素材 299.5s 推理）⇒ 全片 8221s ≈ **31 分钟/片**，与现役建索引同量级。
+
+**结论**：OmniShotCut 不是切点定位器，是**段级「画面重组存在性」信号源**——与 CLS 腿同构但敏感度
+更高（9/15 vs TN 1/15）。若进管线，合理形态 = **长镜头（>30s 段）的存在性标注/复核触发器**
+（对齐续68「它知道这段有切换，但位置只有三成对」→ OmniShotCut 位置更粗但覆盖更广），而非切点表
+生成器。接线为产品级改动，**需用户拍板**；mac/MPS 侧同样需验证两行补丁路径。

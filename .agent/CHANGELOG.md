@@ -1,5 +1,26 @@
 # CHANGELOG
 
+## 2026-10-25（续91）— OmniShotCut 试点实测：段级存在性 9/15（TN 仅 1/15）、帧级定位粗（±1s 命中 1/5）、内部假切 0/9、CPU 4.4× 实时
+
+口令「继续下一步继续」。**零 `mvp/src` 改动、未出包。**
+
+### 1. 环境三门槛全过（`work/omnishotcut_20261024/`）
+
+代码 = api tarball 27MB（codeload 经 api.github.com 重定向可达）；权重 = hf-mirror（211,261,519B，HF 直连不通镜像通，`download.pytorch.org` 的 resnet18 backbone 44.7MB 也顺带下通）；CUDA = **上游 `engine.py:66/266` 硬编码 `.to("cuda")`，CPU torch 开箱即炸**——对本地副本打两行 `cuda→cpu` 补丁（留痕可审计，未推上游）；ffmpeg/ffprobe 注入 PATH。runtime 依赖 = torch/torchvision/numpy/cv2/ffmpeg-python/hf_hub（venv 全有，requirements 里的 transformers/gradio 是训练/demo 件），**venv 零新增包**。
+
+### 2. 24 段真值对照（`probe_all.py` + `out_probe.json`）
+
+真值 = 续68 补三两组：15 真漏切段（召回组，5 条有 ±0.1s 精确认切点）+ 9 单镜头段（精度组），每段剪 clip（≤120s，ultrafast crf18 重编码）：
+
+- **段级存在性 9/15**（漏检 197/198/299/693/756/784）——同素材 **TransNetV2 原生仅 1/15**（续69），「同场景多机位」漏切族上的敏感度优势兑现；
+- **帧级定位粗**：±1s 命中 **1/5**（idx210 Δ+0.07；idx426 +5.19 / idx692 −6.77 / idx791 +1.17 / idx198 无检出）——与我方 CLS「存在性 AUC 0.919、定位 AUC 0.553 判负」**同构**；
+- **内部假切 0/9**：精度组 3 个检出（idx303/idx508 贴段尾 ±0.06、idx45 贴段头 +0.54）全部为 clip 截断边界伪影（段边界本是真实切换）；
+- **CPU 4.4× 实时**（1313s 素材 299.5s 推理）⇒ 全片 8221s ≈ **31 分钟/片**，与现役建索引同量级。
+
+### 3. 结论与形态
+
+OmniShotCut **不是切点定位器，是段级「画面重组存在性」信号源**（比 CLS 腿更敏感、与 CLS 同样指不准位置）。进管线的合理形态 = **长镜头（>30s 段）的存在性标注/复核触发器**（对齐续68「它知道这段有切换，但位置只有三成对」），非切点表生成器。接线为产品级改动，**需用户拍板**；mac/MPS 侧两行补丁路径需另验。落档 FINDINGS_OPENSOURCE_SURVEY §6；STATE 续87 块、TODO 续90 块逐字迁 archive（`work/premigrate_20261024_f/`）。
+
 ## 2026-10-25（续90）— 人脸身份门候选确认（扩上界仅单脸口径大分离 suggest=0.57）+ OmniShotCut 亲核通过
 
 口令「继续」（续89 收口后）。**零 `mvp/src` 改动、未出包。**
