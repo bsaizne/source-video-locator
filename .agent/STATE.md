@@ -42,7 +42,26 @@
 
 ## Current Task
 
-> **▶ 2026-10-25（续93）— 候选 B 人脸身份标注已接线（代码笔+门禁全绿，未出包）；ai_visual 11 行代查定案（无一推翻）；灰带 26 段闭合（阈值不下放）【现读这条】**
+> **▶ 2026-10-25（续94）— 开关矩阵 A/B：dense_recheck 净正（146→147，零退化，建议默认开）；degradation_gate 维持关（−2 = −1 假阳被打 + −1 NEAR 误伤）+ 改标注形态建议；③④⑤ 未跑待续【现读这条】**
+> 口令「review 一下有什么该进 runtime 的功能但是没进的」→「开始吧，跑完就交接」。
+> **`mvp/src` 零改动（纯测量批，新工具 `mvp/scripts/rerun_toggle_ab.py` + `work/ab_compare_20261025.py`）。**
+> **一、review 全景**：5 个默认关开关欠四片生产回归 + 3 个待拍板形态（OmniShotCut/人脸多脸侧/
+> 无支撑警告）+ 确认不进清单（FINDINGS_TOGGLE_AB §5）。
+> **二、⭐ ① dense_recheck 四片 A/B**：严格 **146→147**、导出实得 **141→142**，唯一翻转
+> t1r25 part→HIT，**零退化**（与沙盒净+6 同向）⇒ **建议默认 True**（一句口令即执行：config 一行 +
+> 全套测试 + 四片导出不变式；代价 locate +5~15min/片）。
+> **三、② degradation_gate 四片 A/B**：严格 146→**144**、导出实得 ±0；−2 = t2r02b（已知真错假阳
+> 被打，拒得对）+ t2r06a（M7 NEAR 族，误伤）；另拒 ~10 条无支撑额外行（2mkv 3 条已核对、test3
+> 6 条未逐一确证）⇒ **维持默认关**；**形态建议** = 拒因降级旁路标注 `degenerate_warning`
+> （学 query_cross_cut 先例，不拒行不动三指标）。
+> **四、③④⑤ 未跑**（矩阵按交接预算停在 2/5 轮；续跑命令 FINDINGS_TOGGLE_AB §4；
+> conf_v2 口径 = HIGH 误报数非三指标）。耗时实测：单片全链 20~43 分钟（dense 腿最重）。
+> **五、档案**：`mvp/docs/FINDINGS_TOGGLE_AB_20261025.md`（自包含）+ 交接件
+> `.agent/archive/HANDOFF_20261025_toggle_ab.md`；产物 `work/ab_{dense_recheck,degradation_gate}_{case}`
+> ×4 + `ab_summary_20261025.json`。迁移：STATE 续91、TODO 续93 块逐字迁 archive
+> （`work/premigrate_20261025_i/` 回滚备份）。
+
+> **▶ 2026-10-25（续93）— 候选 B 人脸身份标注已接线（代码笔+门禁全绿，未出包）；ai_visual 11 行代查定案（无一推翻）；灰带 26 段闭合（阈值不下放）【已退休，见上】**
 > 口令「1.先做b吧，2.我懒得自查了…自己查一下，3.读一下吧」三件同批执行。**`mvp/src` 有改动（旁路标注）、未出包、未 push。**
 > **一、⭐ B 接线落地**（`domain.FaceIdentity` + `engine/face_identity.py` + config 两字段 +
 > `locator_service._annotate_face_identity` 旁路 + `install_face_models.py` 资产安装）：挂点在
@@ -76,25 +95,14 @@
 > **三、档案**：PLAN 新文档；迁移：STATE 续89 块、TODO 续91 块逐字迁 archive
 > （`work/premigrate_20261025_g/` 回滚备份）。
 
-> **▶ 2026-10-24（续91）— OmniShotCut 试点实测完毕：段级存在性 9/15（TN 仅 1/15）、帧级定位粗（±1s 命中 1/5）、内部假切 0/9、CPU 4.4× 实时 ⇒ 定位=段级「画面重组存在性」信号源，非切点定位器【已退休，见上】**
-> 口令「继续下一步继续」（未结清单第一项）。**`mvp/src` 零改动、未出包。**
-> **一、环境三门槛全过**（`work/omnishotcut_20261024/`）：代码 api tarball 27MB（codeload 经 api 重定向
-> 可达）；权重 hf-mirror 211,261,519B（HF 直连不通镜像通）；CUDA = **上游 `engine.py:66/266` 硬编码
-> `.to("cuda")`，CPU 开箱即炸** ⇒ 对本地副本打两行 `cuda→cpu` 补丁（留痕可审计）；ffmpeg/ffprobe 注入
-> PATH。runtime 依赖干净（torch/torchvision/numpy/cv2/ffmpeg-python/hf_hub，venv 全有零新增包）。
-> **二、⭐ 24 段真值对照**（续68 补三两组：15 真漏切召回组 + 9 单镜头精度组，`probe_all.py` + `out_probe.json`）：
-> **段级存在性 9/15**（漏 197/198/299/693/756/784）——同素材 **TN 原生仅 1/15**（续69），敏感度优势兑现；
-> **帧级定位粗**：精确切点 ±1s 命中 1/5（idx210 Δ+0.07；426 +5.19 / 692 −6.77 / 791 +1.17 / 198 漏）
-> = 与我方 CLS「存在性 AUC 0.919、定位判负」**同构**；**内部假切 0/9**（3 检出全贴 clip 截断边界 = 段
-> 边界真实切换的伪影）；**CPU 4.4× 实时** ⇒ 全片 8221s ≈ 31 分钟（与建索引同量级）。
-> **三、结论**：不是切点定位器，是**段级存在性信号源**（比 CLS 腿敏感）。进管线的合理形态 = 长镜头
-> >30s 段的存在性标注/复核触发器（对齐续68「知道有切换、位置三成对」），非切点表生成器。
-> 接线为产品级改动，**需用户拍板**（mac/MPS 侧两行补丁路径也需验证）。
-> **四、档案**：FINDINGS_OPENSOURCE_SURVEY **§6**（实测全明细）；迁移：STATE 续87 块、TODO 续90 块
-> 逐字迁 archive（`work/premigrate_20261024_f/` 回滚备份）。
-
 ## Completed
 
+- **开关矩阵 A/B（2026-10-25 续94）**：review 5 个默认关开关 → 四片生产 A/B（新工具
+  rerun_toggle_ab.py + ab_compare）。① dense_recheck **净正**（146→147 / 141→142，唯一翻转
+  t1r25 part→HIT，零退化）建议默认开；② degradation_gate 146→144（−1 假阳 t2r02b 被打 +
+  −1 NEAR 误伤 t2r06a，额外拒 ~10 条无支撑行）维持关 + 改 degenerate_warning 标注形态建议；
+  ③④⑤ 未跑（续跑命令在档）。落档 FINDINGS_TOGGLE_AB_20261025 + HANDOFF_20261025_toggle_ab。
+  **零 `mvp/src` 改动。**
 - **候选 B 人脸身份标注接线 + ai_visual 定案 + 灰带闭合（2026-10-25 续93）**：`face_identity`
   旁路字段落地（domain/engine/config/locator 四层 + 资产安装脚本 + 测试 10 项；挂点在修复链后、
   两侧单脸质心 cos<0.57 判身份切换；480 宽口径与探针对齐；后端 723 + API 150 全绿；真值
@@ -603,6 +611,16 @@
 
 ## Next Actions
 
+> **▶ 交接指针（2026-10-25 续94，最新）**：**先读** `.agent/archive/HANDOFF_20261025_toggle_ab.md`
+> （自包含：review 全景 / ①② 两轮结果与裁决 / 别再做的事 / ③④⑤ 续跑命令 / 未结优先级）+
+> `mvp/docs/FINDINGS_TOGGLE_AB_20261025.md`（数据明细）。**读这两份就够。**
+> **一句话**：该进 runtime 的清单已全部裁决——① dense_recheck 净正待一句口令开默认，
+> ② degradation_gate 维持关但建议改旁路标注形态，③④⑤ 有续跑命令，其余都是确认不进或待拍板形态。
+> **下一步（都需口令）**：① `dense_recheck_enabled=True` 落地（config + 全套门禁 + r29 出包同批）；
+> ② `degenerate_warning` 标注形态改造；③ r29 出包（含续93 face_identity + 若开的 dense_recheck）；
+> ④ ③④⑤ 补跑。
+> 本批纯测量零 `mvp/src` 改动、未出包；档案随本指针同批提交。
+
 > **▶ 交接指针（2026-10-25 续93，最新）**：**先读** `mvp/src/engine/face_identity.py` 模块 docstring +
 > `mvp/docs/PLAN_EXISTENCE_SIGNAL_20261025.md`（候选 B 的判据/边界）+ `mvp/docs/
 > FINDINGS_QUERY_CROSS_CUT_CALIBER_20261022.md` **§11**（灰带闭合）。
@@ -984,4 +1002,4 @@
 
 ## Last Updated
 
-2026-10-25 03:1x（续93）
+2026-10-25 05:38

@@ -108,3 +108,14 @@
 > **三、待拍板（动 `mvp/src` 级）**：① PLAN 的 A/B 接线（含 B 的呈现层）② 旧未结：灰带 25 段、
 > v3 好×MISS 口径（分母 150）、ai_visual 11 行用户人工复核（风险三行已自查）。
 > 续91 块已迁 `.agent/archive/TODO_history_20261023_c.md`（备份 `work/premigrate_20261025_g/`）。
+
+> **▶ 2026-10-25（续93）— 候选 B 人脸身份标注已接线（门禁全绿）；ai_visual 11 行定案；灰带闭合阈值不下放【现读这条】**
+> 口令「先做b吧 / 自己查一下 / 读一下吧」三件同批。**`mvp/src` 改动 = 旁路标注（挂点修复链后，
+> 两侧单脸质心 cos 阈 0.57 才判），不进 confidence、不自动改镜头表；资产 install_face_models.py
+> 装到 models_root()/face，缺失自动降级。**
+> **门禁**：test_face_identity 10 项 + 后端 **723 OK** + API **150 OK**；真值校验与探针逐点一致。
+> **ai_visual 11 行**：8 行 9/10 维持 + 3 行已确证 ⇒ 定案。**灰带 26 段**：7/18/1，两组 dmax 完全
+> 重叠 ⇒ 阈值 0.50 维持。
+> **未结（需口令）**：① **出包 r29**（含 B 标注 + mac dispatch）② UI 呈现层（PLAN 决策点③）③
+> OmniShotCut 接线（候选 A）④ v3 好×MISS 口径（分母 150）。
+> 续92 块已迁 `.agent/archive/TODO_history_20261023_c.md`（备份 `work/premigrate_20261025_h/`）。

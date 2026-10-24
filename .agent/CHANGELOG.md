@@ -1,5 +1,29 @@
 # CHANGELOG
 
+## 2026-10-25（续94）— 开关矩阵 A/B：dense_recheck 净正（146→147 零退化，建议默认开）；degradation_gate 维持关（−2 = −1 假阳被打 + −1 NEAR 误伤）+ 改标注形态建议
+
+口令「review 一下有什么该进 runtime 的功能但是没进的」→「开始吧，跑完就交接」。**纯测量批，`mvp/src` 零改动**（新工具 `mvp/scripts/rerun_toggle_ab.py` 通用开关 A/B + `work/ab_compare_20261025.py` 对照）。
+
+### 1. review 全景
+
+5 个默认关开关（dense_recheck / degradation_gate / resolve_consecutive / fast_global_quality_weights / conf_v2）历史欠四片生产回归；3 个待拍板形态（OmniShotCut 长镜头存在性 / 人脸身份门多脸侧 / 无支撑素材全量警告）；确认不进清单（DTW/TopK/TN 原片侧/三通道/subshot/非外观信号/灰带阈值）见 FINDINGS_TOGGLE_AB §5。
+
+### 2. 第①轮 dense_recheck（每轮单变量、四片全链 locate、DML、基线 scn4、现行 GT 150）
+
+严格 **146→147（+1）**、导出实得 **141→142（+1）**；全四片唯一翻转 `test1/t1r25 part→HIT`，**零退化**——与沙盒（89/139 净+6，续10l）同向，幅度变小 = 现行基线已吸收后续增益。⇒ **建议默认 True**（竞品同语义逐字、攻起点精度主体；代价 locate +5~15min/片）。改默认待用户口令（config 一行 + 全套测试 + 四片导出不变式 + r29 同批）。
+
+### 3. 第②轮 degradation_gate
+
+严格 146→**144（−2）**、导出实得 ±0。−2 构成：`t2r02b HIT→part`（续86/87 定案的已知真错「多取」假阳被打掉，**拒得对**）+ `t2r06a HIT→part`（M7 兄弟机位 NEAR 族，**误伤**）。另拒 ~10 条无支撑额外行（2mkv 3 条已核不落任何 GT 窗；test3 6 条 og 441~502 蒙太奇段 GT 覆盖小未逐一确证）。⇒ **维持默认关**；**形态建议** = 拒因（degenerate_duplicate/覆盖不足）降级为旁路标注字段 `degenerate_warning`（学 query_cross_cut 先例——保可见性、不拒行、不动三指标，同时消解 NEAR 误伤）。
+
+### 4. ③④⑤ 未跑（矩阵按交接预算停在 2/5 轮）
+
+resolve_consecutive / fast_global_quality_weights / conf_v2 续跑命令在 FINDINGS_TOGGLE_AB §4（每轮 ≈1.5~2h；conf_v2 口径 = HIGH 层误报数非三指标）。耗时实测：单片全链 20~43 分钟（dense_recheck 腿逐段 ±4s@10fps 密帧 DML 嵌入最重）。
+
+### 5. 档案
+
+`mvp/docs/FINDINGS_TOGGLE_AB_20261025.md`（自包含）+ 交接件 `.agent/archive/HANDOFF_20261025_toggle_ab.md`；产物 `work/ab_{dense_recheck,degradation_gate}_{case}.results.json` ×8 + `ab_summary_20261025.json`。STATE 续91、TODO 续93 块逐字迁 archive（`work/premigrate_20261025_i/` 回滚备份）。
+
 ## 2026-10-25（续93）— 候选 B 人脸身份标注接线（代码+门禁全绿）；ai_visual 11 行代查定案；灰带 26 段闭合（阈值不下放）
 
 口令「1.先做b吧，2.我懒得自查了…自己查一下，3.读一下吧」三件同批。**`mvp/src` 改动 = 旁路标注；未出包、未 push。**
@@ -5567,3 +5591,7 @@ v2 每条 GT 行只看「编辑侧重叠最大的**那一条**结果」，而编
   残余风险改为域适配（须试点实测）；VDF 判负维持（merit 口径）。
 - 落档 `mvp/docs/FINDINGS_OPENSOURCE_SURVEY_20261024.md`（含裁定后修订表与试点排序建议：
   tslearn-DTW → YuNet+SFace 身份门 → OmniShotCut 亲核）；**零 `mvp/src` 改动、未出包、未提交**。
+
+### Notes
+
+- Created `checkpoint-2026-10-25-0538.md` checkpoint (8 modified/untracked file(s)).
