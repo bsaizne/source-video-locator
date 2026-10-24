@@ -921,3 +921,20 @@
   **未跑 = 未证否**，不得从 b 外推为探针族结案。
 - 证据 = `mvp/benchmark/user_case/competitor_cutmatch/FINDINGS_TWO_STAGE_SAMPLING_20261008.md`
   + `work/two_stage_20261008/`（build_account / 三臂 results / compare / 13 张逐图）。
+
+
+## 2026-10-24 — 本项目**不商业化**（用户拍板）⇒ 选型许可硬约束解除
+
+- **裁定**：本项目不商业化。此前「进产品必须 MIT/Apache/BSD」的许可硬约束**整体解除**：
+  NC（非商业）权重与 AGPL 代码**不再作为排除条件**，只作为属性如实标注。
+  `ENGINE_LICENSE_MATRIX.md` 的「对商业桌面产品的含义」降为**参考资料**（将来若商业化再启用）。
+- **直接效果（同日开源调研中因许可被否的两条候选重新入列）**：
+  · `deepinsight/insightface`（SCRFD 检测 + ArcFace 识别；README 自述权重仅限非商业研究）——
+    B 方向（身份级信号）里精度高于 opencv_zoo YuNet+SFace 一档、ONNX 生态成熟的现成件；
+  · `JDAI-CV/fast-reid` / `KaiyangZhou/torchreid`（全身 ReID；权重训练集含已撤回的 DukeMTMC）——
+    人脸不可见时的身份备胎。
+  两条的残余风险从「许可」改为**域适配**（监控/行人 vs 影视运镜素材，目前零证据），
+  须试点实测，不得默认可用。
+- **追溯说明**：VDF(AGPLv3) 同理不再被许可挡，但其选型判负是 merit 口径（5.46 < VCSL 6.00），维持不变。
+- **后续筛选规则**：调研/选型任务书不再写「AGPL/CC-NC 一律 no」；许可字段保留如实标注。
+- 载体：`mvp/docs/FINDINGS_OPENSOURCE_SURVEY_20261024.md`（含该轮调研全量候选与裁定后修订）。
