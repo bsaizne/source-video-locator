@@ -71,3 +71,18 @@ ByteTrack 关联模块（暗光漏检鲁棒的 Norfair 替换件）；dtaidistan
    精度不够再升 insightface SCRFD+ArcFace（已入列）。
 3. **OmniShotCut**：先亲核仓库/权重可达（HF 镜像）→ 再在 scn5 同场景素材上实测召回
    （对照 TransNetV2 375 切点 / 现役 912 的基数）。
+
+## 5. OmniShotCut 亲核结果（2026-10-24 续90，主代理实测）
+
+- **真身确认**（api.github.com 匿名读，网页 443 阻断属本机网络已知态）：`UVA-Computer-Vision-Lab/OmniShotCut`，
+  NeurIPS 2026 / Shot-Query Transformer / MIT / 339★ / 2026-04 创建、2026-09-09 仍推送 / Python /
+  pip 可装（`pip install git+...`，本机需走 api tarball 替代）。README 存档 `work/omnishotcut_readme_20261024.md`。
+- **输出对口**：`inference(video, mode)` 直接返回 `[start_frame, end_frame]` 镜头区间 +
+  转场类型（dissolve/fade/wipe）；接受视频路径或 numpy/tensor 帧数组。v1.5（52.8M，推荐）
+  自述「对连续运镜/光照变化更少假切、密集快剪召回更好」= 与我们「同场景硬切漏检」方向匹配。
+  四个下游工作（DreamX-Creator/Sekai2/ContextMaster/AlayaWorld）在数据管线用它 ⇒ 工程可信度加分。
+- **三道实测门槛**（试点前必须过）：① 权重在 HF `uva-cv-lab/OmniShotCut_v1.5`（直连不稳，需镜像）；
+  ② **README 官方口径 = PyTorch CUDA**——本机 AMD/DirectML 无 CUDA，CPU 推理速度未知，
+  必须先在 scn5 短素材（15 段真漏切窗口）上测速+召回，不能直接全片；③ 代码获取走 github 443 阻断，
+  改 api tarball。
+- **结论**：亲核通过、试点价值维持；实测（装包+权重+短素材）为试点级动作，**待口令**。
