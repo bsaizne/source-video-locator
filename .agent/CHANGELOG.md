@@ -1,5 +1,23 @@
 # CHANGELOG
 
+## 2026-10-25（续92）— 接线方案文档成形（PLAN_EXISTENCE_SIGNAL）+ 长镜头 5 条「补 GT」预期关闭
+
+口令「继续」。**零 `mvp/src` 改动、未出包。**
+
+### 1. 长镜头 5 条真切点不落 GT（`work/omnishotcut_20261024/longtake5_scan.json`）
+
+t1s210/198/426/692/791（±0.1s 精确认切点）左右镜头（各 ±4s @1fps 索引特征）× test1 编辑片全片 8fps 嵌入扫描（a7 同款口径 top4+1.5s 去重）：10 个 top1 命中 sim 0.42~0.64（= M7 同场景邻居量级）且**全部落在现有 GT 行 edited 窗内**（t1r13b/t1r08b/t1r31/t1r20 等，其 original 窗均不在切点附近）⇒ 这 5 个镜头**未被编辑片取用**，保持「漏切工单」定性（`GT_TICKETS_LONGT_20261019.md`），GT 无需扩——旧未结①「长镜头 GT 5 条」关闭。
+
+### 2. 接线方案文档（`mvp/docs/PLAN_EXISTENCE_SIGNAL_20261025.md`，先文档后动码）
+
+- **候选 A：OmniShotCut 段级存在性标注**——长镜头 >30s 段独立字段（类比 r28 `query_cross_cut` 先例）；⚠️ torch 进 win 包 ≈ **+1GB 级包体**（现包不含 torch）、建索引耗时**约翻倍**（限 >30s 段约 +11min/片）；mac/MPS 补丁路径需另验。
+- **候选 B：人脸身份门标注**——正反打族边界两侧各 3 帧 YuNet+SFace，**两侧均单脸时质心 cos <0.57 标身份切换 / ≥0.57 标连续，多脸/无脸不判**；零新依赖（opencv 已在）、包体不动、单点秒级。
+- 共同排除：不进 confidence 公式（冻结）、不自动改 scenes.npy（采纳层死结，续78）、OmniShotCut 不出切点表。**建议顺序先 B 后 A；动码需用户拍板**（全套测试 + 出包授权）。
+
+### 3. 档案
+
+PLAN 新文档；STATE 续89 块、TODO 续91 块逐字迁 archive（`work/premigrate_20261025_g/` 回滚备份）。
+
 ## 2026-10-25（续91）— OmniShotCut 试点实测：段级存在性 9/15（TN 仅 1/15）、帧级定位粗（±1s 命中 1/5）、内部假切 0/9、CPU 4.4× 实时
 
 口令「继续下一步继续」。**零 `mvp/src` 改动、未出包。**

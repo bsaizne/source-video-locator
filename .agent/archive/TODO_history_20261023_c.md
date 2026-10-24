@@ -88,3 +88,13 @@
 > ② 人脸身份门接线方案（若开）③ 长镜头 GT 5 条 ④ 灰带 25 段 ⑤ ai_visual 11 行用户人工复核
 > ⑥ v3 好×MISS 口径（分母 150）。
 > 续89 块已迁 `.agent/archive/TODO_history_20261023_c.md`（备份 `work/premigrate_20261024_e/`）。
+
+> **▶ 2026-10-24（续91）— OmniShotCut 试点实测：段级存在性 9/15（TN 1/15）、帧级粗（1/5）、内部假切 0/9、CPU 4.4× 实时 ⇒ 段级存在性信号源【现读这条】**
+> 口令「继续下一步继续」。**`mvp/src` 零改动、未出包。** 环境：api tarball + hf-mirror 权重 + 本地两行
+> `cuda→cpu` 补丁（上游硬编码 CUDA，CPU 开箱炸）；venv 零新增包。
+> 24 段真值对照：段级 9/15 ≫ TN 1/15；±1s 命中 1/5（idx210 +0.07）；假切 0/9 内部（3 检出=clip 边界
+> 伪影）；31 分钟/片 CPU。**形态结论 = 长镜头存在性标注/复核触发器，非切点表**；接线需拍板。
+> 档案：FINDINGS_OPENSOURCE_SURVEY §6；产物 `work/omnishotcut_20261024/`。
+> **未结（都需口令）**：① OmniShotCut 接线方案（长镜头存在性标注形态）② 人脸身份门接线（单脸侧
+> 阈 0.57）③ ai_visual 11 行用户人工复核 ④ 长镜头 GT 5 条 / 灰带 25 段 ⑤ v3 好×MISS 口径（分母 150）。
+> 续90 块已迁 `.agent/archive/TODO_history_20261023_c.md`（备份 `work/premigrate_20261024_f/`）。
