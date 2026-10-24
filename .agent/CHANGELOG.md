@@ -1,5 +1,33 @@
 # CHANGELOG
 
+## 2026-10-25（续93）— 候选 B 人脸身份标注接线（代码+门禁全绿）；ai_visual 11 行代查定案；灰带 26 段闭合（阈值不下放）
+
+口令「1.先做b吧，2.我懒得自查了…自己查一下，3.读一下吧」三件同批。**`mvp/src` 改动 = 旁路标注；未出包、未 push。**
+
+### 1. 候选 B 接线（`face_identity` 旁路字段，四处 + 测试）
+
+- `domain/models.py`：`FaceIdentity(cos, verdict, n_faces_left, n_faces_right)` + Result 字段 + 契约往返 + 旧 JSON 兼容；`verdict ∈ {same, different, unknown}`。
+- `engine/face_identity.py`：`resolve_face_models`（models_root()/face，缺失→None）+ `FaceIdentityAnalyzer`（YuNet≥0.7 + SFace 128d、每帧最大脸、每侧 3 帧质心、**480 宽口径**——全分辨率实测会多检边缘小脸致 max 脸漂移，判据阈值只在探针分辨率标定过）。
+- `infrastructure/config.py`：`face_identity_enabled=True` / `face_identity_cos_thresh=0.57`（扩上界双样本互证 suggest）。
+- `app/locator_service.py`：`_annotate_face_identity` 旁路挂在 locate() **修复链之后**（起点已定案；`_locate_features` 是「纯管线无 IO」契约层不得挂）；资产缺失 analyzer=False 本会话不重试；not_in_source/failure_reason/片头跳过；行级异常吞掉。
+- **判据红线**：仅两侧每帧恰好一张脸才给 same/different；多脸（max 脸换人=已实测失败模式）/无脸/失败 ⇒ unknown/None。不进 confidence、不自动改 scenes.npy。
+- **真值校验**（与探针逐点一致）：same 3 点 cos 0.871/0.940/0.859、different 2 点 0.155/0.204、多脸 2 点 unknown 不判。
+- **门禁**：`mvp/tests/test_face_identity.py` 10 项（契约/降级/行为/惰性锁/真值 B 类）全绿；后端全套 **723 OK(skipped=2)**（+10）；API **150 OK**。
+- **端到端分布**（真 scn4 results）：test1 55 行 27s（same 10/diff 3/unknown 41/none 1）、2mkv 84 行 25s（same 22/diff 5/unknown 55/none 2）⇒ ~0.5s/行、unknown 主体=多脸/无脸正确不判。
+- `mvp/scripts/install_face_models.py`：资产安装（work/face_probe_20261024/models → models_root()/face，幂等+字节数校验）。UI 呈现层未做（PLAN 决策点③）；**出包 r29 待口令**。
+
+### 2. ai_visual 11 行代查定案（`work/gt_patch_20261024/recheck2/`）
+
+pg04 同款单帧对图（编辑命中帧±0.3s×3 对 vs 素材窗中点）串行读 8 行：**全部 9/10 同镜头维持**（t1g01 洞中男子/t2g01 蓝马甲/t2g02 草地男子/t2g04 看台花衬衫/t2g05 栅栏男子/t2g06 颁奖台/pg01 椅上女子/pg02 望远镜女子）+ 二轮已确证 3 行（t2g03 loose/pg03 收紧/pg04）⇒ **11/11 无一推翻，ai_visual 批次定案**。t1r13b/t2g05 与灰带读图结论交叉吻合。
+
+### 3. 灰带 26 段闭合（`work/grayband_20261025/`，`query_cross_cut_thresh` 不下放）
+
+GT 扩容后 S5 重枚举 26 段（原文档 25），26 张接触表两段拼 13 张串行读图：**7 切换**（t1r18 0.370/t1r27 0.333/t3r05 0.288/t1r29 0.224/t3r23 0.208/t3r06b 0.193/t3r00 0.175）/ **18 无切换**（最高 t3r30 0.403、t1r23 0.342…）/ 1 暗帧不可判（t3r25）。**切换组 dmax {0.175~0.370} 与无切换组 {0.295~0.403} 完全重叠**（无切换组最高值超过切换组全体）⇒ 灰带主体是同镜头运镜/光照/动作的 CLS 抖动；下放阈值到 0.37 仅 +1 真切换却先误标 t3r30/t1r23。**0.50 维持**，§5 遗留问题关闭。
+
+### 4. 档案
+
+FINDINGS_QUERY_CROSS_CUT §11 + GT_PATCH_PROBES §4.2ter；STATE 续90/TODO 续92 块逐字迁 archive（`work/premigrate_20261025_h/` 回滚备份）。
+
 ## 2026-10-25（续92）— 接线方案文档成形（PLAN_EXISTENCE_SIGNAL）+ 长镜头 5 条「补 GT」预期关闭
 
 口令「继续」。**零 `mvp/src` 改动、未出包。**

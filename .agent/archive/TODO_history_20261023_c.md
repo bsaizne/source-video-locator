@@ -98,3 +98,13 @@
 > **未结（都需口令）**：① OmniShotCut 接线方案（长镜头存在性标注形态）② 人脸身份门接线（单脸侧
 > 阈 0.57）③ ai_visual 11 行用户人工复核 ④ 长镜头 GT 5 条 / 灰带 25 段 ⑤ v3 好×MISS 口径（分母 150）。
 > 续90 块已迁 `.agent/archive/TODO_history_20261023_c.md`（备份 `work/premigrate_20261024_f/`）。
+
+> **▶ 2026-10-25（续92）— 接线方案成形（先文档后动码）+ 长镜头 5 条补 GT 预期关闭【现读这条】**
+> 口令「继续」。**`mvp/src` 零改动、未出包。**
+> **一、长镜头 5 条不落 GT**：编辑片扫描 10 个 top1（sim 0.42~0.64）全落现有 GT 窗内 ⇒ 未被取用，
+> 保持漏切工单定性（`longtake5_scan.json`）。
+> **二、接线方案** `mvp/docs/PLAN_EXISTENCE_SIGNAL_20261025.md`：A=OmniShotCut 存在性标注（torch 进包
+> +1GB 级、建索引翻倍）；B=人脸身份门（零依赖、秒级、单脸侧阈 0.57）；建议先 B 后 A。
+> **三、待拍板（动 `mvp/src` 级）**：① PLAN 的 A/B 接线（含 B 的呈现层）② 旧未结：灰带 25 段、
+> v3 好×MISS 口径（分母 150）、ai_visual 11 行用户人工复核（风险三行已自查）。
+> 续91 块已迁 `.agent/archive/TODO_history_20261023_c.md`（备份 `work/premigrate_20261025_g/`）。

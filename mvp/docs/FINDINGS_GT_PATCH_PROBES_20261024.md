@@ -165,3 +165,13 @@ $PY -u mvp/scripts/measure_shot_recall.py   # 或按 a3_far_three.py 的 evaluat
 
 环境：`IDX=C:/Users/Bsaizne/AppData/Local/SourceVideoLocator/index/{test1-om__5d4fdc2b,test2-om__35b9a58f,test3-om__074e2dcc,2__4c6d4ab2}.idx`；
 编辑片 npz：test1=`work/topk_rerank_20261019/edit_test1_8.npz`，其余=`work/qcut_20261019/edit_{case}_8.npz`。
+
+### 4.2ter 三轮复核（续93，口令「我懒得自查了，你看看有没有办法自己查一下吧」）
+
+11 行 ai_visual 全量代查闭环（pg04 同款单帧对图法，编辑命中帧±0.3s × 3 对 vs 素材窗中点，
+`work/gt_patch_20261024/recheck2/` 8 张串行读图）：**8 行全部 9/10 同镜头维持**
+（t1g01 洞中男子侧脸 / t2g01 蓝马甲男子近景 / t2g02 草地男子微笑 / t2g04 看台花衬衫举臂 /
+t2g05 栅栏旁男子 / t2g06 颁奖台 / pg01 椅上女子侧脸 / pg02 望远镜女子特写），加上二轮已确证
+3 行（t2g03 loose / pg03 / pg04）⇒ **11/11 无一推翻，ai_visual 批次定案**。
+边界：判定仪器仍是 4.5v 视觉模型（非用户人工）；但三行风险行 + 全 11 行双轮读图一致，
+且 t1r13b/t2g05 与另两条独立档案结论（§灰带读图）交叉吻合。

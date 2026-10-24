@@ -42,7 +42,26 @@
 
 ## Current Task
 
-> **▶ 2026-10-25（续92）— 接线方案文档成形（PLAN_EXISTENCE_SIGNAL，先文档后动码）+ 长镜头 5 条「补 GT」预期关闭（编辑片未取用，保持漏切工单）【现读这条】**
+> **▶ 2026-10-25（续93）— 候选 B 人脸身份标注已接线（代码笔+门禁全绿，未出包）；ai_visual 11 行代查定案（无一推翻）；灰带 26 段闭合（阈值不下放）【现读这条】**
+> 口令「1.先做b吧，2.我懒得自查了…自己查一下，3.读一下吧」三件同批执行。**`mvp/src` 有改动（旁路标注）、未出包、未 push。**
+> **一、⭐ B 接线落地**（`domain.FaceIdentity` + `engine/face_identity.py` + config 两字段 +
+> `locator_service._annotate_face_identity` 旁路 + `install_face_models.py` 资产安装）：挂点在
+> locate() 修复链**之后**（起点已定案）、结果行素材起点边界两侧各 3 帧（±0.10/0.25/0.40s，
+> **480 宽口径**——全分辨率会多检边缘小脸，实测必须对齐探针）、**两侧均单脸才判**
+> same/different（阈 0.57）、多脸/无脸/失败=unknown/None；资产缺失整层降级。**口径校验**：
+> same 3 点（cos 0.87/0.94/0.86）+ different 2 点（0.16/0.20）+ 多脸不判，与探针逐点一致。
+> **门禁**：新增 test_face_identity 10 项 + 后端全套 **723 OK(skipped=2)** + API **150 OK**；
+> 惰性锁 = _locate_features（纯管线）与开关逐键无关。**端到端分布**（真 results）：test1 55 行
+> 27s（same 10/diff 3/unknown 41）、2mkv 84 行 25s（same 22/diff 5/unknown 55）⇒ 成本 ~0.5s/行。
+> UI 呈现层未做（PLAN 决策点③待拍板）；出包待口令。
+> **二、ai_visual 11 行代查定案**：8 行单帧对图 9/10 同镜头维持 + 3 行二轮已确证 ⇒ **无一推翻**。
+> **三、灰带 26 段闭合**（`work/grayband_20261025/`）：7 切换 / 18 无切换 / 1 暗帧不可判；
+> 切换组 dmax {0.175~0.370} 与无切换组 {0.295~0.403} **完全重叠**（无切换组最高 0.403 > 切换组
+> 全体）⇒ 灰带主体是同镜头 CLS 抖动，**query_cross_cut_thresh=0.50 维持不下放**。
+> **四、档案**：FINDINGS_QUERY_CROSS_CUT §11（灰带闭合）+ GT_PATCH_PROBES §4.2ter（代查定案）；
+> 迁移：STATE 续90 块、TODO 续92 块逐字迁 archive（`work/premigrate_20261025_h/` 回滚备份）。
+
+> **▶ 2026-10-25（续92）— 接线方案文档成形（PLAN_EXISTENCE_SIGNAL，先文档后动码）+ 长镜头 5 条「补 GT」预期关闭（编辑片未取用，保持漏切工单）【已退休，见上】**
 > 口令「继续」（续91 收口后，推进不动 `mvp/src` 的两件）。**`mvp/src` 零改动、未出包。**
 > **一、⭐ 长镜头 5 条真切点不落 GT**（`work/omnishotcut_20261024/longtake5_scan.json`）：t1s210/198/
 > 426/692/791 左右镜头（各 ±4s @1fps 索引特征）× 编辑片全片 8fps 扫描，10 个 top1 命中 sim 0.42~0.64
@@ -74,23 +93,14 @@
 > **四、档案**：FINDINGS_OPENSOURCE_SURVEY **§6**（实测全明细）；迁移：STATE 续87 块、TODO 续90 块
 > 逐字迁 archive（`work/premigrate_20261024_f/` 回滚备份）。
 
-> **▶ 2026-10-24（续90）— 人脸身份门候选确认（扩上界仅单脸口径大分离 suggest=0.57）+ OmniShotCut 亲核通过【已退休，见上】**
-> 口令「继续」（续89 全部收口之后）。**`mvp/src` 零改动、未出包。**
-> **一、⭐ 扩上界复测**（`work/face_probe_20261024/upband_probe.py` + `out_upband.json`）：质心判据的
-> 承重缺陷 = 上界带 n=3 太薄。上界池扩到 29（test1 九单镜头段×3 中心 + 2mkv/test2 短段 4~15s 中点）、
-> 下界同池重算 p95=0.3442 ⇒ **仅两侧单脸（n=11）p5=0.7935 大分离，suggest=0.5689**，与续89 的
-> 0.8305/0.60 相互印证；全部口径（n=29）p5=0.5136 仍分离但低尾（0.135~0.740）**全为多脸侧**
-> （max 脸换人污染，机制与裸探针一致）⇒ **判据可用条件 = 两侧均单脸；多脸侧必须逐人跟踪**。
-> 接线为产品级改动，**需用户拍板**。
-> **二、OmniShotCut 亲核**（`work/omnishotcut_readme_20261024.md`）：真身确认（NeurIPS 2026 / MIT /
-> 2026-09 活跃 / pip 可装）；输出对口（镜头区间+转场类型，v1.5 52.8M 自述密集快剪召回更好 = 与我们
-> 漏切形态方向匹配）；**三道实测门槛** = HF 权重（需镜像）、README 官方口径 CUDA（本机 AMD，须先短
-> 素材 CPU 测速）、代码获取走 api tarball（github 443 阻断）。亲核通过、**实测待口令**（试点级）。
-> **三、档案**：FINDINGS_GT_PATCH_PROBES §3（扩样读数）；FINDINGS_OPENSOURCE_SURVEY §5（亲核）。
-> 迁移：STATE 续86 块、TODO 续89 块逐字迁 archive（`work/premigrate_20261024_e/` 回滚备份）。
-
 ## Completed
 
+- **候选 B 人脸身份标注接线 + ai_visual 定案 + 灰带闭合（2026-10-25 续93）**：`face_identity`
+  旁路字段落地（domain/engine/config/locator 四层 + 资产安装脚本 + 测试 10 项；挂点在修复链后、
+  两侧单脸质心 cos<0.57 判身份切换；480 宽口径与探针对齐；后端 723 + API 150 全绿；真值
+  same 3/diff 2/多脸不判逐点一致；端到端 ~0.5s/行）。ai_visual 11 行代查无一推翻（8 行 9/10 维持
+  +3 行已确证）。灰带 26 段闭合：切换组与无切换组 dmax 完全重叠 ⇒ 阈值 0.50 不下放。
+  落档 QCC §11 + GPP §4.2ter。**未出包、未 push。**
 - **接线方案文档 + 长镜头 5 条 GT 预期关闭（2026-10-25 续92）**：PLAN_EXISTENCE_SIGNAL_20261025
   （候选 A OmniShotCut 存在性标注——torch 进包 +1GB 级/建索引翻倍；候选 B 人脸身份门——零依赖
   秒级，单脸侧阈 0.57；建议先 B 后 A；都不进 confidence/不自动改 scenes）；长镜头 5 条真切点编辑片
@@ -593,6 +603,15 @@
 
 ## Next Actions
 
+> **▶ 交接指针（2026-10-25 续93，最新）**：**先读** `mvp/src/engine/face_identity.py` 模块 docstring +
+> `mvp/docs/PLAN_EXISTENCE_SIGNAL_20261025.md`（候选 B 的判据/边界）+ `mvp/docs/
+> FINDINGS_QUERY_CROSS_CUT_CALIBER_20261022.md` **§11**（灰带闭合）。
+> **一句话**：候选 B 已进产品代码（旁路标注、门禁全绿、未出包）；GT 的 ai_visual 11 行双轮定案；
+> 灰带证明阈值 0.50 不可再降。
+> **下一步（都需口令）**：① **出包 r29**（含 face_identity + 续93 前全部档案；mac 另 dispatch）；
+> ② UI 呈现层拍板；③ OmniShotCut（候选 A）接线与否；④ v3 口径。
+> 本批 `mvp/src` 改动 = 旁路标注四处 + 测试 10 项；**未出包、未 push**。
+
 > **▶ 交接指针（2026-10-25 续92，最新）**：**先读** `mvp/docs/PLAN_EXISTENCE_SIGNAL_20261025.md`
 > （接线方案：候选 A/B 形态、资产、成本、风险、建议顺序 + §4 长镜头 5 条关闭依据）。
 > **读这一份就够。**
@@ -965,4 +984,4 @@
 
 ## Last Updated
 
-2026-10-25 01:5x（续92）
+2026-10-25 03:1x（续93）
