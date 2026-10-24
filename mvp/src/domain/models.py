@@ -180,6 +180,33 @@ class QueryCrossCut:
         return cls(max_d=float(d["max_d"]), at=float(d["at"]), n_jumps=int(d["n_jumps"]))
 
 
+@dataclass(frozen=True)
+class FaceIdentity:
+    """素材边界两侧的人脸身份一致性（2026-10-25 候选 B：**只标注，不改定位、不改置信度、
+    不自动改镜头表**——采纳层无自动信号是档案死结 FINDINGS_SUBSHOT_QUERY 续78）。
+
+    在结果行素材侧**起点边界**两侧各取 3 帧（±0.10/0.25/0.40s）测 SFace 质心余弦。
+    ``verdict`` 三态：``same``/``different`` 仅当**两侧每帧都恰好一张脸**时给出
+    （多脸场景 max 脸会换人、判据双带重叠，FINDINGS_GT_PATCH_PROBES §3）；其余 ``unknown``。
+    阈值 0.57 = 扩上界双样本互证的 suggest（0.5689/0.60）。已知语义边界：同演员跨场景
+    判 ``same`` 是正确答案；无脸/背影/远景不判。
+    """
+
+    cos: float
+    verdict: str  # "same" | "different" | "unknown"
+    n_faces_left: int   # 左侧 3 帧的每帧检出脸数最大值（0=无脸, -1=抓帧失败）
+    n_faces_right: int
+
+    def to_dict(self) -> dict:
+        return {"cos": self.cos, "verdict": self.verdict,
+                "n_faces_left": self.n_faces_left, "n_faces_right": self.n_faces_right}
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "FaceIdentity":
+        return cls(cos=float(d["cos"]), verdict=str(d["verdict"]),
+                   n_faces_left=int(d["n_faces_left"]), n_faces_right=int(d["n_faces_right"]))
+
+
 @dataclass
 class Result:
     """一条最终结果（含 auto/manual 双轨，不因手动覆盖丢失自动结果）。
@@ -206,6 +233,7 @@ class Result:
     not_in_source: bool = False     # 编辑段判定为非源片内容(文字卡/logo/转场),不做定位
     excluded: bool = False          # 用户手动排除:不进 NLE 导出(结果页可切换,反馈四轮 r16)
     query_cross_cut: QueryCrossCut | None = None   # 段内含画面跳变(只标注,不影响定位/置信度)
+    face_identity: FaceIdentity | None = None      # 素材起点边界两侧身份一致性(只标注,同上)
 
     def to_dict(self) -> dict:
         """产品契约 JSON（MVP_PRODUCT_SPEC §5 / §27）。"""
@@ -231,6 +259,7 @@ class Result:
             "not_in_source": self.not_in_source,
             "excluded": self.excluded,
             "query_cross_cut": self.query_cross_cut.to_dict() if self.query_cross_cut else None,
+            "face_identity": self.face_identity.to_dict() if self.face_identity else None,
         }
         if self.manual_override:
             d["manual_timestamp"] = self.manual_timestamp
@@ -263,6 +292,8 @@ class Result:
             excluded=bool(d.get("excluded", False)),
             query_cross_cut=(QueryCrossCut.from_dict(d["query_cross_cut"])
                              if d.get("query_cross_cut") else None),
+            face_identity=(FaceIdentity.from_dict(d["face_identity"])
+                           if d.get("face_identity") else None),
             auto_result=cls.from_dict(d["auto_result"]) if manual and d.get("auto_result") else None,
         )
 

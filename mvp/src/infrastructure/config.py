@@ -351,6 +351,13 @@ class PipelineConfig:
     # 召回 80% / 精确率 100%（**半开区间口径**，见 FINDINGS_QUERY_CROSS_CUT_CALIBER_20261022 §2/§4）。
     # 已知会漏标「同色调/暗场」的真跨镜头（读数只有 0.21~0.29）⇒ UI 文案不得承诺检全。
     query_cross_cut_thresh: float = 0.5
+    # --- 素材边界人脸身份标注（候选 B，2026-10-25：只标注、不改定位、不改置信度、
+    # 不自动改镜头表）---
+    # 判据 = 两侧各 3 帧最大脸 SFace 质心余弦；**仅两侧每帧恰好一张脸才给 same/different**
+    # （多脸 max 脸换人是已实测的失败模式）。0.57 = 扩上界双样本互证的 suggest
+    # （0.5689/0.60，FINDINGS_GT_PATCH_PROBES §3）。资产缺失自动降级不标注。
+    face_identity_enabled: bool = True
+    face_identity_cos_thresh: float = 0.57
     # --- 编辑侧分析持久缓存（A4 性能优化 2026-09-05）---
     # 缓存两级切分产物 + 每段 8fps 密帧特征到 app data（键=文件身份+feature_version+管线配置+
     # 设备数值口径）。同一编辑片重复定位免重切分/重 embed; 任一口径变化自动失效。纯缓存零语义。

@@ -20,7 +20,7 @@ from typing import Callable
 import numpy as np
 
 from device import DeviceBackend, directml_available, mps_available, pick_best_available
-from domain import (Confidence, ConfidenceLevel, IndexValidation,
+from domain import (Confidence, ConfidenceLevel, FaceIdentity, IndexValidation,
                     IndexValidationStatus, OriginalSegment, QueryCrossCut, Result,
                     ResultBatch, ResultSource, TimeSpan)
 from app.edited_cache import EditedCache, fingerprint as edited_cache_fingerprint
@@ -28,6 +28,7 @@ from functools import partial
 from concurrent.futures import ThreadPoolExecutor
 
 from engine.confidence import ConfidenceEngine
+from engine.face_identity import FaceIdentityAnalyzer, resolve_face_models
 from engine.feature_store import FeatureStore, FeatureStoreError, IndexBundle
 from engine.localization.evidence_localize import EvidenceLocalizer, EvidenceResult
 from engine.localization.degradation_gate import (apply_degradation_gate,
@@ -162,6 +163,8 @@ class SourceLocatorService:
         self._current_edited: Path | None = None
         self._last_candidates = 0
         self._last_seq_items: list[dict] = []
+        # 候选 B 人脸身份标注：None=未建, False=资产缺失/不可用（本次会话不再重试）
+        self._face_analyzer: FaceIdentityAnalyzer | None | bool = None
 
     @property
     def ffmpeg(self) -> FFmpegIO:
@@ -1410,6 +1413,13 @@ class SourceLocatorService:
             else:
                 self._log.warning("isc refine enabled but no ISC onnx asset; skipped")
         _fix_leg_done("isc_refine", None)
+        # 候选 B 旁路标注：必须在修复链全部完成之后（起点已定案）；失败不影响结果。
+        try:
+            self._annotate_face_identity(results, orig_path)
+        except ApplicationError:
+            raise
+        except Exception:
+            self._log.exception("face identity annotation failed (non-fatal)")
         batch = ResultBatch(schema_version=1, original_video=str(orig_path),
                             edited_video=str(Path(edited).resolve()), results=results)
         self._current_batch = batch
@@ -1863,6 +1873,50 @@ class SourceLocatorService:
             except Exception:
                 pass
         return dense
+
+    def _annotate_face_identity(self, results: list[Result], orig_path) -> None:
+        """候选 B（2026-10-25）：结果行素材起点边界的人脸身份一致性**旁路标注**。
+
+        只挂 ``face_identity`` 字段——不改定位、不改 confidence、不回写镜头表（采纳层无
+        自动信号是档案死结）。挂在修复链**之后**：dense_start_recheck/patch_refine 会挪
+        起点，标注必须基于最终值。资产缺失/加载失败 → 整层跳过（本会话不再重试）。
+        """
+        cfg = self.config.pipeline
+        if not bool(getattr(cfg, "face_identity_enabled", True)):
+            return
+        analyzer = self._face_analyzer
+        if analyzer is None:
+            models = resolve_face_models(paths.models_root())
+            analyzer = (FaceIdentityAnalyzer(models, self.ffmpeg)
+                        if models else False)
+            self._face_analyzer = analyzer
+            if analyzer is False:
+                self._log.info("face identity models missing under %s; annotation skipped",
+                               paths.models_root() / "face")
+        if analyzer is False:
+            return
+        thr = float(getattr(cfg, "face_identity_cos_thresh", 0.57))
+        n = 0
+        for r in results:
+            if r.not_in_source or r.failure_reason:
+                continue
+            t = float(r.original.start)
+            if t <= 0.5:   # 片头无左帧
+                continue
+            try:
+                m = analyzer.measure_boundary(orig_path, t, cos_thresh=thr)
+            except Exception:
+                self._log.exception("face identity row failed (non-fatal) t=%.3f", t)
+                continue
+            if m is not None:
+                r.face_identity = FaceIdentity(
+                    cos=(m["cos"] if m["cos"] is not None else 0.0),
+                    verdict=m["verdict"],
+                    n_faces_left=m["n_faces_left"], n_faces_right=m["n_faces_right"])
+                n += 1
+        self._log.info("face identity annotated %d/%d rows (threshold %.2f)",
+                       n, len(results), thr)
+
     def _query_cross_cut(self, shot, dense, cfg):
         """段内画面跳变标注（建议 A，2026-10-22）。**只读 dense，不回写任何东西。**
 
