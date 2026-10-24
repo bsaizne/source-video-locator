@@ -115,6 +115,7 @@ Only load the minimum information required to continue the project.
 - 不伪造结果：装不上/模型下不了/特征失败 → 如实标记 `status: blocked` / `BLOCKED` / `NETWORK_BLOCKED`
 - **限制全部解除(2026-08-28 用户拍板)**:算法/模型(含 CLS forward 与特征语义)/GT/benchmark 均可改;改动嵌入语义须 bump `feature_version` 重建索引;验收仍以 `measure_shot_recall.py` 三指标 + 全套测试为准
 - **护栏逐条确认(2026-09-01 用户拍板,权威)**:见 `.agent/DECISIONS.md` 2026-09-01——**解除**:冻结 DINOv2 backbone、ONNX 只出 CLS、余弦/检索 Top-K/聚类/v2_score/coverage/finloc 语义、不新增 backbone/VLM、已证伪变体不进 runtime、不 sweep、不重跑研究 benchmark、不改 GT;**保留**:索引/编辑采样、Python 3.11+、Confidence 公式冻结+不标定占位+不用 GT 字段、禁 per-query argmax/voting/cut-aware/temporal align、研究代码隔离、GT v3 基准+逐帧确认、FFmpeg seek、L2 归一、DeviceBackend 抽象、不伪造结果、打包需授权、历史结果不覆盖、研究立项触发条件
+- **非商业化裁定(2026-10-24 用户拍板,权威见 .agent/DECISIONS.md 2026-10-24)**:本项目**不商业化**——许可(NC 非商业权重/AGPL)**不再作为选型、调研、试点的排除条件**,只作属性如实标注;`ENGINE_LICENSE_MATRIX.md` 的商用传染分析降为参考(将来若商业化再启用)
 - 网络限制：github/pypi/download.pytorch.org 可达（慢）；Google Drive / HuggingFace / dl.fbaipublicfiles.com 直连可能失败（DINOv2 权重用带 `dinov2_vits14/` 子路径的 URL 可下）
 
 ### 上下文更新约定

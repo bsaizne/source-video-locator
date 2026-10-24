@@ -1,6 +1,8 @@
 # 引擎 License 对比矩阵
 
 > 来源：各仓库 README / LICENSE 文件实测（2026-08-23 核实）。
+> **⚠️ 2026-10-24 用户拍板：本项目不商业化** —— 下文「对商业桌面产品的含义」**降为参考资料**；
+> NC/AGPL 不再作为选型排除条件，仅作属性标注（权威见 `.agent/DECISIONS.md` 2026-10-24）。
 
 | 项 | VDF (videoduplicatefinder) | TransVCL | VCSL / VTA |
 |---|---|---|---|
