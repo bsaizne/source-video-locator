@@ -9,11 +9,12 @@
 
 ## P0 — Current
 
-> **▶ 2026-10-25（续95）— 续94 四件事全部收口；r29 出包执行中【现读这条】**
-> ① dense_recheck 默认开 + trim 亚帧缺口修复（`afa5644`）；② degenerate_warning 旁路标注
-> （`d8ee02b`）；④ ③④⑤ 三轮 A/B 补跑完 + qw 广播 bug 修复（`3db0391`）——**三轮全部维持
-> 默认关、无新增益**。后端 **737** + API **150** + 双批不变式全绿。
-> **进行中**：r29 出包（已批；含 face_identity + dense_recheck + degenerate_warning；mac 另 dispatch）。
+> **▶ 2026-10-25（续95）— 续94 四件事全部收口 + r29 已出包【现读这条】**
+> ① dense_recheck 默认开 + trim 修复（`afa5644`）；② degenerate_warning（`d8ee02b`）；
+> ④ ③④⑤ 三轮 A/B 完跑，全部维持默认关（`3db0391`）；③ r29 = `Video-Locator-win-x64-20261025r29.zip`
+> 1,018,084,363B / backend.exe sha16 `cc212c6029ba700e`，五道包内验收全绿；face_identity 资产
+> 接包（SVL_FACE_MODELS_ROOT）+ numba/llvmlite 排除 -120MB（`d0e3563`）。
+> **待用户**：mac dispatch（必重出）；conf_v2 翻默认与否待拍板；release/ r27 删除等口令。
 
 ## P1 — Next
 

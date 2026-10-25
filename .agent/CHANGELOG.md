@@ -63,6 +63,28 @@ STATE 续92 块、TODO 续94 块逐字迁 archive（`work/premigrate_20261025_j/
 
 后端 **737 OK**（+3 单测）/ API **150 OK**。FINDINGS_TOGGLE_AB §4 已补全。**r29 出包已批待执行**（含 face_identity + dense_recheck 默认开 + degenerate_warning；mac 另 dispatch）。
 
+---
+
+## 2026-10-25（续95⑤）— r29 出包（face_identity 资产接包 + numba 过度收集排除 + 五道验收全绿）
+
+口令「跑完再出吧」兑现。构建点 = 干净 commit `3be4f36` + spec 修补 `d0e3563`。
+
+### 1. face_identity 资产接包（接包前包内整层降级 = 空功能）
+
+资产原「不入 git / 不进包」；r29 起按 SVL_DML_MODEL/ISC 同模式接包：`SVL_FACE_MODELS_ROOT` 注入（`main.ts` → resources/models，后端 `resolve_face_models_auto` env 优先回退 models_root，env 指 models **父目录**与 resolve 拼 /face 语义一致）+ `build-release.ps1` 装配 YuNet/SFace（字节数 fail-fast，源 `work/face_probe_20261024/models` 或 SVL_FACE_MODEL_SOURCE）+ `accept_packaged_bundle` 资产锁（r28 及以前预期红）。
+
+### 2. numba/llvmlite 过度收集排除（-120MB）
+
+r29 首打 zip 对 r28 +81MB 归因 = face 资产 38.9MB + **llvmlite 120.4MB**。后者 = `onnxruntime/transformers/benchmark.py` 顶部 `import numba` 被 PyInstaller 顺收；r28 恰逢 venv 无 numba 所以没有。numba 2026-10-24 21:42 入 venv（续91 试点批）。产品从不 import numba ⇒ spec excludes 加 `numba/llvmlite`（`d0e3563`），重建后 0 条目。
+
+### 3. r29 zip 身份与五道验收
+
+`Video-Locator-win-x64-20261025r29.zip` **1,018,084,363 B**（对 r28 +36.4MB ≈ face 资产净增）/ **8,370 条目**（文件 6,995 + 目录 1,375；r28 惯例目录条目口径不同）/ `testzip=None` / zip 内 backend.exe **77,521,601B sha16 `cc212c6029ba700e` == 磁盘**。五道：bundle **36 PASS/0**（含新 face 资产锁）· render **FAILED=0** · 不变式**双批 FAILED=0** · 冒烟（隔离收割 exitcode=0）· 合并腿 **merged==baseline 零翻转**。
+
+### 4. 遗留
+
+mac 包待用户 dispatch（本批 mvp/src + 资产 + main.ts 都变了，mac 必须重出）；release/ 现三档 r29/r28/r27（删除按节奏等口令）。
+
 
 ## 2026-10-25（续94）— 开关矩阵 A/B：dense_recheck 净正（146→147 零退化，建议默认开）；degradation_gate 维持关（−2 = −1 假阳被打 + −1 NEAR 误伤）+ 改标注形态建议
 

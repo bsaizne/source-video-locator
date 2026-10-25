@@ -70,6 +70,14 @@
 > 维持默认关、无新增益**：resolve_consecutive 147→147 全面持平；qw 修复后 37 行 span 微动但
 > 三指标与 dense 腿逐位相同；conf_v2 span 逐位一致、恰 1 条无支撑行 HIGH→MEDIUM 零代价
 > （FINDINGS_TOGGLE_AB §4 已补全）。
+> **八、⭐ r29 已出包（口令「跑完再出吧」兑现）**：face_identity 资产接包（SVL_FACE_MODELS_ROOT
+> 注入 + build 装配 + 包内锁；接包前包内会整层降级 = 空功能）+ **numba/llvmlite 过度收集排除**
+> （-120MB，onnxruntime.transformers.benchmark 顶 import numba；numba 10-24 入 venv 后首次被收；
+> spec excludes，代码笔 `d0e3563`）。zip `Video-Locator-win-x64-20261025r29.zip`
+> **1,018,084,363B** / 8,370 条目 / testzip=None / backend.exe 77,521,601B sha16
+> `cc212c6029ba700e` == 磁盘；五道全绿（bundle 36 PASS 含 face 锁 / render 0 / 不变式双批 0 /
+> 冒烟 0 / 合并腿零翻转）。**mac 必须重出**（代码+资产+main.ts 都变了）；release/ 现 r29/r28/r27
+> 三档（删除等口令）。
 
 
 
@@ -645,11 +653,13 @@
 
 ## Next Actions
 
-> **▶ 交接指针（2026-10-25 续95，最新）**：续94 四件事**全部收口**——① dense_recheck 默认开 +
-> trim 修复（`afa5644`）；② degenerate_warning 旁路标注（`d8ee02b`，test3 逐图 3 拒对+2 误伤+1 NEAR）；
-> ④ ③④⑤ 三轮 A/B 补跑完 + qw 广播 bug 修复（`3db0391`），**三轮全部维持默认关、无新增益**。
-> 后端 737 + API 150 全绿。**下一步：出 r29（已批，跑完后执行；含 face_identity + dense_recheck
-> 默认开 + degenerate_warning；mac 另 dispatch）**。
+> **▶ 交接指针（2026-10-25 续95，最新）**：续94 四件事**全部收口 + r29 已出包**——① dense_recheck
+> 默认开 + trim 修复（`afa5644`）；② degenerate_warning 旁路标注（`d8ee02b`）；④ ③④⑤ 三轮 A/B
+> 完跑全部维持默认关（`3db0391`）；③ r29 = `Video-Locator-win-x64-20261025r29.zip`
+> 1,018,084,363B / backend.exe sha16 `cc212c6029ba700e`，五道包内验收全绿，含 face_identity
+> 资产接包 + numba 排除（-120MB，`d0e3563`）。
+> **下一步（需用户）**：① mac dispatch（代码+资产+main.ts 都变了，mac 必须重出）；
+> ② conf_v2 是否翻默认待拍板（微收益零代价，本轮维持关）；③ release/ r27 删除等口令。
 
 > **▶ 交接指针（2026-10-25 续93，最新）**：**先读** `mvp/src/engine/face_identity.py` 模块 docstring +
 > `mvp/docs/PLAN_EXISTENCE_SIGNAL_20261025.md`（候选 B 的判据/边界）+ `mvp/docs/
@@ -1032,7 +1042,8 @@
 
 ## Last Updated
 
-2026-10-25 21:0x（续95 ④完跑）
+2026-10-25 23:5x（续95 r29 已出包）
+完跑）
 
 
 
