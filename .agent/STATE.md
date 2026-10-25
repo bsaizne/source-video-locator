@@ -78,6 +78,10 @@
 > `cc212c6029ba700e` == 磁盘；五道全绿（bundle 36 PASS 含 face 锁 / render 0 / 不变式双批 0 /
 > 冒烟 0 / 合并腿零翻转）。**mac 必须重出**（代码+资产+main.ts 都变了）；release/ 现 r29/r28/r27
 > 三档（删除等口令）。
+> **九、2026-10-26（续96）用户三口令收口**：conf_v2 **拍板维持默认关**（悬置关闭）；
+> mac dispatch 用户自行待定；**r27 已删**（删前三档双验逐字一致：r27 `fbba9d9870b2fcab` /
+> r28 `de4458207adb2b26` / r29 `cc212c6029ba700e` 全 PASS），释放 ≈936MB，
+> **release/ 现两档 = r29 现役 + r28 回滚**。
 
 
 
@@ -658,8 +662,8 @@
 > 完跑全部维持默认关（`3db0391`）；③ r29 = `Video-Locator-win-x64-20261025r29.zip`
 > 1,018,084,363B / backend.exe sha16 `cc212c6029ba700e`，五道包内验收全绿，含 face_identity
 > 资产接包 + numba 排除（-120MB，`d0e3563`）。
-> **下一步（需用户）**：① mac dispatch（代码+资产+main.ts 都变了，mac 必须重出）；
-> ② conf_v2 是否翻默认待拍板（微收益零代价，本轮维持关）；③ release/ r27 删除等口令。
+> **下一步（需用户）**：mac dispatch 待定（用户自行触发；代码+资产+main.ts 都变了，mac 必须重出）。
+> conf_v2 已拍板默认关（2026-10-26）；r27 已删（现两档 r29+r28）。
 
 > **▶ 交接指针（2026-10-25 续93，最新）**：**先读** `mvp/src/engine/face_identity.py` 模块 docstring +
 > `mvp/docs/PLAN_EXISTENCE_SIGNAL_20261025.md`（候选 B 的判据/边界）+ `mvp/docs/
@@ -1042,7 +1046,8 @@
 
 ## Last Updated
 
-2026-10-25 23:5x（续95 r29 已出包）
+2026-10-26（续96 三口令收口）
+r29 已出包）
 完跑）
 
 

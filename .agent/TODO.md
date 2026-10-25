@@ -14,7 +14,8 @@
 > ④ ③④⑤ 三轮 A/B 完跑，全部维持默认关（`3db0391`）；③ r29 = `Video-Locator-win-x64-20261025r29.zip`
 > 1,018,084,363B / backend.exe sha16 `cc212c6029ba700e`，五道包内验收全绿；face_identity 资产
 > 接包（SVL_FACE_MODELS_ROOT）+ numba/llvmlite 排除 -120MB（`d0e3563`）。
-> **待用户**：mac dispatch（必重出）；conf_v2 翻默认与否待拍板；release/ r27 删除等口令。
+> **2026-10-26（续96）用户口令**：conf_v2 拍板**维持默认关**（悬置关闭）；r27 已删
+> （删前三档双验逐字一致，释放 ≈936MB，现两档 r29+r28）；mac dispatch 用户自行待定。
 
 ## P1 — Next
 
