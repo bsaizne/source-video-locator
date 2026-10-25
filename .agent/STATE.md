@@ -42,20 +42,31 @@
 
 ## Current Task
 
-> **▶ 2026-10-25（续95）— dense_recheck 默认开落地 + 修掉 trim 包含形态亚帧丢画面缺口（不变式门红转绿）【现读这条】**
-> 口令「开始吧」（续94 四件事的第 1 件）。**`mvp/src` 有改动**，代码笔 `afa5644`。
-> **一、⭐ dense_recheck_enabled 默认 True**（续94 裁决兑现）：config 一行 + 注释订正（含 vote_prior
-> 块「维持默认关」过时表述）。
-> **二、⭐ 四片导出不变式首跑即红 = 挖出真缺口**：test2 `coverage_delta_zero` 违反（覆盖
-> 70.793→70.777s，Δ=−16ms；基线批全绿 ⇒ dense_recheck 开启态新暴露，与 config 翻默认无关——A/B 批
-> 是 rerun 脚本强开的）。机制 = `trim_adjacent_source_overlaps` 包含形态兜底丢外层独占亚帧尾巴
-> （外层 [3032.000,3032.433] 包内层 [3032.000,3032.417]，头宽 0 / 尾宽 16ms 都 <1 帧 ⇒ 中点均分把
-> 16ms 独占尾巴丢掉），违背该函数自述硬要求「不丢画面，只去重复」；生产数据此前从未踩中非零亚帧余量。
-> **修法** = 亚帧余量由内层 clip 吸收（头或尾单侧 <1 帧 ⇒ 内层窗扩 ≤1 帧；两侧都不成段 ⇒ 内层吸收后
-> 对**并集**中点均分，并集 <2 帧整对跳过）；「头够切/尾够切」两分支同族丢余量一并修。
-> **三、门禁（修复后重跑）**：单测 +3 项（`test_export_adjacent_dedup` 19 项）· 后端 **726
-> OK(skipped=2)** · API **150 OK** · 不变式**双批全绿**（dense 批 + 基线批，FAILED=0）。
-> **四、档案**：STATE 续92 块、TODO 续94 块逐字迁 archive（`work/premigrate_20261025_j/` 回滚备份）。
+> **▶ 2026-10-25（续95）— ①dense_recheck 默认开 + trim 亚帧缺口修复；②degenerate_warning 旁路标注落地（gate 拒因降级，不拒行）【现读这条】**
+> 口令「开始吧」→「开始」（续94 四件事的第 1、2 件同批）。**`mvp/src` 有改动**，代码笔
+> `afa5644`（①）+ `d8ee02b`（②）。
+> **一、⭐ ① dense_recheck_enabled 默认 True**（续94 裁决兑现）：config 一行 + 注释订正。
+> **二、⭐ ① 四片导出不变式首跑即红 = 挖出真缺口**：test2 `coverage_delta_zero` 违反（覆盖
+> 70.793→70.777s，Δ=−16ms；基线批全绿 ⇒ dense_recheck 开启态新暴露）。机制 =
+> `trim_adjacent_source_overlaps` 包含形态兜底丢外层独占亚帧尾巴（头宽 0 / 尾宽 16ms 都 <1 帧 ⇒
+> 中点均分把尾巴丢掉），违背「不丢画面，只去重复」硬要求。**修法** = 亚帧余量由内层 clip 吸收
+> （单侧不成段 ⇒ 内层窗扩 ≤1 帧；两侧都不成段 ⇒ 内层吸收后对**并集**中点均分，并集 <2 帧整对跳过）；
+> 「头够切/尾够切」两分支同族问题一并修。单测 +3。
+> **三、⭐ ② `degenerate_warning` 旁路标注落地**（`FINDINGS_DEGENERATE_WARNING_20261025.md` 自包含）：
+> 域 `DegenerateWarning(ratio, threshold)` + `annotate_degenerate_duplicates`（与 gate 同判据同处理序，
+> 只标注不拒行不动置信不删数据）+ 接线在 gate 后 shot_split 前同辖区，始终运行无独立开关（阈 0.8
+> 共用）。**gate 本体维持默认关**。E2E：test2 生产链重跑（1816s）标注触发 1 行 = seg17 ratio 0.864，
+> **与 A/B gate 拒识同一行**（t2r02b 家族）且该行 failure_reason=None/置信 HIGH 未动；三指标与基线/
+> dense 腿逐位一致。**⚠️ 落盘产物重放对账对不齐是预期**（gate/标注在 split 前父 span 辖区判，
+> results.json 是 split 后子行），勿再用此法验等价。
+> **四、⭐ test3 六条被拒行逐图定案**（接触表 `work/contin95_gatecheck/`）：**3 拒对**（seg13/14/15
+> 内容不符）+ **2 误伤**（seg53 瑟兰迪尔同镜头；seg66 山坡镜头被编辑片 86.6s/139.8s 两处真实复用）
+> + **1 NEAR**（seg56 绿厅同景异镜）——与续94「价值真实但有误伤面」定性吻合，实证标注形态正确。
+> **五、门禁**：单测 +8（gate 文件 36 项）· 后端 **734 OK(skipped=2)** · API **150 OK** ·
+> ①双批不变式全绿。
+> **六、档案**：STATE 续92 块、TODO 续94 块逐字迁 archive（`work/premigrate_20261025_j/`）。
+
+
 
 > **▶ 2026-10-25（续94）— 开关矩阵 A/B：dense_recheck 净正（146→147，零退化，建议默认开）；degradation_gate 维持关（−2 = −1 假阳被打 + −1 NEAR 误伤）+ 改标注形态建议；③④⑤ 未跑待续【现读这条】**
 > 口令「review 一下有什么该进 runtime 的功能但是没进的」→「开始吧，跑完就交接」。
@@ -98,11 +109,17 @@
 
 ## Completed
 
-- **dense_recheck 默认开 + trim 亚帧丢画面修复（2026-10-25 续95）**：config 翻默认（续94 裁决兑现）；
+- **dense_recheck 默认开 + trim 亚帧丢画面修复（2026-10-25 续95①）**：config 翻默认（续94 裁决兑现）；
   四片导出不变式验收挖出 `trim_adjacent_source_overlaps` 包含形态兜底丢外层独占亚帧尾巴
   （test2 覆盖 Δ=−16ms 违反 coverage_delta_zero，dense_recheck 移动边界后首次生产触发），修 =
   亚帧余量内层吸收 + 并集中点均分（含头/尾单侧两分支同族修复）；后端 **726（+3 单测）** / API **150** /
-  **双批不变式全绿**（dense 批 + 基线批）。代码笔 `afa5644`。**未出包。**
+  **双批不变式全绿**（dense 批 + 基线批）。代码笔 `afa5644`。
+- **degenerate_warning 旁路标注落地 + test3 六条逐图定案（2026-10-25 续95②）**：
+  `DegenerateWarning` 域字段 + `annotate_degenerate_duplicates`（与 gate 同判据同处理序，只标注
+  不拒行不动置信）接线 gate 后同辖区、始终运行；gate 维持默认关。E2E test2 生产链标注触发 1 行
+  （= A/B gate 拒识同一行 t2r02b 家族，failure_reason/置信未动），三指标逐位一致；
+  test3 六条被拒行逐图 = **3 拒对 + 2 误伤 + 1 NEAR**（`FINDINGS_DEGENERATE_WARNING_20261025.md`）。
+  后端 **734（+8 单测）** / API **150**。代码笔 `d8ee02b`。**未出包。**
 - **开关矩阵 A/B（2026-10-25 续94）**：review 5 个默认关开关 → 四片生产 A/B（新工具
   rerun_toggle_ab.py + ab_compare）。① dense_recheck **净正**（146→147 / 141→142，唯一翻转
   t1r25 part→HIT，零退化）建议默认开；② degradation_gate 146→144（−1 假阳 t2r02b 被打 +
@@ -617,11 +634,11 @@
 
 ## Next Actions
 
-> **▶ 交接指针（2026-10-25 续95，最新）**：续94 四件事的**第 1 件已落地**——dense_recheck 默认开 +
-> trim 亚帧丢画面缺口修复（代码笔 `afa5644`；后端 726 + API 150 + dense/基线双批不变式全绿）。
-> **下一步（都需口令）**：② `degenerate_warning` 标注形态改造（方案 FINDINGS_TOGGLE_AB §3）；
-> ③ r29 出包（含续93 face_identity + dense_recheck 默认开；mac 另 dispatch）；
-> ④ ③④⑤ 补跑（命令 FINDINGS_TOGGLE_AB §4）。
+> **▶ 交接指针（2026-10-25 续95，最新）**：续94 四件事的**①② 已落地**——dense_recheck 默认开 +
+> trim 亚帧缺口修复（`afa5644`）+ `degenerate_warning` 旁路标注落地（`d8ee02b`，含 test3 六条
+> 逐图定案 3 拒对+2 误伤+1 NEAR）。后端 734 + API 150 + 双批不变式全绿。
+> **下一步（都需口令）**：③ r29 出包（含续93 face_identity + dense_recheck 默认开 +
+> degenerate_warning 标注；mac 另 dispatch）；④ ③④⑤ 补跑（命令 FINDINGS_TOGGLE_AB §4）。
 
 > **▶ 交接指针（2026-10-25 续93，最新）**：**先读** `mvp/src/engine/face_identity.py` 模块 docstring +
 > `mvp/docs/PLAN_EXISTENCE_SIGNAL_20261025.md`（候选 B 的判据/边界）+ `mvp/docs/
@@ -1004,5 +1021,6 @@
 
 ## Last Updated
 
-2026-10-25 12:0x（续95）
+2026-10-25 15:3x（续95 ①②）
+
 

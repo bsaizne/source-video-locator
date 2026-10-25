@@ -22,6 +22,26 @@ test2 `coverage_delta_zero` 违反（覆盖 70.793→70.777s，Δ=−16ms；基�
 
 STATE 续92 块、TODO 续94 块逐字迁 archive（`work/premigrate_20261025_j/` 回滚备份）。**未出包**（r29 等口令）。
 
+---
+
+## 2026-10-25（续95②）— `degenerate_warning` 旁路标注落地（degradation_gate 拒因降级）
+
+口令「开始」（续95 批第 2 件）。代码笔 `d8ee02b`。**未出包。**
+
+### 1. 形态
+
+域 `DegenerateWarning(ratio, threshold)` + `annotate_degenerate_duplicates`（与 gate 同判据同处理序：置信分降序、最强认领者存活、被标注者不再认领、并集重复率、严格大于 0.8 才标），只标注不拒行不动置信不删数据；接线 gate 后 shot_split 前同辖区，始终运行无独立开关。gate 本体维持默认关。
+
+### 2. 验证
+
+- 单测 +8（gate 文件 36 项）；后端 **734 OK** / API **150 OK**。
+- E2E：test2 生产链重跑（当前默认 dense_recheck=True，1816s）标注触发 1 行 = seg17 ratio 0.864，**与 A/B gate 拒识同一行**（t2r02b 家族）且 failure_reason=None/置信 HIGH 未动；三指标与 scn4 基线/dense 腿**逐位一致**（strict 25 / main 23 / verified 19 / scene 25 / fp 0）。
+- ⚠️ 落盘产物重放对账对不齐 gate 拒识集是**预期**（gate/标注在 split 前父 span 辖区判，results.json 是 split 后子行）——勿再用此法验等价。
+
+### 3. test3 六条被拒行逐图定案（续94 遗留）
+
+**3 拒对**（seg13/14/15 内容不符：龙/弩炮 vs 士兵/城镇俯瞰/兽人大厅）+ **2 误伤**（seg53 瑟兰迪尔同镜头；seg66 山坡镜头被编辑片 86.6s/139.8s 两处真实复用）+ **1 NEAR**（seg56 绿厅同景异镜）。接触表 `work/contin95_gatecheck/`；明细 `mvp/docs/FINDINGS_DEGENERATE_WARNING_20261025.md`。
+
 
 ## 2026-10-25（续94）— 开关矩阵 A/B：dense_recheck 净正（146→147 零退化，建议默认开）；degradation_gate 维持关（−2 = −1 假阳被打 + −1 NEAR 误伤）+ 改标注形态建议
 
