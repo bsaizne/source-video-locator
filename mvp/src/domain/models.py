@@ -207,6 +207,28 @@ class FaceIdentity:
                    n_faces_left=int(d["n_faces_left"]), n_faces_right=int(d["n_faces_right"]))
 
 
+@dataclass(frozen=True)
+class DegenerateWarning:
+    """退化重复标注（2026-10-25 续95：**只标注，不拒行、不改置信度、不删数据**）。
+
+    本段主 span 与「更强结论」（置信分更高的已保留段）的源区间重复率超过
+    ``max_duplicate_scene_ratio``。判据与处理序与 ``apply_degradation_gate`` 完全同源
+    （竞品 results.validation 语义），但 gate 的「唯一认领者存活」拒识在我方架构实测误伤
+    （解说片刻意复用/同机位 NEAR 族，续19/31/94 A/B −2），故降级为旁路提示
+    （学 query_cross_cut / face_identity 先例，FINDINGS_TOGGLE_AB §3）。
+    """
+
+    ratio: float       # 实测重复率（被更强结论认领的并集覆盖比例）
+    threshold: float   # 当时的判定阈值（回放/A/B 对账用）
+
+    def to_dict(self) -> dict:
+        return {"ratio": self.ratio, "threshold": self.threshold}
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "DegenerateWarning":
+        return cls(ratio=float(d["ratio"]), threshold=float(d["threshold"]))
+
+
 @dataclass
 class Result:
     """一条最终结果（含 auto/manual 双轨，不因手动覆盖丢失自动结果）。
@@ -234,6 +256,7 @@ class Result:
     excluded: bool = False          # 用户手动排除:不进 NLE 导出(结果页可切换,反馈四轮 r16)
     query_cross_cut: QueryCrossCut | None = None   # 段内含画面跳变(只标注,不影响定位/置信度)
     face_identity: FaceIdentity | None = None      # 素材起点边界两侧身份一致性(只标注,同上)
+    degenerate_warning: DegenerateWarning | None = None  # 与更强结论源区间重复率高(只标注,不拒行)
 
     def to_dict(self) -> dict:
         """产品契约 JSON（MVP_PRODUCT_SPEC §5 / §27）。"""
@@ -260,6 +283,8 @@ class Result:
             "excluded": self.excluded,
             "query_cross_cut": self.query_cross_cut.to_dict() if self.query_cross_cut else None,
             "face_identity": self.face_identity.to_dict() if self.face_identity else None,
+            "degenerate_warning": (self.degenerate_warning.to_dict()
+                                   if self.degenerate_warning else None),
         }
         if self.manual_override:
             d["manual_timestamp"] = self.manual_timestamp
@@ -294,6 +319,8 @@ class Result:
                              if d.get("query_cross_cut") else None),
             face_identity=(FaceIdentity.from_dict(d["face_identity"])
                            if d.get("face_identity") else None),
+            degenerate_warning=(DegenerateWarning.from_dict(d["degenerate_warning"])
+                                if d.get("degenerate_warning") else None),
             auto_result=cls.from_dict(d["auto_result"]) if manual and d.get("auto_result") else None,
         )
 

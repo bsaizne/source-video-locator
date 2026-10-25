@@ -31,7 +31,8 @@ from engine.confidence import ConfidenceEngine
 from engine.face_identity import FaceIdentityAnalyzer, resolve_face_models
 from engine.feature_store import FeatureStore, FeatureStoreError, IndexBundle
 from engine.localization.evidence_localize import EvidenceLocalizer, EvidenceResult
-from engine.localization.degradation_gate import (apply_degradation_gate,
+from engine.localization.degradation_gate import (annotate_degenerate_duplicates,
+                                                  apply_degradation_gate,
                                                   duplicate_claim_warnings)
 from engine.localization.dense_start_check import dense_start_shift
 from engine.localization.patch_refine import apply_patch_refine
@@ -113,6 +114,7 @@ class SourceLocatorService:
         self.export_root = Path(export_root) if export_root else paths.export_root(override=data_dir)
         self._log = get_logger(__name__)
         self._last_gate_stats = None          # 退化拒绝门统计（locate() 写入，供诊断/脚本读）
+        self._last_degenerate_warnings = None  # 退化重复旁路标注统计（locate() 写入，同上）
         self.last_export_warnings: list[str] = []   # 导出前告警（碎片/降级），API 透传给 UI
         self.last_render_info: dict | None = None   # 最近一次成片渲染信息（2026-09-29 续30）
         # multi-evidence 主定位器（query-axis 逐帧 top1 聚类；无 IO，仅参数，构造即安全）
@@ -1301,6 +1303,16 @@ class SourceLocatorService:
             self._log.info("degradation gate rejected=%d subs_dropped=%d subs_kept=%d",
                            len(gate.rejected), gate.subs_dropped, gate.subs_kept)
         self._last_gate_stats = gate
+        # 退化重复旁路标注（2026-10-25 续95，FINDINGS_TOGGLE_AB §3）：与 gate 同判据同处理序的
+        # 只标注形态——不拒行、不动置信度、不删数据（NEAR 族合法歧义从「伤害」降为「提示」）。
+        # 放 gate 之后同一辖区（最终主 span、split 之前）；gate 真拒的段已带 failure_reason，
+        # _answerable 自动排除。纯计算零解码/推理，始终运行。
+        self._last_degenerate_warnings = annotate_degenerate_duplicates(
+            results,
+            max_duplicate_scene_ratio=self.config.pipeline.max_duplicate_scene_ratio)
+        if self._last_degenerate_warnings.warned:
+            self._log.info("degenerate duplicate warnings=%d (annotation only)",
+                           len(self._last_degenerate_warnings.warned))
         _fix_leg_done("degradation_gate", None)
         # 段级拆分（2026-09-30 续32 形态4 runtime 化, engine/localization/shot_split.py;
         # 2026-10-01 续35 默认开）。放在全部定位/门/重排之后 = 看到最终主 span；宽 span 保全 ⇒

@@ -378,10 +378,11 @@ class PipelineConfig:
     #     用户拍板 T1-1 接入）。竞品确证值 max_duplicate_scene_ratio=0.8 / min_scene_coverage=0.2。
     #     我方口径见 engine/localization/degradation_gate.py 模块头：重复率 = 本段主 span 被其它段
     #     主 span 覆盖的比例；覆盖不足 = 子 span cover 低于门槛即丢弃。
-    #     ⚠️ 已知误伤面：解说片故意复用同一源镜头（回闪/前后呼应）会被误拒 ⇒ 默认关，须四片 A/B
-    #     + 逐图复核翻转段后再定默认值（离线重放脚本 mvp/scripts/replay_degradation_gate.py）。
+    #     ⚠️ 已知误伤面：解说片故意复用同一源镜头（回闪/前后呼应）会被误拒 ⇒ 默认关。四片 A/B
+    #     已做（2026-10-25 续94：严格 −2 = −1 假阳 + −1 NEAR 误伤）仍维持关；拒因已降级为旁路
+    #     标注形态 `degenerate_warning`（annotate_degenerate_duplicates，始终运行，不拒行）。
     degradation_gate_enabled: bool = False
-    max_duplicate_scene_ratio: float = 0.8
+    max_duplicate_scene_ratio: float = 0.8   # gate 拒识与 degenerate_warning 标注共用同一阈值
     min_scene_coverage: float = 0.2
     # 段级拆分（2026-09-30 续32 形态4 runtime 化，engine/localization/shot_split.py）：
     # 多镜头结果段按编辑窗内切镜重排为逐镜子结果（宽 span 保全 ⇒ 严格结构性零回退）。

@@ -23,7 +23,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))  # -> mvp/s
 from app.exporters import build_export_plan
 from domain import (Confidence, ConfidenceLevel, OriginalSegment, Result,
                     ResultBatch, TimeSpan)
-from engine.localization.degradation_gate import (apply_degradation_gate,
+from engine.localization.degradation_gate import (annotate_degenerate_duplicates,
+                                                  apply_degradation_gate,
                                                   duplicate_claim_groups,
                                                   duplicate_claim_warnings,
                                                   duplicate_ratio, fragment_warnings)
@@ -142,6 +143,90 @@ class DegradationGateTest(unittest.TestCase):
         stats = self._run([weak, strong])
         self.assertEqual(stats.rejected, [0])     # 弱的那条被拒
         self.assertIsNone(strong.failure_reason)
+
+
+class DegenerateWarningAnnotationTest(unittest.TestCase):
+    """续95 旁路标注形态：与 gate 同判据同处理序，但只标 ``degenerate_warning``——
+    不拒行、不动置信度、不删数据（FINDINGS_TOGGLE_AB §3；学 query_cross_cut 先例）。"""
+
+    def _run(self, results, max_ratio=0.8):
+        return annotate_degenerate_duplicates(results, max_duplicate_scene_ratio=max_ratio)
+
+    def test_over_threshold_row_warned_without_any_mutation(self):
+        a = _result(ed=(0.0, 2.0), orig=(100.0, 110.0))
+        b = _result(ed=(2.0, 4.0), orig=(102.0, 112.0))     # 被盖 8 / 自宽 10 = 0.8 = 阈值，不标注
+        c = _result(ed=(4.0, 6.0), orig=(100.0, 110.0))     # 对 kept 并集 = 1.0 > 阈值
+        stats = self._run([a, b, c])
+        self.assertEqual(stats.warned, [2])
+        self.assertIsNone(a.degenerate_warning)
+        self.assertIsNone(b.degenerate_warning)
+        self.assertIsNotNone(c.degenerate_warning)
+        self.assertAlmostEqual(c.degenerate_warning.ratio, 1.0, places=4)
+        self.assertEqual(c.degenerate_warning.threshold, 0.8)
+        # 零语义面：不拒行、不动置信度
+        self.assertIsNone(c.failure_reason)
+        self.assertEqual(c.confidence.level, ConfidenceLevel.HIGH)
+        self.assertEqual(c.confidence.score, 0.9)
+
+    def test_warned_row_still_claims_next(self):
+        # 被标注者不再认领（与 gate 同处理序）：后续段相对「强认领者」算重复率。
+        a = _result(ed=(0.0, 2.0), orig=(100.0, 110.0), score=0.95)
+        b = _result(ed=(2.0, 4.0), orig=(100.0, 110.0), score=0.9)    # 被标注
+        c = _result(ed=(4.0, 6.0), orig=(100.0, 110.0), score=0.8)    # 相对 a 仍 1.0 → 也被标注
+        stats = self._run([a, b, c])
+        self.assertEqual(stats.warned, [1, 2])
+        self.assertIsNone(b.failure_reason)
+
+    def test_below_threshold_no_warning(self):
+        a = _result(ed=(0.0, 2.0), orig=(100.0, 200.0))
+        b = _result(ed=(2.0, 4.0), orig=(195.0, 295.0))     # dup = 0.05
+        stats = self._run([a, b])
+        self.assertEqual(stats.warned, [])
+        self.assertIsNone(b.degenerate_warning)
+
+    def test_skip_rules_match_gate(self):
+        claim = _result(ed=(0.0, 2.0), orig=(100.0, 110.0))
+        failed = _result(ed=(2.0, 4.0), orig=(100.0, 110.0), failure="unresolved")
+        nir = _result(ed=(4.0, 6.0), orig=(100.0, 110.0), not_in_source=True)
+        excl = _result(ed=(6.0, 8.0), orig=(100.0, 110.0), excluded=True)
+        manual = _result(ed=(8.0, 10.0), orig=(100.0, 110.0), manual=True)
+        zero = _result(ed=(10.0, 12.0), orig=(100.0, 100.0))
+        stats = self._run([failed, nir, excl, manual, zero, claim])
+        self.assertEqual(stats.warned, [])   # 只有健康段受管辖，而它自己不重复
+
+    def test_gate_rejected_row_is_not_annotated(self):
+        # gate 开启时真拒的段（failure_reason 已写）不在标注范围
+        a = _result(ed=(0.0, 2.0), orig=(100.0, 110.0))
+        b = _result(ed=(2.0, 4.0), orig=(100.0, 110.0))
+        apply_degradation_gate([a, b], enabled=True, max_duplicate_scene_ratio=0.8,
+                               min_scene_coverage=0.2)
+        stats = self._run([a, b])
+        self.assertEqual(stats.warned, [])
+        self.assertEqual(b.failure_reason, "degenerate_duplicate")
+
+    def test_threshold_open_wide_silences_annotation(self):
+        # 「阈值开满 vs 关死，除本字段外结果 JSON 逐键相同」的惰性口径
+        a = _result(ed=(0.0, 2.0), orig=(100.0, 110.0))
+        b = _result(ed=(2.0, 4.0), orig=(100.0, 110.0))
+        stats = self._run([a, b], max_ratio=1.01)
+        self.assertEqual(stats.warned, [])
+        self.assertIsNone(b.degenerate_warning)
+
+    def test_serialization_roundtrip(self):
+        r = _result(ed=(0.0, 2.0), orig=(100.0, 110.0))
+        r.degenerate_warning = __import__("domain").DegenerateWarning(ratio=0.92, threshold=0.8)
+        d = r.to_dict()
+        self.assertEqual(d["degenerate_warning"], {"ratio": 0.92, "threshold": 0.8})
+        r2 = Result.from_dict(d)
+        self.assertEqual(r2.degenerate_warning, r.degenerate_warning)
+        # None 行对称
+        d2 = _result().to_dict()
+        self.assertIsNone(d2["degenerate_warning"])
+        self.assertIsNone(Result.from_dict(d2).degenerate_warning)
+
+    def test_gate_stats_dict_includes_warned(self):
+        stats = self._run([_result(ed=(0.0, 2.0), orig=(100.0, 110.0))])
+        self.assertEqual(stats.as_dict()["warned"], [])
 
 
 class DuplicateClaimWarningTest(unittest.TestCase):

@@ -16,6 +16,9 @@
   - **重复认领告警**（``duplicate_claim_warnings``，2026-09-29 续31）：同一原片区被多个导出
     clip 指到时提示用户可合并。这是退化判据的**同构安全形态** —— 不做「唯一认领者存活」
     式删答案（该语义在我方架构实测砍正确段），只指出冗余。
+  - **退化重复旁路标注**（``annotate_degenerate_duplicates``，2026-10-25 续95）：与重复率门
+    同判据同处理序的**只标注**形态（``degenerate_warning`` 字段），不拒行、不动置信度；
+    生产 A/B 实测拒识 −2 = −1 假阳被打 + −1 NEAR 误伤（FINDINGS_TOGGLE_AB §3）后落地。
 
 全部为纯函数，输入 ``Result`` 列表 / ``ExportClip`` 列表，返回统计字典，便于离线重放 A/B。
 """
@@ -23,7 +26,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from domain import Confidence, ConfidenceLevel
+from domain import Confidence, ConfidenceLevel, DegenerateWarning
 
 
 def _union_length(intervals) -> float:
@@ -152,11 +155,13 @@ class GateStats:
     dup_ratios: dict[int, float] = field(default_factory=dict)
     subs_dropped: int = 0
     subs_kept: int = 0
+    warned: list[int] = field(default_factory=list)        # 旁路标注命中（见 annotate_…）
 
     def as_dict(self) -> dict:
         return {"rejected": list(self.rejected),
                 "dup_ratios": {str(k): round(v, 4) for k, v in self.dup_ratios.items()},
-                "subs_dropped": self.subs_dropped, "subs_kept": self.subs_kept}
+                "subs_dropped": self.subs_dropped, "subs_kept": self.subs_kept,
+                "warned": list(self.warned)}
 
 
 def apply_degradation_gate(results: list, *, enabled: bool,
@@ -209,6 +214,38 @@ def apply_degradation_gate(results: list, *, enabled: bool,
                         i + 1, r.edited.start, r.edited.end, ratio,
                         r.original.start, r.original.end)
     stats.rejected.sort()
+    return stats
+
+
+def annotate_degenerate_duplicates(results: list, *,
+                                   max_duplicate_scene_ratio: float) -> GateStats:
+    """退化重复**旁路标注**（2026-10-25 续95，FINDINGS_TOGGLE_AB §3 建议形态落地）。
+
+    判据与处理序与 :func:`apply_degradation_gate` 第 2 步**完全同源**（置信分降序、
+    最强认领者存活、被标注者不再认领），但超阈段**只**写 ``degenerate_warning``
+    （ratio/threshold），不写 ``failure_reason``、不动置信度、不删任何数据
+    ⇒ 不拒行、不动三指标；NEAR 族（同机位反复出现的合法歧义）误伤从「伤害」降为「提示」。
+    已被 gate 真拒的段（``failure_reason`` 非空）不在标注范围（``_answerable`` 排除）。
+    返回统计（``warned`` = 命中下标），便于离线重放对账。
+    """
+    stats = GateStats()
+    spans = [(r.original.start, r.original.end) if _answerable(r) else None for r in results]
+    order = sorted((i for i, sp in enumerate(spans) if sp is not None),
+                   key=lambda i: (-(results[i].confidence.score if results[i].confidence else 0.0),
+                                  results[i].edited.start, results[i].edited.end))
+    kept: list[tuple[float, float]] = []
+    for i in order:
+        r = results[i]
+        mine = (r.original.start, r.original.end)
+        ratio = duplicate_ratio(mine, kept)
+        stats.dup_ratios[i] = round(ratio, 4)
+        if ratio <= max_duplicate_scene_ratio:
+            kept.append(mine)
+            continue
+        r.degenerate_warning = DegenerateWarning(ratio=round(ratio, 4),
+                                                 threshold=max_duplicate_scene_ratio)
+        stats.warned.append(i)
+    stats.warned.sort()
     return stats
 
 
