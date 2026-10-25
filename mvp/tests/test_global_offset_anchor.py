@@ -14,7 +14,8 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from engine.localization.offset_vote_prior import (frame_quality_stats,
+from engine.localization.offset_vote_prior import (combine_quality_weights,
+                                                   frame_quality_stats,
                                                    global_offset_anchor,
                                                    offset_vote_seed)
 
@@ -244,6 +245,38 @@ class GlobalAnchorTest(unittest.TestCase):
         _, _, s_sharp = frame_quality_stats(checker)
         self.assertGreater(s_sharp, s_flat)
         self.assertLessEqual(s_sharp, 1.5)   # 清晰度帽
+
+
+class CombineQualityWeightsTest(unittest.TestCase):
+    """续95 修：旧内联版 (n,)−(3,) 广播必炸（224 段测废根因），提纯函数后锁语义。"""
+
+    def test_no_broadcast_error_and_channel_semantics(self):
+        # 三通道各自 min-max 归一后加权；q[:,0] 全为 lo → 0 权，全为 hi → 满权。
+        q = np.array([[0.0, 0.5, 1.0],
+                      [1.0, 0.5, 1.0],
+                      [0.5, 0.5, 1.0]])
+        lo, hi = np.array([0.0, 0.0, 0.0]), np.array([1.0, 1.0, 2.0])
+        w = combine_quality_weights(q, lo, hi, 1.0, 0.0, 0.0)
+        self.assertAlmostEqual(float(w[0]), 0.0, places=9)
+        self.assertAlmostEqual(float(w[1]), 1.0, places=9)
+        self.assertAlmostEqual(float(w[2]), 0.5, places=9)
+
+    def test_constant_channel_is_uniform_one(self):
+        # 某通道 min==max（全片恒定）⇒ 该通道按均匀 1.0，不参与区分。
+        q = np.array([[0.7, 0.1, 0.5], [0.7, 0.9, 0.5]])
+        lo, hi = np.array([0.7, 0.0, 0.0]), np.array([0.7, 1.0, 1.0])
+        w = combine_quality_weights(q, lo, hi, 1.0, 1.0, 0.0)
+        self.assertAlmostEqual(float(w[0]), 1.0 + 0.1, places=9)   # ch0=1.0 + ch1=0.1
+        self.assertAlmostEqual(float(w[1]), 1.0 + 0.9, places=9)
+
+    def test_old_bug_shape_would_have_raised(self):
+        # 旧实现的调用形状（(n,) 与 (3,) 相减）在 numpy 下直接 ValueError；
+        # 新纯函数对任意 n≥2 都不抛（2mkv 整片 0 失败、其它片 224 失败的回归锁）。
+        q = np.random.RandomState(7).rand(43, 3)
+        lo, hi = np.zeros(3), np.ones(3)
+        w = combine_quality_weights(q, lo, hi, 0.4, 0.3, 0.3)
+        self.assertEqual(w.shape, (43,))
+        self.assertTrue(np.all(np.isfinite(w)))
 
 
 if __name__ == "__main__":

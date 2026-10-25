@@ -64,8 +64,11 @@ def run_round(toggles: list[str]) -> None:
     tag = "+".join(t.replace("_enabled", "") for t in toggles)
     cfg = load_config()
     for t in toggles:
-        assert hasattr(cfg.pipeline, t), t
-        setattr(cfg.pipeline, t, True)
+        # 开关默认都在 pipeline；conf_v2_* 一组挂在 pipeline.confidence（续95 修：
+        # 旧写法 assert hasattr(cfg.pipeline, t) 对 conf_v2_enabled 必炸）。
+        target = cfg.pipeline if hasattr(cfg.pipeline, t) else cfg.pipeline.confidence
+        assert hasattr(target, t), t
+        setattr(target, t, True)
     print("\n######## ROUND %s (%s) ########" % (tag, time.strftime("%H:%M:%S")), flush=True)
     srv = SourceLocatorService(config=cfg)
     b = srv.backend

@@ -39,7 +39,7 @@ from engine.localization.patch_refine import apply_patch_refine
 from engine.localization import isc_l2_index as engine_isc_l2
 from engine.localization.isc_refine import IscScorer, apply_isc_refine
 from engine.localization.shot_split import split_results as apply_shot_split
-from engine.localization.offset_vote_prior import offset_vote_seed
+from engine.localization.offset_vote_prior import combine_quality_weights, offset_vote_seed
 from engine.localization.temporal_repair import (find_overlap_conflicts,
                                                  find_temporal_outliers, relocate_in_window)
 from engine.localization.conflict_rerank import (accept_repair, best_free_span,
@@ -775,13 +775,13 @@ class SourceLocatorService:
                 if qw_on:
                     q = self._dense_quality(shot, edited)
                     if q is not None and q.shape[0] == dense[0].shape[0]:
-                        def _nz(x):
-                            d = qw_hi - qw_lo
-                            return np.where(d > 1e-9, (x - qw_lo) / np.where(d > 1e-9, d, 1.0), 1.0)
-                        qw = (float(cfg.fast_global_qw_bright) * _nz(q[:, 0])
-                              + float(cfg.fast_global_qw_contrast) * _nz(q[:, 1])
-                              + float(cfg.fast_global_qw_sharp) * _nz(q[:, 2]))
-                        quality_w = np.clip(qw, 0.2, 1.0)[::step]
+                        # 续95 修：逐通道归一提为纯函数 combine_quality_weights——
+                        # 旧内联版 (n,)−(3,) 广播必炸，224 段被整段放弃。
+                        quality_w = np.clip(combine_quality_weights(
+                            q, qw_lo, qw_hi,
+                            float(cfg.fast_global_qw_bright),
+                            float(cfg.fast_global_qw_contrast),
+                            float(cfg.fast_global_qw_sharp)), 0.2, 1.0)[::step]
                 width = span.end - span.start
                 seed, info = global_offset_anchor(
                     feats, times, bundle.features, lib_times,

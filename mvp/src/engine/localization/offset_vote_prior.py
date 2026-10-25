@@ -17,7 +17,8 @@ from __future__ import annotations
 
 import numpy as np
 
-__all__ = ["offset_vote_seed", "global_offset_anchor", "frame_quality_stats"]
+__all__ = ["offset_vote_seed", "global_offset_anchor", "frame_quality_stats",
+           "combine_quality_weights"]
 
 
 def frame_quality_stats(frame) -> tuple[float, float, float]:
@@ -32,6 +33,26 @@ def frame_quality_stats(frame) -> tuple[float, float, float]:
     contrast = float(g.std()) / 128.0
     sharp = min(float(cv2.Laplacian(g, cv2.CV_32F).var()) / 2000.0, 1.5)
     return bright, contrast, sharp
+
+
+def combine_quality_weights(q: np.ndarray, qw_lo, qw_hi,
+                            w_bright: float, w_contrast: float, w_sharp: float) -> np.ndarray:
+    """质量三元组 (n,3) × 全 ED min-max 界 (3,) → 逐通道归一加权合成分 (n,)（qw 腿专用纯函数）。
+
+    某通道 min==max（全片恒定）时该通道按均匀 1.0 处理（与沙盒 F1 的归一化语义一致）。
+    2026-10-25 续95 修：旧内联版把单通道向量 ``(n,)`` 直接减 ``(3,)`` 的 lo/hi，
+    广播必炸 ⇒ fast_global 锚定被逐段整段放弃（A/B 第 2 轮 224 段测废的根因）；
+    该腿默认关，生产此前从未触发，这是它第一次真跑。
+    """
+    lo = np.asarray(qw_lo, dtype=np.float64)
+    hi = np.asarray(qw_hi, dtype=np.float64)
+    total = None
+    for k, w in ((0, float(w_bright)), (1, float(w_contrast)), (2, float(w_sharp))):
+        d = float(hi[k] - lo[k])
+        x = np.asarray(q[:, k], dtype=np.float64)
+        nz = (x - float(lo[k])) / d if d > 1e-9 else np.ones_like(x)
+        total = w * nz if total is None else total + w * nz
+    return total
 
 
 def offset_vote_seed(q_feats: np.ndarray, q_times: np.ndarray,
