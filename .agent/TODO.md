@@ -9,13 +9,12 @@
 
 ## P0 — Current
 
-> **▶ 2026-10-25（续95）— 续94 四件事全部收口 + r29 已出包【现读这条】**
-> ① dense_recheck 默认开 + trim 修复（`afa5644`）；② degenerate_warning（`d8ee02b`）；
-> ④ ③④⑤ 三轮 A/B 完跑，全部维持默认关（`3db0391`）；③ r29 = `Video-Locator-win-x64-20261025r29.zip`
-> 1,018,084,363B / backend.exe sha16 `cc212c6029ba700e`，五道包内验收全绿；face_identity 资产
-> 接包（SVL_FACE_MODELS_ROOT）+ numba/llvmlite 排除 -120MB（`d0e3563`）。
-> **2026-10-26（续96）用户口令**：conf_v2 拍板**维持默认关**（悬置关闭）；r27 已删
-> （删前三档双验逐字一致，释放 ≈936MB，现两档 r29+r28）；mac dispatch 用户自行待定。
+> **▶ 2026-10-26（续97）— 出片性能批：workers 2→6 = 2.3x 落地；分级复核判负；三路调研收口【现读这条】**
+> 口令「可以，9点前花完token」。代码笔 `379c1fd`；后端 **742** / API **150** 全绿。
+> ✅ 渲染 workers 2→6（60.1s→26.3s 实测）；✅ 三路调研（FINDINGS_PERF_HARDPROBLEMS_SURVEY
+> + PLAN_SMART_RENDER）；❌ dense_recheck 分级复核判负（test1 −1 + 细窗仅占 5-10%，opt-in 默认关）。
+> **待口令**：smart render 实现 + HEVC 输出契约（PLAN §4）；XFeat 起点精修；ArcFace 替换。
+> **待用户**：mac dispatch（r29 起必重出）。
 
 ## P1 — Next
 

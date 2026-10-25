@@ -93,6 +93,41 @@ mac 包待用户 dispatch（本批 mvp/src + 资产 + main.ts 都变了，mac �
 - **mac dispatch = 用户自行待定**（未触发）。
 - **r27 已删（删前三档双验逐字一致）**：r27 = 981,703,562B / 7,079 条目 / testzip=None / backend.exe 77,509,036B sha16 `fbba9d9870b2fcab`、r28 = 981,705,760B / de4458207adb2b26、r29 = 1,018,084,363B / cc212c6029ba700e 全部 PASS 后动删；释放 981,703,562B ≈ 936MB。**release/ 现两档 = r29 现役 + r28 回滚**。
 
+---
+
+## 2026-10-26（续97）— 出片性能落地（workers 2→6 = 2.3x）+ 三路业界调研 + 分级复核判负
+
+口令「可以，预计跑完全部要多久…4片回归缩到1-2片…9点前花完token」。
+
+### 1. 出片（渲染）性能——已落地一项
+
+- **时序分解**：60s 渲染中 Σ逐段编码占 ~96%（串行 108s/70 段），concat 仅 4.1s（已是流复制）。
+- ⭐ **workers 2→6**（代码笔 `379c1fd`）：2mkv 12 段吞吐 2→11.5s / 4→7.4s / 6→6.1s（近线性）；
+  **全片 70 段真渲染 60.1s→26.3s（2.3x）**，mode=copy 帧数正常。quality/balanced 无差保 quality。
+- **d3d11va 硬解判负**（本机实测）：纯解码 0.48s vs CPU 0.22s/2s 窗——RX 6750 GRE 解码回拷比 CPU
+  软解 HEVC10 还慢；解码只占段耗时 36%，瓶颈在 AMF 编码（固定功能，可并发）。
+- **smart render 关键发现**：3/4 现有原片是 **HEVC 10-bit**（2.mkv/test1/test2），copy 段与 H.264
+  重编段不可互拼 ⇒ 现契约下不适用；条件快路径（仅 H.264 源）设计已落
+  `PLAN_SMART_RENDER_20261026.md`（含 DeepRegular 11 坑清单），**HEVC 契约改动待拍板**。
+
+### 2. dense_recheck 分级复核 = 判负（代码保留 opt-in 默认关，`379c1fd`）
+
+设计 = 1fps 索引特征粗复核（零解码嵌入）框 10fps 细窗。三片 A/B：**test1 严格 42→41 回归**
+（22 行细窗微调起点被粗跳过；10fps 峰常落 +0.1~0.9s，1fps 网格无邻近采样点，粗证据结构性框不住
+细峰）；且实测细窗仅占 locate **~5-10%**（非调研时估计的「耗时大头」——耗时分散在逐段检索/
+patch/ISC）。两条件相加不立项；调研文档 §3 已订正。
+
+### 3. 三路调研（子代理执行，修正后收敛）
+
+`FINDINGS_PERF_HARDPROBLEMS_SURVEY_20261026.md`：出片 smart render（skeskinen/smartcut MIT 可抄）/
+DML 陷阱清单（INT8 静默回退 CPU、动态 axes、batch=1 实为官方特性）/ 难题方案（XFeat 起点精修 1.8k★
+CPU 实时、SFace→ArcFace 单点替换、FFmpeg MV 场第三腿；换 SBD 主干判负）。
+
+### 4. 门禁与回归口径
+
+后端 **742**（+4 单测）/ API **150** 全绿。回归按口令收缩：渲染层 1 片（与三指标无关，逐帧等值门）+
+定位语义 2 片（test1+test2），2mkv 冒烟——本轮实际跑 2mkv/test1/test2 三片。
+
 
 ## 2026-10-25（续94）— 开关矩阵 A/B：dense_recheck 净正（146→147 零退化，建议默认开）；degradation_gate 维持关（−2 = −1 假阳被打 + −1 NEAR 误伤）+ 改标注形态建议
 

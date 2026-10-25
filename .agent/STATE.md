@@ -82,6 +82,12 @@
 > mac dispatch 用户自行待定；**r27 已删**（删前三档双验逐字一致：r27 `fbba9d9870b2fcab` /
 > r28 `de4458207adb2b26` / r29 `cc212c6029ba700e` 全 PASS），释放 ≈936MB，
 > **release/ 现两档 = r29 现役 + r28 回滚**。
+> **十、2026-10-26（续97）出片性能 + 调研批**（口令「可以…9点前花完token」）：
+> ⭐ **渲染 workers 2→6 = 2.3x**（60.1s→26.3s 实测，`379c1fd`）；硬解判负（d3d11va 慢于 CPU）；
+> **HEVC 10-bit 3/4 源阻塞 smart render**（条件快路径设计待拍板 PLAN_SMART_RENDER）；
+> dense_recheck 分级复核**判负**（test1 −1 + 细窗仅占 5-10%，代码 opt-in 默认关）；
+> 三路调研落档 FINDINGS_PERF_HARDPROBLEMS_SURVEY（XFeat/ArcFace/MV 第三腿候选 + DML 陷阱）。
+> 后端 742 / API 150 全绿。**XFeat、ArcFace、smart render 实现留待下一批（需口令）。**
 
 
 
@@ -662,8 +668,9 @@
 > 完跑全部维持默认关（`3db0391`）；③ r29 = `Video-Locator-win-x64-20261025r29.zip`
 > 1,018,084,363B / backend.exe sha16 `cc212c6029ba700e`，五道包内验收全绿，含 face_identity
 > 资产接包 + numba 排除（-120MB，`d0e3563`）。
-> **下一步（需用户）**：mac dispatch 待定（用户自行触发；代码+资产+main.ts 都变了，mac 必须重出）。
-> conf_v2 已拍板默认关（2026-10-26）；r27 已删（现两档 r29+r28）。
+> **下一步（需口令/用户）**：① mac dispatch 待定（用户触发）；② smart render 实现与
+> HEVC 输出契约（PLAN_SMART_RENDER §4 两决策点）；③ XFeat 起点精修 / ArcFace 替换（下一批候选）。
+> conf_v2 已拍板默认关；r27 已删（现两档 r29+r28）。
 
 > **▶ 交接指针（2026-10-25 续93，最新）**：**先读** `mvp/src/engine/face_identity.py` 模块 docstring +
 > `mvp/docs/PLAN_EXISTENCE_SIGNAL_20261025.md`（候选 B 的判据/边界）+ `mvp/docs/
@@ -1046,7 +1053,8 @@
 
 ## Last Updated
 
-2026-10-26（续96 三口令收口）
+2026-10-26 04:4x（续97 性能批）
+三口令收口）
 r29 已出包）
 完跑）
 
