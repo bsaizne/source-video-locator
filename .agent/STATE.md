@@ -65,6 +65,11 @@
 > **五、门禁**：单测 +8（gate 文件 36 项）· 后端 **734 OK(skipped=2)** · API **150 OK** ·
 > ①双批不变式全绿。
 > **六、档案**：STATE 续92 块、TODO 续94 块逐字迁 archive（`work/premigrate_20261025_j/`）。
+> **七、⭐ ④ ③④⑤ 三轮 A/B 补跑完（口令「开吧，继续」+「跑完再出吧」）**：首跑两个工具级中断
+> （conf_v2 字段归属错 + qw 腿广播 bug 224 段测废）修掉后重跑（代码笔 `3db0391`）。**三轮全部
+> 维持默认关、无新增益**：resolve_consecutive 147→147 全面持平；qw 修复后 37 行 span 微动但
+> 三指标与 dense 腿逐位相同；conf_v2 span 逐位一致、恰 1 条无支撑行 HIGH→MEDIUM 零代价
+> （FINDINGS_TOGGLE_AB §4 已补全）。
 
 
 
@@ -109,6 +114,12 @@
 
 ## Completed
 
+- **③④⑤ 三轮 A/B 补跑完 + qw 腿广播 bug 修复（2026-10-25 续95④）**：resolve_consecutive
+  **147→147 全面持平**；fast_global_quality_weights 首跑暴露 qw 广播 bug（`(n,)−(3,)` 必炸、
+  224 段 fast_global 整段放弃 = 该腿生产从未真跑），修复（`combine_quality_weights` 纯函数
+  + 单测 3 项，代码笔 `3db0391`）后重跑 = 37 行 span 微动、三指标与 dense 腿逐位相同；
+  conf_v2 span 逐位一致、恰 1 条无支撑行 HIGH→MEDIUM 零代价。**三轮全部维持默认关、无新增益**
+  （对照基 = dense 腿/现役栈）。后端 737 + API 150 全绿。**r29 出包已批（跑完后）待执行。**
 - **dense_recheck 默认开 + trim 亚帧丢画面修复（2026-10-25 续95①）**：config 翻默认（续94 裁决兑现）；
   四片导出不变式验收挖出 `trim_adjacent_source_overlaps` 包含形态兜底丢外层独占亚帧尾巴
   （test2 覆盖 Δ=−16ms 违反 coverage_delta_zero，dense_recheck 移动边界后首次生产触发），修 =
@@ -634,11 +645,11 @@
 
 ## Next Actions
 
-> **▶ 交接指针（2026-10-25 续95，最新）**：续94 四件事的**①② 已落地**——dense_recheck 默认开 +
-> trim 亚帧缺口修复（`afa5644`）+ `degenerate_warning` 旁路标注落地（`d8ee02b`，含 test3 六条
-> 逐图定案 3 拒对+2 误伤+1 NEAR）。后端 734 + API 150 + 双批不变式全绿。
-> **下一步（都需口令）**：③ r29 出包（含续93 face_identity + dense_recheck 默认开 +
-> degenerate_warning 标注；mac 另 dispatch）；④ ③④⑤ 补跑（命令 FINDINGS_TOGGLE_AB §4）。
+> **▶ 交接指针（2026-10-25 续95，最新）**：续94 四件事**全部收口**——① dense_recheck 默认开 +
+> trim 修复（`afa5644`）；② degenerate_warning 旁路标注（`d8ee02b`，test3 逐图 3 拒对+2 误伤+1 NEAR）；
+> ④ ③④⑤ 三轮 A/B 补跑完 + qw 广播 bug 修复（`3db0391`），**三轮全部维持默认关、无新增益**。
+> 后端 737 + API 150 全绿。**下一步：出 r29（已批，跑完后执行；含 face_identity + dense_recheck
+> 默认开 + degenerate_warning；mac 另 dispatch）**。
 
 > **▶ 交接指针（2026-10-25 续93，最新）**：**先读** `mvp/src/engine/face_identity.py` 模块 docstring +
 > `mvp/docs/PLAN_EXISTENCE_SIGNAL_20261025.md`（候选 B 的判据/边界）+ `mvp/docs/
@@ -1021,6 +1032,7 @@
 
 ## Last Updated
 
-2026-10-25 15:3x（续95 ①②）
+2026-10-25 21:0x（续95 ④完跑）
+
 
 

@@ -9,12 +9,11 @@
 
 ## P0 — Current
 
-> **▶ 2026-10-25（续95）— ①dense_recheck 默认开+trim 亚帧缺口修复；②degenerate_warning 旁路标注落地【现读这条】**
-> 口令「开始吧」→「开始」。`mvp/src` 有改动，代码笔 `afa5644`（①）+ `d8ee02b`（②）；
-> 后端 **734** + API **150** + 双批不变式全绿；test3 六条被拒行逐图定案（3 拒对+2 误伤+1 NEAR）。
-> **待口令**：③ r29 出包（face_identity + dense_recheck + degenerate_warning，mac 另 dispatch）
-> ④ ③④⑤ 补跑（FINDINGS_TOGGLE_AB §4）。
-> 续94 块已迁 archive（备份 `work/premigrate_20261025_j/`）。
+> **▶ 2026-10-25（续95）— 续94 四件事全部收口；r29 出包执行中【现读这条】**
+> ① dense_recheck 默认开 + trim 亚帧缺口修复（`afa5644`）；② degenerate_warning 旁路标注
+> （`d8ee02b`）；④ ③④⑤ 三轮 A/B 补跑完 + qw 广播 bug 修复（`3db0391`）——**三轮全部维持
+> 默认关、无新增益**。后端 **737** + API **150** + 双批不变式全绿。
+> **进行中**：r29 出包（已批；含 face_identity + dense_recheck + degenerate_warning；mac 另 dispatch）。
 
 ## P1 — Next
 

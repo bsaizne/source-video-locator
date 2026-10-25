@@ -42,6 +42,27 @@ STATE 续92 块、TODO 续94 块逐字迁 archive（`work/premigrate_20261025_j/
 
 **3 拒对**（seg13/14/15 内容不符：龙/弩炮 vs 士兵/城镇俯瞰/兽人大厅）+ **2 误伤**（seg53 瑟兰迪尔同镜头；seg66 山坡镜头被编辑片 86.6s/139.8s 两处真实复用）+ **1 NEAR**（seg56 绿厅同景异镜）。接触表 `work/contin95_gatecheck/`；明细 `mvp/docs/FINDINGS_DEGENERATE_WARNING_20261025.md`。
 
+---
+
+## 2026-10-25（续95④）— ③④⑤ 三轮 A/B 补跑完（无新增益）+ qw 腿广播 bug 修复
+
+口令「开吧，继续」+「跑完再出吧」。**三轮全部维持默认关**；对照基 = dense 腿/现役栈（scn4 的 +1 全来自 dense）。
+
+### 1. 两个工具级中断（同批修掉，代码笔 `3db0391`）
+
+- conf_v2 字段归属：`conf_v2_enabled` 挂在 `pipeline.confidence` 而非 `pipeline`，rerun_toggle_ab 断言错位 ⇒ 第 3 轮启动即崩；脚本改 toggle 目标解析。
+- ⭐ **qw 腿广播 bug**：`fast_global_quality_weights` 的旧内联归一 `(n,)−(3,)` 广播必炸 ⇒ 224 段 fast_global 锚定被整段放弃（第 2 轮测废）；该腿默认关、生产从未真跑，A/B 是它第一次运行。修 = `combine_quality_weights` 纯函数（`offset_vote_prior`）+ 单测 3 项。
+
+### 2. 三轮结果
+
+- **resolve_consecutive**：严格 147→147，四片三指标逐位持平 ⇒ 维持默认关（与 E1 预统计一致）。
+- **fast_global_quality_weights**（修复后重跑，qw 失败 0）：37 行 span 微动（12/6/6/13），三指标与 dense 腿逐位相同 ⇒ 质量权重无净收益，维持默认关。
+- **conf_v2**：span 逐位一致（只改档位），全四片恰 1 条变化 = test3 一条无支撑行 HIGH→MEDIUM（edited 39.214），零 HIT 误伤、负例不变（HIGH 185→184）⇒ 微收益零代价，维持默认关（是否翻默认待用户拍板）。
+
+### 3. 门禁与档案
+
+后端 **737 OK**（+3 单测）/ API **150 OK**。FINDINGS_TOGGLE_AB §4 已补全。**r29 出包已批待执行**（含 face_identity + dense_recheck 默认开 + degenerate_warning；mac 另 dispatch）。
+
 
 ## 2026-10-25（续94）— 开关矩阵 A/B：dense_recheck 净正（146→147 零退化，建议默认开）；degradation_gate 维持关（−2 = −1 假阳被打 + −1 NEAR 误伤）+ 改标注形态建议
 

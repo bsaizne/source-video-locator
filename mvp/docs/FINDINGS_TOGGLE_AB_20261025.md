@@ -43,9 +43,21 @@ feature_version 不变、DML），产物 `work/ab_{tag}_{case}.results.json`；�
   降级为**旁路标注字段**（如 `degenerate_warning`，学 query_cross_cut / face_identity 先例）——
   既保留用户可见性，又不拒行、不动三指标，NEAR 族误伤也从「伤害」降为「提示」。
 
-## §4 ③④⑤ 未完成（矩阵按交接预算停在 2/5 轮）
+## §4 ③④⑤ 补跑结果（2026-10-25 续95④ 完跑；基线口径改 = dense 腿/现役栈）
 
-resolve_consecutive / fast_global_quality_weights / conf_v2 三轮未跑，产物缺。续跑：
+> 三轮在续95 跑（dense_recheck 已默认开）⇒ 单变量对照基 = `ab_dense_recheck_{case}`（现役栈），
+> scn4 只作历史参考；ab_compare 对 scn4 的 +1 全部来自 dense 腿本身。
+
+- **③ resolve_consecutive = 净零，维持默认关**：严格 147→147，四片三指标逐位持平
+  （2mkv/test3 sup ±2/±3 微动）——与 E1 预统计（影响面 7 对且多合法复用）一致。
+- **④ fast_global_quality_weights = 净零，维持默认关**：⚠️ 首跑暴露 qw 广播 bug
+  （旧内联 `(n,)−(3,)` 必炸，224 段 fast_global 整段放弃 = 该腿生产从未真跑过），
+  修复（`combine_quality_weights`，代码笔 `3db0391`）后重跑：37 行 span 微动
+  （12/6/6/13），三指标与 dense 腿逐位相同 ⇒ 质量权重无净收益。
+- **⑤ conf_v2 = 微收益零代价，维持默认关（是否翻默认待拍板）**：span 逐位一致（只改档位）；
+  全四片**恰 1 条变化** = test3 一条无支撑行 HIGH→MEDIUM（edited 39.214，UNMATCHED），
+  零 HIT 误伤、负例档位不变（HIGH 185→184）。
+- 续跑命令（原始）：
 ```bash
 PY=D:/claudework/video-dedup-tool/.venv/Scripts/python.exe
 $PY -u mvp/scripts/rerun_toggle_ab.py resolve_consecutive_enabled
