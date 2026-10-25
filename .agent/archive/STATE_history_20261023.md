@@ -251,3 +251,23 @@
 > 接线为产品级改动，**需用户拍板**（mac/MPS 侧两行补丁路径也需验证）。
 > **四、档案**：FINDINGS_OPENSOURCE_SURVEY **§6**（实测全明细）；迁移：STATE 续87 块、TODO 续90 块
 > 逐字迁 archive（`work/premigrate_20261024_f/` 回滚备份）。
+
+
+---
+
+# 2026-10-25 续95 迁入（原 STATE.md Current Task 块，逐字）
+
+> **▶ 2026-10-25（续92）— 接线方案文档成形（PLAN_EXISTENCE_SIGNAL，先文档后动码）+ 长镜头 5 条「补 GT」预期关闭（编辑片未取用，保持漏切工单）【已退休，见上】**
+> 口令「继续」（续91 收口后，推进不动 `mvp/src` 的两件）。**`mvp/src` 零改动、未出包。**
+> **一、⭐ 长镜头 5 条真切点不落 GT**（`work/omnishotcut_20261024/longtake5_scan.json`）：t1s210/198/
+> 426/692/791 左右镜头（各 ±4s @1fps 索引特征）× 编辑片全片 8fps 扫描，10 个 top1 命中 sim 0.42~0.64
+> （同场景邻居量级）**全部落在现有 GT 行 edited 窗内**（t1r13b/t1r08b/t1r31 等，其 original 窗均不在
+> 切点附近）⇒ 5 个镜头未被编辑片取用，**保持「漏切工单」定性**（GT_TICKETS_LONGT_20261019），
+> 未结①的「补 GT」半边关闭。
+> **二、⭐ 接线方案文档**（`mvp/docs/PLAN_EXISTENCE_SIGNAL_20261025.md`）：候选 A = OmniShotCut
+> 段级存在性标注（长镜头>30s 段独立字段，类比 query_cross_cut 先例；⚠️ **torch 进 win 包 ≈ +1GB 级
+> 包体变化 + 建索引耗时约翻倍（限>30s 段约 +11min/片）**）；候选 B = 人脸身份门标注（两侧单脸质心
+> cos<0.57 标身份切换/≥0.57 标连续，多脸/无脸不判；零新依赖、包体不动、秒级成本）。**建议顺序
+> 先 B 后 A**；共同排除 = 不进 confidence、不自动改 scenes.npy、不出切点表。**动码需用户拍板**。
+> **三、档案**：PLAN 新文档；迁移：STATE 续89 块、TODO 续91 块逐字迁 archive
+> （`work/premigrate_20261025_g/` 回滚备份）。

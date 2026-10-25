@@ -42,6 +42,21 @@
 
 ## Current Task
 
+> **▶ 2026-10-25（续95）— dense_recheck 默认开落地 + 修掉 trim 包含形态亚帧丢画面缺口（不变式门红转绿）【现读这条】**
+> 口令「开始吧」（续94 四件事的第 1 件）。**`mvp/src` 有改动**，代码笔 `afa5644`。
+> **一、⭐ dense_recheck_enabled 默认 True**（续94 裁决兑现）：config 一行 + 注释订正（含 vote_prior
+> 块「维持默认关」过时表述）。
+> **二、⭐ 四片导出不变式首跑即红 = 挖出真缺口**：test2 `coverage_delta_zero` 违反（覆盖
+> 70.793→70.777s，Δ=−16ms；基线批全绿 ⇒ dense_recheck 开启态新暴露，与 config 翻默认无关——A/B 批
+> 是 rerun 脚本强开的）。机制 = `trim_adjacent_source_overlaps` 包含形态兜底丢外层独占亚帧尾巴
+> （外层 [3032.000,3032.433] 包内层 [3032.000,3032.417]，头宽 0 / 尾宽 16ms 都 <1 帧 ⇒ 中点均分把
+> 16ms 独占尾巴丢掉），违背该函数自述硬要求「不丢画面，只去重复」；生产数据此前从未踩中非零亚帧余量。
+> **修法** = 亚帧余量由内层 clip 吸收（头或尾单侧 <1 帧 ⇒ 内层窗扩 ≤1 帧；两侧都不成段 ⇒ 内层吸收后
+> 对**并集**中点均分，并集 <2 帧整对跳过）；「头够切/尾够切」两分支同族丢余量一并修。
+> **三、门禁（修复后重跑）**：单测 +3 项（`test_export_adjacent_dedup` 19 项）· 后端 **726
+> OK(skipped=2)** · API **150 OK** · 不变式**双批全绿**（dense 批 + 基线批，FAILED=0）。
+> **四、档案**：STATE 续92 块、TODO 续94 块逐字迁 archive（`work/premigrate_20261025_j/` 回滚备份）。
+
 > **▶ 2026-10-25（续94）— 开关矩阵 A/B：dense_recheck 净正（146→147，零退化，建议默认开）；degradation_gate 维持关（−2 = −1 假阳被打 + −1 NEAR 误伤）+ 改标注形态建议；③④⑤ 未跑待续【现读这条】**
 > 口令「review 一下有什么该进 runtime 的功能但是没进的」→「开始吧，跑完就交接」。
 > **`mvp/src` 零改动（纯测量批，新工具 `mvp/scripts/rerun_toggle_ab.py` + `work/ab_compare_20261025.py`）。**
@@ -80,23 +95,14 @@
 > **四、档案**：FINDINGS_QUERY_CROSS_CUT §11（灰带闭合）+ GT_PATCH_PROBES §4.2ter（代查定案）；
 > 迁移：STATE 续90 块、TODO 续92 块逐字迁 archive（`work/premigrate_20261025_h/` 回滚备份）。
 
-> **▶ 2026-10-25（续92）— 接线方案文档成形（PLAN_EXISTENCE_SIGNAL，先文档后动码）+ 长镜头 5 条「补 GT」预期关闭（编辑片未取用，保持漏切工单）【已退休，见上】**
-> 口令「继续」（续91 收口后，推进不动 `mvp/src` 的两件）。**`mvp/src` 零改动、未出包。**
-> **一、⭐ 长镜头 5 条真切点不落 GT**（`work/omnishotcut_20261024/longtake5_scan.json`）：t1s210/198/
-> 426/692/791 左右镜头（各 ±4s @1fps 索引特征）× 编辑片全片 8fps 扫描，10 个 top1 命中 sim 0.42~0.64
-> （同场景邻居量级）**全部落在现有 GT 行 edited 窗内**（t1r13b/t1r08b/t1r31 等，其 original 窗均不在
-> 切点附近）⇒ 5 个镜头未被编辑片取用，**保持「漏切工单」定性**（GT_TICKETS_LONGT_20261019），
-> 未结①的「补 GT」半边关闭。
-> **二、⭐ 接线方案文档**（`mvp/docs/PLAN_EXISTENCE_SIGNAL_20261025.md`）：候选 A = OmniShotCut
-> 段级存在性标注（长镜头>30s 段独立字段，类比 query_cross_cut 先例；⚠️ **torch 进 win 包 ≈ +1GB 级
-> 包体变化 + 建索引耗时约翻倍（限>30s 段约 +11min/片）**）；候选 B = 人脸身份门标注（两侧单脸质心
-> cos<0.57 标身份切换/≥0.57 标连续，多脸/无脸不判；零新依赖、包体不动、秒级成本）。**建议顺序
-> 先 B 后 A**；共同排除 = 不进 confidence、不自动改 scenes.npy、不出切点表。**动码需用户拍板**。
-> **三、档案**：PLAN 新文档；迁移：STATE 续89 块、TODO 续91 块逐字迁 archive
-> （`work/premigrate_20261025_g/` 回滚备份）。
 
 ## Completed
 
+- **dense_recheck 默认开 + trim 亚帧丢画面修复（2026-10-25 续95）**：config 翻默认（续94 裁决兑现）；
+  四片导出不变式验收挖出 `trim_adjacent_source_overlaps` 包含形态兜底丢外层独占亚帧尾巴
+  （test2 覆盖 Δ=−16ms 违反 coverage_delta_zero，dense_recheck 移动边界后首次生产触发），修 =
+  亚帧余量内层吸收 + 并集中点均分（含头/尾单侧两分支同族修复）；后端 **726（+3 单测）** / API **150** /
+  **双批不变式全绿**（dense 批 + 基线批）。代码笔 `afa5644`。**未出包。**
 - **开关矩阵 A/B（2026-10-25 续94）**：review 5 个默认关开关 → 四片生产 A/B（新工具
   rerun_toggle_ab.py + ab_compare）。① dense_recheck **净正**（146→147 / 141→142，唯一翻转
   t1r25 part→HIT，零退化）建议默认开；② degradation_gate 146→144（−1 假阳 t2r02b 被打 +
@@ -611,15 +617,11 @@
 
 ## Next Actions
 
-> **▶ 交接指针（2026-10-25 续94，最新）**：**先读** `.agent/archive/HANDOFF_20261025_toggle_ab.md`
-> （自包含：review 全景 / ①② 两轮结果与裁决 / 别再做的事 / ③④⑤ 续跑命令 / 未结优先级）+
-> `mvp/docs/FINDINGS_TOGGLE_AB_20261025.md`（数据明细）。**读这两份就够。**
-> **一句话**：该进 runtime 的清单已全部裁决——① dense_recheck 净正待一句口令开默认，
-> ② degradation_gate 维持关但建议改旁路标注形态，③④⑤ 有续跑命令，其余都是确认不进或待拍板形态。
-> **下一步（都需口令）**：① `dense_recheck_enabled=True` 落地（config + 全套门禁 + r29 出包同批）；
-> ② `degenerate_warning` 标注形态改造；③ r29 出包（含续93 face_identity + 若开的 dense_recheck）；
-> ④ ③④⑤ 补跑。
-> 本批纯测量零 `mvp/src` 改动、未出包；档案随本指针同批提交。
+> **▶ 交接指针（2026-10-25 续95，最新）**：续94 四件事的**第 1 件已落地**——dense_recheck 默认开 +
+> trim 亚帧丢画面缺口修复（代码笔 `afa5644`；后端 726 + API 150 + dense/基线双批不变式全绿）。
+> **下一步（都需口令）**：② `degenerate_warning` 标注形态改造（方案 FINDINGS_TOGGLE_AB §3）；
+> ③ r29 出包（含续93 face_identity + dense_recheck 默认开；mac 另 dispatch）；
+> ④ ③④⑤ 补跑（命令 FINDINGS_TOGGLE_AB §4）。
 
 > **▶ 交接指针（2026-10-25 续93，最新）**：**先读** `mvp/src/engine/face_identity.py` 模块 docstring +
 > `mvp/docs/PLAN_EXISTENCE_SIGNAL_20261025.md`（候选 B 的判据/边界）+ `mvp/docs/
@@ -1002,4 +1004,5 @@
 
 ## Last Updated
 
-2026-10-25 05:38
+2026-10-25 12:0x（续95）
+

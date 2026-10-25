@@ -119,3 +119,18 @@
 > **未结（需口令）**：① **出包 r29**（含 B 标注 + mac dispatch）② UI 呈现层（PLAN 决策点③）③
 > OmniShotCut 接线（候选 A）④ v3 好×MISS 口径（分母 150）。
 > 续92 块已迁 `.agent/archive/TODO_history_20261023_c.md`（备份 `work/premigrate_20261025_h/`）。
+
+
+---
+
+# 2026-10-25 续95 迁入（原 TODO.md P0 块，逐字）
+
+> **▶ 2026-10-25（续94）— 开关 A/B 收口：dense_recheck 净正待一句口令开默认；degradation_gate 维持关+改标注建议；交接件就绪【现读这条】**
+> 口令「开始吧，跑完就交接」。**纯测量批，`mvp/src` 零改动**（新工具 rerun_toggle_ab.py）。
+> ① dense_recheck：**146→147 / 141→142 零退化** ⇒ 建议默认开；② degradation_gate：−2 = −1 假阳
+> （t2r02b，拒对）−1 误伤（t2r06a NEAR）⇒ 维持关，建议改 `degenerate_warning` 旁路标注形态；
+> ③④⑤ 未跑（续跑命令 FINDINGS_TOGGLE_AB §4）。
+> **待口令**：① dense_recheck 默认开（config+全套+不变式+并入 r29 出包）② gate 标注形态改造
+> ③ r29 出包（含续93 face_identity）④ ③④⑤ 补跑。
+> 交接件 `.agent/archive/HANDOFF_20261025_toggle_ab.md`；续93 块已迁 archive
+> （备份 `work/premigrate_20261025_i/`）。

@@ -1,5 +1,28 @@
 # CHANGELOG
 
+## 2026-10-25（续95）— dense_recheck 默认开落地 + 修掉 trim 包含形态亚帧丢画面缺口
+
+口令「开始吧」（续94 四件事的第 1 件）。**`mvp/src` 有改动**，代码笔 `afa5644`。
+
+### 1. dense_recheck_enabled 默认 True
+
+续94 裁决兑现（生产四片 A/B 净正 146→147 / 141→142 零退化）。config 一行 + 注释订正（含 vote_prior 块「dense_recheck 维持默认关」过时表述）。
+
+### 2. 四片导出不变式首跑即红 = 真缺口
+
+test2 `coverage_delta_zero` 违反（覆盖 70.793→70.777s，Δ=−16ms；基线批全绿）。机制：`trim_adjacent_source_overlaps` 包含形态在头/尾都不足 1 帧时落「中点均分」兜底，把外层独占的 16ms 尾巴丢掉（外层 [3032.000,3032.433] 包内层 [3032.000,3032.417]），违背函数自述硬要求「不丢画面，只去重复」；dense_recheck 移动起点后首次生产触发，与 config 翻默认无关（A/B 批是 rerun 脚本强开的）。
+
+**修法**：亚帧余量由内层 clip 吸收——头或尾单侧 <1 帧 ⇒ 内层窗扩 ≤1 帧；两侧都不成段 ⇒ 内层吸收后对**并集**中点均分（并集 <2 帧整对跳过）；「头够切/尾够切」两分支同族丢余量一并修。单测 +3 项（`test_export_adjacent_dedup` 19 项）。
+
+### 3. 门禁（修复后重跑）
+
+后端 **726 OK(skipped=2)** · API **150 OK** · 不变式**双批全绿**（`work/ab_dense_recheck_{case}` + `work/stable_sort_regress/{case}`，FAILED=0）。
+
+### 4. 档案
+
+STATE 续92 块、TODO 续94 块逐字迁 archive（`work/premigrate_20261025_j/` 回滚备份）。**未出包**（r29 等口令）。
+
+
 ## 2026-10-25（续94）— 开关矩阵 A/B：dense_recheck 净正（146→147 零退化，建议默认开）；degradation_gate 维持关（−2 = −1 假阳被打 + −1 NEAR 误伤）+ 改标注形态建议
 
 口令「review 一下有什么该进 runtime 的功能但是没进的」→「开始吧，跑完就交接」。**纯测量批，`mvp/src` 零改动**（新工具 `mvp/scripts/rerun_toggle_ab.py` 通用开关 A/B + `work/ab_compare_20261025.py` 对照）。
