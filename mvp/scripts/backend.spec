@@ -79,7 +79,11 @@ a = Analysis(
     excludes=["tkinter", "matplotlib", "IPython", "notebook", "jupyter",
               "torchvision", "PyQt5", "PySide6", "scipy", "pandas",
               "scipy.spatial", "scipy.stats",
-              "scipy.special", "scipy.linalg", "scipy.sparse"],
+              "scipy.special", "scipy.linalg", "scipy.sparse",
+              # numba/llvmlite：onnxruntime.transformers.benchmark 顶部 import numba
+              # 的过度收集（r29 首打 +120MB）——产品从不 import numba；r28 无它也是
+              # 此因（当时 venv 恰无 numba）。2026-10-25 续95 r29 记录。
+              "numba", "llvmlite"],
     noarchive=False,
 )
 
