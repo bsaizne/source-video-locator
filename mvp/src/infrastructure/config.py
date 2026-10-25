@@ -290,6 +290,12 @@ class PipelineConfig:
     dense_recheck_min_gain: float = 0.04
     dense_recheck_max_shift_s: float = 2.0
     dense_recheck_fps: int = 10
+    # --- 分级复核（2026-10-26 续97）：先用原片 1fps 全片索引特征（内存现成, 零解码零嵌入）
+    # 做同判据粗复核, 粗增益 < min_gain×factor 且粗位移 <= max_shift 才跳过 10fps 细窗。
+    # 每段细窗 = 8s×10fps 原片解码+嵌入（batch 16）, 是 locate 耗时大头（~30min/片 的
+    # 主要构成）；粗跳不影响判据语义——经验保守阈值, 以四片 A/B 零差为翻转默认的前提。
+    dense_recheck_coarse_enabled: bool = False
+    dense_recheck_coarse_gain_factor: float = 0.5
     # --- 偏移投票起点先验（2026-09-27 续10m/续11 立项, 竞品 coarse_retrieval 语义重建; 用户拍板）---
     # 段内采样帧逐帧独立检索全片源索引 -> 0.05s 分桶加权偏移投票 -> 共识簇质心 = 起点种子。
     # 跨查询全局共识信号（与 P0 密集复核的局部窗本质不同）。沙盒四片截等长严格 89 -> 100/139
@@ -560,7 +566,10 @@ class RenderConfig:
     crf: int = 18                   # 软件档质量（工程先验，与合并/素材链路同档）
     preset: str = "medium"
     prefer_hw: bool = True          # 先试硬件 H.264（本机 amf/qsv/nvenc），失败拉黑回退 libx264
-    workers: int = 2                # 片段并发数（竞品在位常量 2/6；编码是 CPU/GPU 重活，取保守端）
+    workers: int = 6                # 片段并发数。竞品在位常量 2/6 中原取保守端 2；
+                                    # 2026-10-26 续97 实测（2mkv 12 段吞吐）：2→11.5s /
+                                    # 4→7.4s / 6→6.1s（近线性，AMF 编码会话可并发），
+                                    # 全片 70 段墙钟 ~60s→~31s；quality/balanced 无差保 quality。
     stall_timeout_s: float = 120.0  # 竞品确证停滞阈值语义（blob 数值 120.0 在位）
     timeout_s: float = 1800.0       # 单条 ffmpeg 命令总超时（blob 数值 1800.0 在位）
     sample_rate: int = 48000        # 统一音频采样率（blob 数值 48000 在位）——concat 流复制前提

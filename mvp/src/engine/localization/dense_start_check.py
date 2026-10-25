@@ -89,3 +89,19 @@ def dense_start_shift(q_feats: np.ndarray, q_times: np.ndarray,
     info["applied"] = True
     info["before_start"] = round(span_start, 3)
     return round(best_pos, 3), info
+
+
+def coarse_skip(coarse_info: dict, *, min_gain: float, gain_factor: float,
+                max_shift_s: float) -> bool:
+    """分级复核的跳过判定（2026-10-26 续97, 纯函数）。
+
+    输入 = 用原片 **1fps 全片索引特征**跑同一 ``dense_start_shift`` 的诊断字典。
+    跳过 10fps 细窗的条件（经验保守阈值, 非可证上界——10fps 峰可能高于 1fps 峰）：
+      粗增益 < min_gain × gain_factor（放宽半档, 给细峰留余量）
+      且 粗位移 <= max_shift_s（粗峰跑出位移帽的段照跑细窗, 防量化假象）。
+    语义不变的最终裁决 = 四片 A/B 零差（locator_service 接线处）。
+    """
+    gain = float(coarse_info.get("gain", 0.0))
+    move = float(coarse_info.get("move_s", 0.0))
+    return (gain < min_gain * float(gain_factor)
+            and move <= float(max_shift_s))

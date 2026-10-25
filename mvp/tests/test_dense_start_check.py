@@ -16,7 +16,8 @@ SRC = Path(__file__).resolve().parents[1] / "src"
 sys.path.insert(0, str(SRC))          # mvp/src
 sys.path.insert(0, str(SRC.parent))   # mvp 包
 
-from engine.localization.dense_start_check import dense_start_shift, _select_query_indices  # noqa: E402
+from engine.localization.dense_start_check import (coarse_skip, dense_start_shift,  # noqa: E402
+                                                   _select_query_indices)
 
 
 def _rng(seed: int) -> np.random.Generator:
@@ -124,6 +125,27 @@ class DenseStartShiftTest(unittest.TestCase):
         new_start, info = dense_start_shift(qs, qt, win, wt, span_start=0.0)
         self.assertIsNone(new_start)
         self.assertEqual(info.get("reason"), "no_move")
+
+
+class CoarseSkipTest(unittest.TestCase):
+    """分级复核跳过判定（2026-10-26 续97）：粗增益低 + 粗位移在帽内才允许跳过细窗。"""
+
+    def test_skip_when_low_gain_and_move_within_cap(self):
+        self.assertTrue(coarse_skip({"gain": 0.01, "move_s": 1.0},
+                                    min_gain=0.04, gain_factor=0.5, max_shift_s=2.0))
+
+    def test_no_skip_when_gain_near_threshold(self):
+        # 粗增益 >= min_gain×factor ⇒ 不跳（10fps 细峰只会更高，可能过门）
+        self.assertFalse(coarse_skip({"gain": 0.025, "move_s": 1.0},
+                                     min_gain=0.04, gain_factor=0.5, max_shift_s=2.0))
+
+    def test_no_skip_when_move_exceeds_cap(self):
+        # 粗峰跑出位移帽 ⇒ 不跳（1fps 量化可能把近处峰错标成远处峰）
+        self.assertFalse(coarse_skip({"gain": 0.01, "move_s": 2.5},
+                                     min_gain=0.04, gain_factor=0.5, max_shift_s=2.0))
+
+    def test_missing_keys_default_zero(self):
+        self.assertTrue(coarse_skip({}, min_gain=0.04, gain_factor=0.5, max_shift_s=2.0))
 
 
 if __name__ == "__main__":

@@ -35,7 +35,7 @@ from engine.localization.evidence_localize import EvidenceLocalizer, EvidenceRes
 from engine.localization.degradation_gate import (annotate_degenerate_duplicates,
                                                   apply_degradation_gate,
                                                   duplicate_claim_warnings)
-from engine.localization.dense_start_check import dense_start_shift
+from engine.localization.dense_start_check import coarse_skip, dense_start_shift
 from engine.localization.patch_refine import apply_patch_refine
 from engine.localization import isc_l2_index as engine_isc_l2
 from engine.localization.isc_refine import IscScorer, apply_isc_refine
@@ -816,17 +816,20 @@ class SourceLocatorService:
                        cfg.fast_global_fps)
 
     def _apply_dense_start_recheck(self, results, shots, orig_path, *,
-                                   cfg, cancel_token, on_tick=None) -> None:
+                                   cfg, cancel_token, on_tick=None, bundle=None):
         """P0 密集起点复核（竞品 dense_alignment 语义重建, DECISIONS 2026-09-26 豁免裁决）。
 
         已定位主 span 起点 ±margin @10fps 密集窗, 查询侧取段内采样帧 3 个均匀代表帧做
         多帧首段证据打分; 采纳门 = 增益(>=min_gain) + max_shift(<=2s) + 距离平局裁决。
         只移起点、宽度保持; 逐段失败隔离(回退原 span); 不碰 confidence/子 span/alternatives。
+        分级复核（续97, coarse_enabled）：先用原片 1fps 全片索引特征跑同一判据的粗复核
+        （零解码零嵌入）, coarse_skip 判真才跳过 10fps 细窗——细窗是 locate 耗时大头。
         """
         margin = float(cfg.dense_recheck_margin_s)
         fps = int(cfg.dense_recheck_fps)
         n = len(results)
         applied = 0
+        skipped = 0
         for idx, (result, shot) in enumerate(zip(results, shots)):
             if on_tick is not None:
                 on_tick(idx, n)     # 本腿逐段抓密集窗，整腿可达分钟级
@@ -836,6 +839,31 @@ class SourceLocatorService:
             if span is None or span.end - span.start <= 0.01:
                 continue
             try:
+                # 分级复核（续97）：1fps 索引特征粗复核，判真跳过 10fps 细窗。
+                coarse_on = (bool(getattr(cfg, "dense_recheck_coarse_enabled", False))
+                             and bundle is not None)
+                if coarse_on:
+                    _lt = np.asarray(bundle.times, dtype=np.float64)
+                    _sel = ((_lt >= span.start - margin - 1e-6)
+                            & (_lt <= span.start + margin + 1e-6))
+                    if int(_sel.sum()) >= 3:
+                        _cstart, _cinfo = dense_start_shift(
+                            shot.feats, shot.times,
+                            bundle.features[_sel], _lt[_sel],
+                            span_start=float(span.start),
+                            margin_s=margin,
+                            min_gain=float(cfg.dense_recheck_min_gain),
+                            max_shift_s=float(cfg.dense_recheck_max_shift_s))
+                        if coarse_skip(_cinfo,
+                                       min_gain=float(cfg.dense_recheck_min_gain),
+                                       gain_factor=float(getattr(
+                                           cfg, "dense_recheck_coarse_gain_factor", 0.5)),
+                                       max_shift_s=float(cfg.dense_recheck_max_shift_s)):
+                            self._log.info(
+                                "segment %d/%d dense recheck coarse-skip: gain=%s move=%s",
+                                idx + 1, n, _cinfo.get("gain"), _cinfo.get("move_s"))
+                            skipped += 1
+                            continue
                 start_t = max(0.0, span.start - margin)
                 end_t = span.start + margin
                 ts: list[float] = []
@@ -867,8 +895,10 @@ class SourceLocatorService:
             except Exception:
                 self._log.exception("segment %d/%d dense recheck failed (keep original span)",
                                     idx + 1, n)
-        self._log.info("dense start recheck applied %d/%d (margin=%.1fs gain>=%.2f max_shift=%.1fs)",
-                       applied, n, margin, cfg.dense_recheck_min_gain, cfg.dense_recheck_max_shift_s)
+        self._log.info("dense start recheck applied %d/%d coarse_skipped=%d "
+                       "(margin=%.1fs gain>=%.2f max_shift=%.1fs)",
+                       applied, n, skipped, margin,
+                       cfg.dense_recheck_min_gain, cfg.dense_recheck_max_shift_s)
 
     def _refine_cut_twopass(self, edited: Path, cut_t: float, vfps: float,
                             fine_fps: float, window_frames: int, cancel_token,
@@ -1203,6 +1233,7 @@ class SourceLocatorService:
                 self._apply_dense_start_recheck(results, shots, orig_path,
                                                 cfg=self.config.pipeline,
                                                 cancel_token=cancel_token,
+                                                bundle=bundle,
                                                 on_tick=_fix_tick(7, 9,
                                                                   "画面深度复核：起点密集复核"))
             except ApplicationError:
