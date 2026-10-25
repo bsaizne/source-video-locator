@@ -320,8 +320,11 @@ def trim_adjacent_source_overlaps(plan: list[ExportClip], *, fps: float = 25.0,
     - **一段整个被另一段包住**（扩宽到整镜头 vs 短段的常态）：把外层段**挖洞**——保留洞左的
       头段，洞右还剩 ≥1 帧时另起一条尾段（同属该编辑段，记录槽按源宽比例分）。中点裁尾会
       把外层独占的尾巴丢掉（真实四片回放实测少 6.58s/0.83s 画面），故不采用。
-    - 单帧守卫：任何一侧切完不足 1 帧 ⇒ 不切该对（重复量本身不可见）；挖洞时头/尾各自
-      不足 1 帧的那半直接舍弃（≤1 帧）。
+    - 挖洞不成段的一侧（头或尾 <1 帧）：该亚帧余量**由内层吸收**（内层源窗扩 ≤1 帧量级），
+      不丢画面；头尾都不成段（两段几乎重合）⇒ 内层窗吸收两侧余量后对**并集**中点均分
+      （并集 <2 帧则整对跳过）。2026-10-25（续95）修：旧写法在此兜底里丢外层独占亚帧尾巴，
+      dense_recheck 生产四片 test2 实测 −16ms 违反覆盖不变式门。
+    - 单帧守卫：任何一侧切完不足 1 帧 ⇒ 不切该对（重复量本身不可见）。
     - 链式多段连叠按编辑序从左到右逐对处理；新产生的尾段插回原位后继续参与后续配对。
     - 只改 clip 的源片侧区间与其记录槽内部分配，不改 ``Result`` 定位语义、不改该段在编辑
       时间轴上的总占位 ⇒ 三指标（读 Result）与既有回归口径不受影响。
@@ -343,6 +346,7 @@ def trim_adjacent_source_overlaps(plan: list[ExportClip], *, fps: float = 25.0,
             continue
         # 源序左段（起点不晚于另一段）与右段。
         left, right = ((a, b) if a.orig_start <= b.orig_start else (b, a))
+        left_start0, left_end0 = left.orig_start, left.orig_end
         if (left.orig_start <= right.orig_start + 1e-9
                 and left.orig_end >= right.orig_end - 1e-9):
             # 包含形态：外层挖洞，内层完整保留。
@@ -373,14 +377,28 @@ def trim_adjacent_source_overlaps(plan: list[ExportClip], *, fps: float = 25.0,
                 trimmed += 1
                 continue
             if head_w >= frame_s:
+                # 外层留头段；亚帧尾巴由内层吸收（并集不丢）。
                 left.orig_end = round(right.orig_start, 3)
+                right.orig_end = round(left_end0, 3)
                 trimmed += 1
                 continue
             if tail_w >= frame_s:
+                # 外层留尾段；亚帧头由内层吸收。
                 left.orig_start = round(right.orig_end, 3)
+                right.orig_start = round(left_start0, 3)
                 trimmed += 1
                 continue
-            # 头尾都留不下 1 帧（两段几乎重合）⇒ 落到中点均分。
+            # 头尾都留不下 1 帧（两段几乎重合）⇒ 内层窗吸收两侧亚帧余量后对并集中点均分。
+            u_s = round(min(left.orig_start, right.orig_start), 3)
+            u_e = round(max(left.orig_end, right.orig_end), 3)
+            if u_e - u_s < 2 * frame_s:
+                continue   # 并集不足 2 帧，重复量本身不可见
+            cut = round((u_s + u_e) / 2.0, 3)
+            right.orig_start, right.orig_end = cut, u_e
+            left.orig_end = cut
+            trimmed += 1
+            continue
+        # 部分重叠（含源序倒挂）：交叠区按中点切开，谁独占左半谁取左半。
         cut = min(max((lo + hi) / 2.0, left.orig_start + frame_s),
                   right.orig_end - frame_s)
         if (cut - left.orig_start < frame_s

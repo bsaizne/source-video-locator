@@ -283,8 +283,9 @@ class PipelineConfig:
     # --- P0 密集起点复核（2026-09-26 续10i/k, 竞品 dense_alignment 语义重建; DECISIONS 2026-09-26 豁免裁决）---
     # 已定位主 span 起点 ±margin @10fps 密集窗多帧首段证据复核; 采纳门 = 增益(>=min_gain)
     # + max_shift(<=2s, 防"一致但错"远漂移) + 距离平局裁决。沙盒四片 89/139 净+6 零退化;
-    # 生产口径(518/2fps/两级切分)与沙盒不同须独立回归, 故默认关。
-    dense_recheck_enabled: bool = False
+    # 生产四片 A/B(2026-10-25 续94, rerun_toggle_ab.py): 严格 146→147 / 导出实得 141→142,
+    # 唯一翻转 t1r25 part→HIT, 零退化 ⇒ 按裁决翻默认开(代价 locate +5~15 分钟/片)。
+    dense_recheck_enabled: bool = True
     dense_recheck_margin_s: float = 4.0
     dense_recheck_min_gain: float = 0.04
     dense_recheck_max_shift_s: float = 2.0
@@ -294,7 +295,8 @@ class PipelineConfig:
     # 跨查询全局共识信号（与 P0 密集复核的局部窗本质不同）。沙盒四片截等长严格 89 -> 100/139
     # （test1 +10 零退化）; 生产四片双臂回归 117 -> 119/139（+2 零回退, 续11）。
     # 2026-09-28(续20) 打包验收通过（发行三防线/随机端口/元数据/四格式导出/预览直链）
-    # ⇒ 按拍板翻默认开。dense_recheck/conf_v2 因实测零增益/1-231 维持默认关。
+    # ⇒ 按拍板翻默认开。conf_v2 因 1-231 实测维持默认关; dense_recheck 曾因当时零增益默认关,
+    # 2026-10-25(续94) 生产四片 A/B 净正后翻默认开(见上方 dense_recheck 注释)。
     vote_prior_enabled: bool = True
     vote_prior_bucket_s: float = 0.05
     vote_prior_cluster_half_buckets: int = 1

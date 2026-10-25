@@ -104,6 +104,37 @@ class TrimAdjacentOverlapTest(unittest.TestCase):
         self.assertEqual((a.orig_start, a.orig_end), (101.0, 103.0))
         self.assertEqual((b.orig_start, b.orig_end), (100.0, 101.0))
 
+    def test_contained_subframe_tail_absorbed_not_lost(self):
+        """包含形态、外层独占尾巴 <1 帧（dense_recheck 生产 test2 实测形态）：
+        旧写法中点兜底丢 16ms ⇒ 违反覆盖不变式门；修后内层吸收，并集逐字段保持。"""
+        a = _clip(8.333, 9.167, 3032.0, 3032.433)
+        b = _clip(9.167, 10.0, 3032.0, 3032.417)
+        plan = [a, b]
+        self.assertEqual(trim_adjacent_source_overlaps(plan, fps=FPS), 1)
+        self.assertEqual(len(plan), 2)
+        spans = sorted((c.orig_start, c.orig_end) for c in plan)
+        for (s1, e1), (s2, e2) in zip(spans, spans[1:]):
+            self.assertLessEqual(e1, s2 + 1e-9)              # 不再重叠
+        self.assertAlmostEqual(sum(e - s for s, e in spans), 0.433, places=6)
+        for c in plan:
+            self.assertGreaterEqual(c.orig_end - c.orig_start, FRAME - 1e-6)
+
+    def test_contained_subframe_head_absorbed(self):
+        """对称形态：外层独占头 <1 帧 ⇒ 内层吸收起点，外层留尾段。"""
+        a = _clip(0.0, 1.0, 100.0, 103.0)
+        b = _clip(1.0, 2.0, 100.01, 101.0)
+        plan = [a, b]
+        self.assertEqual(trim_adjacent_source_overlaps(plan, fps=FPS), 1)
+        self.assertEqual((a.orig_start, a.orig_end), (101.0, 103.0))
+        self.assertEqual((b.orig_start, b.orig_end), (100.0, 101.0))
+
+    def test_contained_subframe_union_under_two_frames_skips(self):
+        """包含形态且并集不足 2 帧 ⇒ 整对跳过（重复量不可见，不切出闪烁段）。"""
+        a = _clip(0.0, 1.0, 100.0, 100.04)
+        b = _clip(1.0, 2.0, 100.0, 100.03)
+        self.assertEqual(trim_adjacent_source_overlaps([a, b], fps=FPS), 0)
+        self.assertEqual((a.orig_start, a.orig_end), (100.0, 100.04))
+
     def test_reverse_source_order_keeps_tail(self):
         """源序倒挂（后段起点更早）：谁独占左半谁取左半，前段的尾巴不能被裁掉。"""
         a = _clip(0.0, 3.03, 2043.0, 2045.0)
