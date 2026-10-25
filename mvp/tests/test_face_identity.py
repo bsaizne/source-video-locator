@@ -61,6 +61,28 @@ class ResolveAndContractTest(unittest.TestCase):
         from engine.face_identity import resolve_face_models
         self.assertIsNone(resolve_face_models(Path("Z:/no/such/dir")))
 
+    def test_env_override_and_fallback(self):
+        """SVL_FACE_MODELS_ROOT 优先（打包态注入，续95 接包），未设回退 models_root。"""
+        import tempfile
+        from engine.face_identity import resolve_face_models_auto
+        with tempfile.TemporaryDirectory() as td:
+            tdp = Path(td)
+            env_dir = tdp / "packaged"          # env 指向 models 父目录（resolve 拼 /face）
+            (env_dir / "face").mkdir(parents=True)
+            (env_dir / "face" / "face_detection_yunet_2023mar.onnx").write_bytes(b"x")
+            (env_dir / "face" / "face_recognition_sface_2021dec.onnx").write_bytes(b"y")
+            # env 有两份资产 ⇒ 从 env 解析成功，不受 models_root 缺失影响
+            got = resolve_face_models_auto(Path("Z:/no/such/dir"),
+                                           env={"SVL_FACE_MODELS_ROOT": str(env_dir)})
+            self.assertIsNotNone(got)
+            self.assertEqual(got[0].parent, env_dir / "face")
+            # env 目录缺 SFace ⇒ None（整层降级）
+            (env_dir / "face" / "face_recognition_sface_2021dec.onnx").unlink()
+            self.assertIsNone(resolve_face_models_auto(
+                Path("Z:/no/such/dir"), env={"SVL_FACE_MODELS_ROOT": str(env_dir)}))
+            # 未设 env ⇒ 回退 models_root（也缺失 ⇒ None）
+            self.assertIsNone(resolve_face_models_auto(Path("Z:/no/such/dir"), env={}))
+
     def test_contract_roundtrip_and_legacy_json(self):
         r = Result(edited=TimeSpan(0.0, 1.0), original=TimeSpan(10.0, 11.0))
         self.assertIsNone(r.to_dict()["face_identity"])   # 未标注 => null，不是缺键

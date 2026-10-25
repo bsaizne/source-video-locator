@@ -99,6 +99,34 @@ foreach ($f in @($iscOnnx, $iscData)) {
 }
 Write-Host "== ISC ONNX 资产就位（图 + 外部权重 209MB） ==" -ForegroundColor Green
 
+# --- 人脸身份标注资产（候选 B：YuNet 检测 + SFace 嵌入，2026-10-25 续95 接包）-------
+# 缺它 = 包内 face_identity 整层降级不标注。232,589B + 38,696,353B，不入 git，
+# 构建时从源目录拷入 + 字节数 fail-fast（同 mvp/scripts/install_face_models.py 口径）。
+$faceDir = Join-Path $ui 'resources\models\face'
+$faceSizes = @{ 'face_detection_yunet_2023mar.onnx' = 232589;
+                'face_recognition_sface_2021dec.onnx' = 38696353 }
+$faceComplete = ($faceSizes.Keys | ForEach-Object { Test-Path (Join-Path $faceDir $_) }) -notcontains $false
+if (-not $faceComplete) {
+    $fsrc = if ($env:SVL_FACE_MODEL_SOURCE) { $env:SVL_FACE_MODEL_SOURCE } else {
+        Join-Path $benchmark 'work\face_probe_20261024\models'
+    }
+    foreach ($f in $faceSizes.Keys) {
+        if (-not (Test-Path (Join-Path $fsrc $f))) {
+            throw "人脸资产缺失: $fsrc\$f（设 SVL_FACE_MODEL_SOURCE 指向含两份 ONNX 的目录）"
+        }
+    }
+    Write-Host "== -> 复制人脸身份资产: $fsrc ==" -ForegroundColor Cyan
+    New-Item -ItemType Directory -Force -Path $faceDir | Out-Null
+    foreach ($f in $faceSizes.Keys) { Copy-Item (Join-Path $fsrc $f) (Join-Path $faceDir $f) -Force }
+}
+foreach ($f in $faceSizes.Keys) {
+    $p = Join-Path $faceDir $f
+    if (-not (Test-Path $p)) { throw "人脸资产缺 $p（fail-fast）" }
+    $got = (Get-Item $p).Length
+    if ($got -ne $faceSizes[$f]) { throw "人脸资产字节数不符: $f 期望 $($faceSizes[$f]) 实得 $got" }
+}
+Write-Host "== 人脸身份资产就位（YuNet + SFace，face_identity 可用） ==" -ForegroundColor Green
+
 Write-Host "== [1/4] 渲染层构建 (vite) ==" -ForegroundColor Cyan
 npm run build
 if ($LASTEXITCODE -ne 0) { throw "renderer build failed" }

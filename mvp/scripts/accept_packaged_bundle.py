@@ -275,6 +275,17 @@ def main() -> int:
         check("跨镜头提示已编译进渲染层（UI 真的会显示）",
               len(hit_q) >= 1, "%d 个资产命中 %s" % (len(hit_q), hit_q[:3]))
 
+        # ---- 人脸身份资产进包锁（候选 B，2026-10-25 续95 接包）---------------- #
+        # 资产不入 git，构建脚本从源目录拷入（SVL_FACE_MODEL_SOURCE）；缺它 =
+        # face_identity 在包内整层降级不标注。r28 及以前的包无此目录 = 预期红。
+        face_dir = RES / "models" / "face"
+        face_expect = {"face_detection_yunet_2023mar.onnx": 232589,
+                       "face_recognition_sface_2021dec.onnx": 38696353}
+        face_got = {n: ((face_dir / n).stat().st_size
+                        if (face_dir / n).exists() else -1) for n in face_expect}
+        check("人脸身份资产进包（face_identity 包内可用）",
+              face_got == face_expect, "实得 %s（r28 及以前无此目录=预期红）" % face_got)
+
     else:
         check("冒烟产物可读", False, str(summary_path))
 

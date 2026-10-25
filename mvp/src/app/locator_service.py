@@ -12,6 +12,7 @@ seq_align moment + patch/scene/event 扩池）-> ``ConfidenceEngine.assess_evide
 """
 from __future__ import annotations
 
+import os
 import sys
 import time
 from pathlib import Path
@@ -28,7 +29,7 @@ from functools import partial
 from concurrent.futures import ThreadPoolExecutor
 
 from engine.confidence import ConfidenceEngine
-from engine.face_identity import FaceIdentityAnalyzer, resolve_face_models
+from engine.face_identity import FaceIdentityAnalyzer, resolve_face_models_auto
 from engine.feature_store import FeatureStore, FeatureStoreError, IndexBundle
 from engine.localization.evidence_localize import EvidenceLocalizer, EvidenceResult
 from engine.localization.degradation_gate import (annotate_degenerate_duplicates,
@@ -1898,13 +1899,17 @@ class SourceLocatorService:
             return
         analyzer = self._face_analyzer
         if analyzer is None:
-            models = resolve_face_models(paths.models_root())
+            # 打包态经 SVL_FACE_MODELS_ROOT 注入（resources/models/face），缺省 = 开发态
+            # app_data models_root；任一缺失整层降级（本会话不再重试）。
+            face_root = paths.models_root()
+            models = resolve_face_models_auto(face_root)
             analyzer = (FaceIdentityAnalyzer(models, self.ffmpeg)
                         if models else False)
             self._face_analyzer = analyzer
             if analyzer is False:
-                self._log.info("face identity models missing under %s; annotation skipped",
-                               paths.models_root() / "face")
+                self._log.info("face identity models missing (root=%s env=%s); annotation skipped",
+                               Path(face_root) / "face",
+                               os.environ.get("SVL_FACE_MODELS_ROOT", "<unset>"))
         if analyzer is False:
             return
         thr = float(getattr(cfg, "face_identity_cos_thresh", 0.57))

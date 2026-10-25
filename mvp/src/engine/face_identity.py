@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from pathlib import Path
 
 import numpy as np
@@ -36,6 +37,15 @@ def resolve_face_models(models_root: Path) -> tuple[Path, Path] | None:
     if yunet.exists() and sface.exists():
         return yunet, sface
     return None
+
+
+def resolve_face_models_auto(models_root: Path, env=None) -> tuple[Path, Path] | None:
+    """打包态资产注入解析（2026-10-25 续95 接包）：``SVL_FACE_MODELS_ROOT`` 优先
+    （Electron main.ts 指到 ``resources/models/face``，与 SVL_DML_MODEL/SVL_ISC_ONNX
+    同模式），未设回退开发态 ``models_root``。任一缺失仍返回 None（整层降级）。"""
+    e = os.environ if env is None else env
+    root = e.get("SVL_FACE_MODELS_ROOT")
+    return resolve_face_models(root if root else models_root)
 
 
 class FaceIdentityAnalyzer:
