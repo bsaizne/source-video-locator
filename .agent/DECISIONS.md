@@ -944,8 +944,12 @@
 - **裁定**：`pipeline.xfeat_start_enabled` 默认 False → True（`mvp/src/infrastructure/config.py`）。
 - **依据**：四片生产 A/B（2026-10-27）严格 **147→148** · 仅主 span **142→144** · 假阳 **4→4** · 四片
   导出计划不变式 **FAILED=0**；离线去重 101 独立段 **49 better / 47 tie / 5 worse**，退化样例
-  t1r14a/t1r15/t1r19/p28/t2r04b 已登记为 runtime 回归锁。**成本 ≈7~8s/行、增量未闭合**——
+  t1r14a/t1r15/t1r19/p28/t2r04b 已登记为 runtime 回归锁。拍板时成本 ≈7~8s/行、未闭合——
   用户拍板即接受该成本（"只报收益不报耗时"的反面：成本已如实报出后再拍板）。
+- **成本账当日闭合（2026-10-28）**：stage 逐行计时（生产输入/生产代码）+ 2mkv 同脚本双臂（缓存全热）
+  ⇒ 四片合计 **2249.0s ≈ 37.5 min**（302 可判行/198 精修，~7.5s/行）；2mkv **+583.1s**
+  （1649.8→2232.9）与阶段 557.9s 差 **4.5%** ⇒ 可加性成立。首组臂差 151.5s 是离臂冷缓存重建
+  **+347.8s** 的伪影（pipeline 字段进编辑侧缓存键 ⇒ 升级后首跑重建，一次性、非 XFeat 成本）。
 - **默认路径同一性**：A/B 腿 = `load_config()` + `setattr(...,True)`，生产唯一消费点
   `locator_service.py:1463`，`settings.json` 只存 `device.preferred` ⇒ 默认开态 = A/B 腿。
 - **默认值锁**：`test_xfeat_start.test_default_on`（原 `test_opt_in_default_off`）。

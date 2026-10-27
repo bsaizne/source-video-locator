@@ -9,20 +9,16 @@
 
 ## P0 — Current
 
-> **▶ 2026-10-26（续97~98）/ 2026-10-27（续99）— 出片性能批 + smart render 真片判负；ArcFace 替换 + XFeat 四片验收【现读这条】**
-> 口令「可以，9点前花完token」→「Continue this project」。代码笔 `379c1fd`；本批改动未提交、未出包。
-> ✅ 渲染 workers 2→6（60.1s→26.3s 实测）；✅ 三路调研（FINDINGS_PERF_HARDPROBLEMS_SURVEY
-> + PLAN_SMART_RENDER）；❌ dense_recheck 分级复核判负（test1 −1 + 细窗仅占 5-10%，opt-in 默认关）。
-> ❌ **smart render 默认关**：test3 off=4513/4513、35.352858s；on 容器 4513 但严格解码 1975，
-> AMF/libx264 与早期 POC 均有非法 PTS，未完成收益测量。实验代码保留 opt-in；新成片/缓存复用加强制
-> 严格帧数校验，普通渲染不变。后端 **752 OK(skipped=2)** / API **150 OK**。
-> **续99（口令「开始吧」→「交接」）+ 2026-10-28「1，翻默认」**：✅ ArcFace SCRFD2.5G+MobileFace 已替换，
-> 302行可判57→70、same↔different直接翻转0，0.51±0.10灰带unknown；✅ XFeat四片离线101独立段49/47/5，
-> 生产严格147→148、主span142→144、假阳4→4、导出不变式全绿；**2026-10-28 已翻默认开**
-> （`xfeat_start_enabled=True`，默认开态复验：不变式FAILED=0、148/150·144/150·假阳4/9；专项5/后端758/API150）。
-> 成本≈7~8s/行仍未闭合。UI166/双typecheck0（本批未动UI，沿用10-27读数）。
-> **待用户**：① 是否补同脚本双臂成本；②提交/出包（现役r29不含XFeat ⇒ 出包才生效）；③ mac（需授权改workflow加
-> kornia/XFeat/新face资产后dispatch）；④ r29/r28删除等口令。HEVC输出契约仍不改；smart render修复须重新立项。
+> **▶ 2026-10-28（批次1）— 三 bug 复核修复 + mAP@δ 边界尺子（develop，凌晨定时批）【现读这条】**
+> 口令「3 点钟开始跑任务 + 每阶段回滚点 + 4 点自检兜底」。**先读**
+> `mvp/docs/FINDINGS_BATCH1_20261028.md`。✅ bug1 text_anchor CJK（**修复即激活 OCR 字牌腿，
+> 出包前建议四片 A/B**）；✅ bug2 isc_refine 高侧钳制（LOC-1107 同族，已接线 bundle.meta.duration）；
+> ✅ bug3 finloc 零填充 + 短窗(<3帧)潜伏缺陷；✅ mAP@δ 尺子 + 四片基线（**池化 AP@0.5s=0.447 /
+> @1s=0.647 / @2s=0.753**，亚秒起点精度首次可量化）。
+> 门禁：基线 758 → 终 **765 OK(skipped=2) + API 150 OK**；单测 +7。回滚点 5 笔
+> （`6271b19`→`0085d9c`→`13d199c`→`c92ec9b`→`7e5ee73`）。
+> **待用户**：① bug1 四片 A/B（并出包批）；② 批次2 立项（Drop-DTW/置信三件套/VQ2D 扩窗/XFeat 加固）；
+> ③ develop push / 合 master 时机；④ 未 push、未出包、未动 GT、未翻默认值。
 
 ## P1 — Next
 
