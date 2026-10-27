@@ -1456,6 +1456,10 @@ class SourceLocatorService:
                     l2_index=self._ensure_isc_l2_index(orig_path, on_progress),
                     refine_grid=bool(getattr(self.config.pipeline,
                                              "isc_refine_grid_refine", False)),
+                    # 片尾钳制（2026-10-28，LOC-1107 同族）：与 patch_refine 同基准
+                    # （容器时长 >= 流末点，不削任何原本成功的点）；宽扫/细化/评分窗
+                    # 高侧越界此前会吃到 grab_frame 的片尾惰性兜底帧 ⇒ 可造假峰。
+                    source_duration_s=float(bundle.meta.duration or 0.0) or None,
                     log=self._log, progress=_isc_progress)
             else:
                 self._log.warning("isc refine enabled but no ISC onnx asset; skipped")

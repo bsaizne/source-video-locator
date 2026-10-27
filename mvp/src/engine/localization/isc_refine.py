@@ -122,6 +122,7 @@ def apply_isc_refine(results: Sequence[Result], *, edited_path, source_path,
                      grab_grid: Callable | None = None,
                      l2_index: tuple[np.ndarray, np.ndarray] | None = None,
                      refine_grid: bool = False,
+                     source_duration_s: float | None = None,
                      progress: Callable[[int, int], None] | None = None) -> list[Result]:
     """对歧义段做 ISC 第二意见局部重排；其余原样返回。不修改入参对象。
 
@@ -140,6 +141,12 @@ def apply_isc_refine(results: Sequence[Result], *, edited_path, source_path,
     （现役 CLS，用于候选提案与歧义门）。``grab_frames``/``progress`` 语义与
     ``apply_patch_refine`` 相同（批量抓帧先并行、embed 串行；逐段进度回调）。
 
+    ``source_duration_s``（可选，2026-10-28 修 LOC-1107 同族）：原片**视频流时长**。
+    宽扫粗网格高侧 / top-K 峰细化窗高侧 / 评分窗高侧按它钳制 —— 此前这三处只钳低侧
+    （``max(0.0,…)``），高侧越界点会走到 ``FFmpegIO.grab_frame`` 的片尾惰性兜底
+    （越界请求返回片内最后一帧）⇒ 越界候选全部用同一张片尾帧重复评分，可造假峰。
+    ``None`` = 不钳制（旧行为逐位不变，单测/离线验证器用）。
+
     v2 宽幅扫描（``scan_radius_s`` > 0，2026-10-03 续45）：以现主为中心 ±radius 粗扫
     （``WIDE_COARSE_STEP``）→ top-3 粗峰各 ±``WIDE_REFINE_S`` 细化 → 峰作为虚拟候选进
     同一 margin 门。动机：聚簇提案来自 CLS，CLS 真盲案例（p20/p34，GT 区 rank 286+）
@@ -156,6 +163,8 @@ def apply_isc_refine(results: Sequence[Result], *, edited_path, source_path,
 
     out: list[Result] = []
     n_refine = n_switch = 0
+    hi_bound = (float(source_duration_s) if source_duration_s
+                and float(source_duration_s) > 0 else None)
     n_total = len(results)
     for i_r, r in enumerate(results, start=1):
         if progress is not None:
@@ -234,6 +243,8 @@ def apply_isc_refine(results: Sequence[Result], *, edited_path, source_path,
             """评分窗采样点（与 _score_mid 同一公式；1s 步长 + 0.5 相位，round 3 位）。"""
             lo = max(0.0, mid - w / 2 - ISC_TOL_S)
             hi = mid + w / 2 + ISC_TOL_S
+            if hi_bound is not None:
+                hi = min(hi, hi_bound)
             n = max(2, int(np.ceil((hi - lo) / ISC_STEP)))
             return sorted({round(lo + (hi - lo) * (i + 0.5) / n, 3) for i in range(n)})
 
@@ -272,6 +283,10 @@ def apply_isc_refine(results: Sequence[Result], *, edited_path, source_path,
                     if any(abs(t0 - m) <= WIDE_EXCLUDE_S for m in taken):
                         continue
                     rlo, rhi = max(0.0, t0 - WIDE_REFINE_S), t0 + WIDE_REFINE_S
+                    if hi_bound is not None:
+                        rhi = min(rhi, hi_bound)
+                    if rhi <= rlo:
+                        continue
                     n_f = max(2, int(np.ceil((rhi - rlo) / ISC_STEP)))
                     fine_ts = sorted({round(rlo + (rhi - rlo) * (i + 0.5) / n_f, 3)
                                       for i in range(n_f)})
@@ -308,6 +323,10 @@ def apply_isc_refine(results: Sequence[Result], *, edited_path, source_path,
                         if any(abs(t0 - mm) <= WIDE_EXCLUDE_S for mm in taken):
                             continue
                         rlo, rhi = max(0.0, t0 - WIDE_REFINE_S), t0 + WIDE_REFINE_S
+                        if hi_bound is not None:
+                            rhi = min(rhi, hi_bound)
+                        if rhi <= rlo:
+                            continue
                         n_f = max(2, int(np.ceil((rhi - rlo) / ISC_STEP)))
                         fine_ts = sorted({round(rlo + (rhi - rlo) * (i + 0.5) / n_f, 3)
                                           for i in range(n_f)})
@@ -324,6 +343,10 @@ def apply_isc_refine(results: Sequence[Result], *, edited_path, source_path,
                 for R in stages:
                     wlo = max(0.0, main_mid - R)
                     whi = main_mid + R
+                    if hi_bound is not None:
+                        whi = min(whi, hi_bound)
+                    if whi <= wlo:
+                        continue
                     n_c = max(2, int(np.ceil((whi - wlo) / WIDE_COARSE_STEP)) + 1)
                     coarse_ts = [round(wlo + (whi - wlo) * i / (n_c - 1), 3) for i in range(n_c)]
                     coarse_ts = [t for t in coarse_ts if abs(t - main_mid) > scanned_r + 1e-6]

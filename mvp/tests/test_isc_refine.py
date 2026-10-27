@@ -232,6 +232,67 @@ class ApplyIscRefineTest(unittest.TestCase):
         self.assertEqual(len(out), 1)
         self.assertTrue(out[0].result_id.endswith("-iscw"))
 
+    def test_wide_scan_clamped_to_source_duration(self):
+        """2026-10-28 修 LOC-1107 同族：传 source_duration_s 时，宽扫粗网格 / 峰细化窗 /
+        评分窗的源片侧取帧时刻全部 ≤ 时长——此前高侧越界点会吃到 grab_frame 的片尾
+        惰性兜底帧（越界请求返回片内最后一帧）⇒ 越界候选全用同一张片尾帧重复评分。"""
+        seen_src: list[float] = []
+        lib_t, lib_f = _lib()
+
+        def grab(path, t):
+            t = float(t)
+            if path == "y":
+                seen_src.append(t)
+            return t
+
+        def embed_cls(marker):
+            t = float(marker)
+            if 0 <= t <= 4:
+                return _onehot(2)
+            if 99 <= t <= 102:
+                return _onehot(0)
+            if 112 <= t <= 116:
+                return _onehot(1)
+            return _onehot(2)
+
+        r = _mk_result(original=TimeSpan(98.5, 102.5))   # 主 mid=100.5, ±20 → 高侧 120.5
+        out = apply_isc_refine(
+            [r], edited_path="x", source_path="y", grab_frame=grab,
+            embed_isc=_make_isc("switch"), embed_cls=embed_cls, lib_times=lib_t,
+            lib_feats=lib_f, margin=0.05, scan_radius_s=20.0,
+            source_duration_s=112.0)
+        self.assertEqual(len(out), 1)
+        self.assertTrue(seen_src, "宽扫没有取源片帧")
+        self.assertLessEqual(max(seen_src), 112.0 + 1e-9)
+
+    def test_no_duration_keeps_legacy_unclamped(self):
+        """source_duration_s 缺省 None = 旧行为逐位不变（高侧不钳）。"""
+        seen_src: list[float] = []
+        lib_t, lib_f = _lib()
+
+        def grab(path, t):
+            t = float(t)
+            if path == "y":
+                seen_src.append(t)
+            return t
+
+        def embed_cls(marker):
+            t = float(marker)
+            if 0 <= t <= 4:
+                return _onehot(2)
+            if 99 <= t <= 102:
+                return _onehot(0)
+            if 112 <= t <= 116:
+                return _onehot(1)
+            return _onehot(2)
+
+        r = _mk_result(original=TimeSpan(98.5, 102.5))
+        apply_isc_refine(
+            [r], edited_path="x", source_path="y", grab_frame=grab,
+            embed_isc=_make_isc("switch"), embed_cls=embed_cls, lib_times=lib_t,
+            lib_feats=lib_f, margin=0.05, scan_radius_s=20.0)
+        self.assertGreater(max(seen_src), 112.0)         # 未钳：粗网格触及 120.5 附近
+
 
 if __name__ == "__main__":
     unittest.main()
