@@ -129,6 +129,36 @@ CPU 实时、SFace→ArcFace 单点替换、FFmpeg MV 场第三腿；换 SBD 主
 定位语义 2 片（test1+test2），2mkv 冒烟——本轮实际跑 2mkv/test1/test2 三片。
 
 
+## 2026-10-26（续98）— smart render 真片判负：默认关 + 严格解码校验堵住容器计数假绿
+
+口令「Continue this project」，范围 = 续97 的 H.264 8-bit 条件快路径；不改 HEVC 源处理与成片 H.264
+8-bit 契约。实验实现保留 opt-in，但**不具备生产默认开启条件**。
+
+### 1. 真实素材结论（不是 POC 外推）
+
+- 同产品入口 test3 基线：101 clips / **4513 严格帧** / H.264 yuv420p / AAC 48kHz / AMF /
+  **wall=35.352858s**；CFR tick 间隔 41332~41334，最大局部拟合误差 1.001330 tick。
+- 首个 smart 臂：容器 `nb_frames=4513`，严格 `nb_read_frames=1975`，并出现非单调 DTS/非法 PTS。
+  AMF 与 libx264 单长段都复现，排除硬件编码器单因。早期 POC `smart.mov` 同样失败，故此前
+  SSIM=0.987679 **只保留为按解码序号比较画面内容的读数，不再作为时间轴可行证据**。
+- 首个 smart 臂失败后即停：未跑 test3 on2/off2、HEVC 双臂、最终 SSIM/接触表，**无提速倍数结论**。
+  证据目录 `work/smart_render_accept/run_20261026_221744/`、`work/smart_render_debug/`。
+
+### 2. 收口改动
+
+- `RenderConfig.smart_render_enabled` 与 `TimelineMovieRenderer(smart_render=...)` 默认均改 **False**；
+  service 原有显式透传保留，现役默认完整走重编。
+- smart 新成片及稳定命名缓存复用均强制 `-count_frames` 严格解码，且要求与计划帧数**精确相等**；
+  不再先信容器 `nb_frames`。普通渲染保留原快速计数/容差口径，不新增全片严格解码成本。
+- 新增默认关、真实假绿形态（4513→1975）与缓存复用校验回归锁；合成 GOP E2E 显式 opt-in 保留。
+
+### 3. 门禁与边界
+
+渲染相关 **62 OK**；后端 **752 OK(skipped=2)**；API **150 OK**。另用真实损坏 test3 成片直调新门禁，
+实测抛 `MediaError: 预期 4513，实际 1975`。未提交、未出包、未 dispatch；不把本轮写成 smart render
+验收通过或性能收益落地。
+
+
 ## 2026-10-25（续94）— 开关矩阵 A/B：dense_recheck 净正（146→147 零退化，建议默认开）；degradation_gate 维持关（−2 = −1 假阳被打 + −1 NEAR 误伤）+ 改标注形态建议
 
 口令「review 一下有什么该进 runtime 的功能但是没进的」→「开始吧，跑完就交接」。**纯测量批，`mvp/src` 零改动**（新工具 `mvp/scripts/rerun_toggle_ab.py` 通用开关 A/B + `work/ab_compare_20261025.py` 对照）。
@@ -5724,3 +5754,61 @@ v2 每条 GT 行只看「编辑侧重叠最大的**那一条**结果」，而编
 ### Notes
 
 - Created `checkpoint-2026-10-25-0538.md` checkpoint (8 modified/untracked file(s)).
+
+### Notes
+
+- Created `checkpoint-2026-10-26-212906.md` checkpoint (1 modified/untracked file(s)).
+
+### Notes
+
+- Created `checkpoint-2026-10-26-224928.md` checkpoint (9 modified/untracked file(s)).
+
+## 2026-10-27
+
+### Added
+
+- None.
+
+### Modified
+
+- Updated `.agent/STATE.md` last-updated timestamp.
+
+### Fixed
+
+- None.
+
+### Removed
+
+- None.
+
+### Notes
+
+- Created `checkpoint-2026-10-27-230233.md` checkpoint (25 modified/untracked file(s)).
+
+- Created `checkpoint-2026-10-27-2249.md` checkpoint (24 modified/untracked file(s)).
+
+- Created `checkpoint-2026-10-27-2248.md` checkpoint (23 modified/untracked file(s)).
+
+- Created `checkpoint-2026-10-27-012324.md` checkpoint (22 modified/untracked file(s)).
+
+## 2026-10-28
+
+### Added
+
+- None.
+
+### Modified
+
+- Updated `.agent/STATE.md` last-updated timestamp.
+
+### Fixed
+
+- None.
+
+### Removed
+
+- None.
+
+### Notes
+
+- Created `checkpoint-2026-10-28-004802.md` checkpoint (27 modified/untracked file(s)).

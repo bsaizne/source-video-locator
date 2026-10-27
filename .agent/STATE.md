@@ -42,7 +42,7 @@
 
 ## Current Task
 
-> **▶ 2026-10-25（续95）— ①dense_recheck 默认开 + trim 亚帧缺口修复；②degenerate_warning 旁路标注落地（gate 拒因降级，不拒行）【现读这条】**
+> **▶ 2026-10-25（续95）/ 2026-10-27（续99）/ 2026-10-28 — ①dense_recheck 默认开 + trim 亚帧缺口修复；②degenerate_warning 旁路标注落地（gate 拒因降级，不拒行）；③ArcFace 替换 + XFeat 四片生产 A/B 净正（2026-10-28 翻默认开）【现读这条】**
 > 口令「开始吧」→「开始」（续94 四件事的第 1、2 件同批）。**`mvp/src` 有改动**，代码笔
 > `afa5644`（①）+ `d8ee02b`（②）。
 > **一、⭐ ① dense_recheck_enabled 默认 True**（续94 裁决兑现）：config 一行 + 注释订正。
@@ -88,6 +88,30 @@
 > dense_recheck 分级复核**判负**（test1 −1 + 细窗仅占 5-10%，代码 opt-in 默认关）；
 > 三路调研落档 FINDINGS_PERF_HARDPROBLEMS_SURVEY（XFeat/ArcFace/MV 第三腿候选 + DML 陷阱）。
 > 后端 742 / API 150 全绿。**XFeat、ArcFace、smart render 实现留待下一批（需口令）。**
+> **十一、2026-10-26（续98）smart render 真片判负，默认关**：H.264 8-bit 条件快路径已做实验实现，
+> 但 test3 真片验收 **off=4513/4513、35.352858s；on 容器 4513、严格解码仅 1975**，且有非单调 DTS/
+> 非法 PTS。AMF 与 libx264 单长段均复现；早期 POC 的 SSIM 只证明按序号取帧内容相近，**时间轴结论撤回**。
+> 因首个 smart 臂失败，未继续 HEVC/第二轮墙钟，**没有提速倍数结论**。`smart_render_enabled` 与渲染器
+> 默认值均改 False；实验路径新成片及缓存复用强制严格解码帧数精确相等，普通渲染口径不变。
+> 相关 62 项 + 后端 **752 OK(skipped=2)** / API **150 OK**；未提交、未出包。
+> **十二、2026-10-27（续99）ArcFace 已替换**：只换嵌入（YuNet+ArcFace）判负；SCRFD2.5G+ArcFace
+> 全栈成立。现役 302 行可判 57→70，same↔different 直接翻转 0；近阈逐图会互造误标，故阈值 0.51±0.10
+> unknown。真值3点、resolver、契约、惰性挂点全绿；Windows build/accept 已换 SCRFD/ArcFace 资产。
+> **十三、⭐ XFeat 四片离线逐图**：117 GT 改点 = 56 better/55 tie/6 worse；程序按结果段去重
+> 101 独立段 = **49 better/47 tie/5 worse**。退化回归 t1r14a/t1r15/t1r19/p28(pg03)/t2r04b。
+> 官方 Apache 源码 vendor（当时 `xfeat_start_enabled=False`，2026-10-28 已翻默认开）；只移主 span 起点、
+> 宽度不变，不碰 confidence/子 span/alternatives。
+> **十四、⭐ XFeat 四片生产 A/B 全绿**：严格 **147→148**、仅主 span **142→144**、假阳 **4→4**，
+> 四片导出计划不变式 FAILED=0；改点198/309，max shift≤3.98s。四片 wall总10,661.2s，基线为历史批，
+> **XFeat 增量成本未闭合**，故当时不翻默认。**2026-10-28 用户口令「1，翻默认」⇒
+> `xfeat_start_enabled=True`**（成本仍 ≈7~8s/行，随口令接受；默认值锁改为断言 True）。
+> 明细 `FINDINGS_XFEAT_ARCFACE_20261027.md` §6。
+> **十五、门禁/遗留**：专项17 · 后端 **758 OK(skipped=2)** · API **150 OK** · UI **166** ·双 typecheck 0。
+> **翻默认验收（2026-10-28）**：专项 5 OK（含真模型硬样本）· 后端 **758 OK(skipped=2)** · API **150 OK** ·
+> 四片 A/B 产物（= 默认开态）不变式 **FAILED=0**、三指标复算 **148/150 · 144/150 · 假阳 4/9**；
+> 默认路径 `load_config()`/`SourceLocatorService()` 均 True，代码漂移核对仅本次 config 改动。
+> 非GT的198生产改点未逐张读图，仅指标/不变式/首片字段锁通过。未提交、未push、未出包；
+> mac 未更新，CI 尚未加 kornia/XFeat/新 face 资产（改 workflow 需用户授权）；现役 r29 不含 XFeat ⇒ 下次构建生效。
 
 
 
@@ -129,9 +153,16 @@
 > **四、档案**：FINDINGS_QUERY_CROSS_CUT §11（灰带闭合）+ GT_PATCH_PROBES §4.2ter（代查定案）；
 > 迁移：STATE 续90 块、TODO 续92 块逐字迁 archive（`work/premigrate_20261025_h/` 回滚备份）。
 
-
 ## Completed
 
+- **ArcFace SCRFD 全栈替换（2026-10-27 续99）**：YuNet+ArcFace 单点替换判负；SCRFD2.5G+ArcFace
+  正/负带重新分离。现役 302 行可判 57→70、same↔different 直接翻转 0；近阈逐图促成交付 0.51±0.10
+  unknown。产品资产、Windows build/accept、真值与契约测试均更新；后端 **758 / API 150 / UI 166** 全绿。
+- **XFeat 起点精修四片离线 + 生产 A/B + 翻默认（2026-10-27 续99 / 2026-10-28）**：117 GT 改点逐图
+  56/55/6，去重101独立段 **49/47/5**；官方 Apache 代码 vendor。四片生产严格 **147→148**、仅主span
+  **142→144**、假阳 **4→4**、导出不变式全绿；增量成本未闭合（≈7~8s/行）。**2026-10-28 口令
+  「1，翻默认」⇒ 默认 True**（默认开态复验：不变式 FAILED=0、三指标 148/150·144/150·假阳4/9）。
+  明细 `FINDINGS_XFEAT_ARCFACE_20261027.md` §6。
 - **③④⑤ 三轮 A/B 补跑完 + qw 腿广播 bug 修复（2026-10-25 续95④）**：resolve_consecutive
   **147→147 全面持平**；fast_global_quality_weights 首跑暴露 qw 广播 bug（`(n,)−(3,)` 必炸、
   224 段 fast_global 整段放弃 = 该腿生产从未真跑），修复（`combine_quality_weights` 纯函数
@@ -663,14 +694,15 @@
 
 ## Next Actions
 
-> **▶ 交接指针（2026-10-25 续95，最新）**：续94 四件事**全部收口 + r29 已出包**——① dense_recheck
-> 默认开 + trim 修复（`afa5644`）；② degenerate_warning 旁路标注（`d8ee02b`）；④ ③④⑤ 三轮 A/B
-> 完跑全部维持默认关（`3db0391`）；③ r29 = `Video-Locator-win-x64-20261025r29.zip`
-> 1,018,084,363B / backend.exe sha16 `cc212c6029ba700e`，五道包内验收全绿，含 face_identity
-> 资产接包 + numba 排除（-120MB，`d0e3563`）。
-> **下一步（需口令/用户）**：① mac dispatch 待定（用户触发）；② smart render 实现与
-> HEVC 输出契约（PLAN_SMART_RENDER §4 两决策点）；③ XFeat 起点精修 / ArcFace 替换（下一批候选）。
-> conf_v2 已拍板默认关；r27 已删（现两档 r29+r28）。
+> **▶ 交接指针（2026-10-27 续99，最新）**：**先读**
+> `mvp/docs/FINDINGS_XFEAT_ARCFACE_20261027.md`（本批自包含：离线逐图、生产 A/B、ArcFace 解混、
+> 资产/门禁/边界）。
+> **一句话**：ArcFace 已替换；XFeat 四片生产严格 147→148、仅主 span 142→144、假阳4→4、
+> 导出不变式全绿；**2026-10-28 已翻默认开**（成本 ≈7~8s/行仍未闭合，随拍板接受）。
+> **下一步（需用户）**：① 是否补 XFeat 同脚本双臂成本（翻默认已做，仅成本账未闭合）；② 提交与出包时机（本批未提交）；
+> ③ mac：需用户授权先改 workflow 加 kornia/XFeat/SCRFD/ArcFace 资产，再 dispatch；④ r29/r28 保留与删除等口令。
+> **出包注意**：现役 r29（10-25 构建）不含 XFeat 代码与资产 ⇒ 翻默认只对下次构建生效。
+> 历史 r29/numba/face 接包细节见本 STATE 续95 块。
 
 > **▶ 交接指针（2026-10-25 续93，最新）**：**先读** `mvp/src/engine/face_identity.py` 模块 docstring +
 > `mvp/docs/PLAN_EXISTENCE_SIGNAL_20261025.md`（候选 B 的判据/边界）+ `mvp/docs/
@@ -1053,10 +1085,4 @@
 
 ## Last Updated
 
-2026-10-26 04:4x（续97 性能批）
-三口令收口）
-r29 已出包）
-完跑）
-
-
-
+2026-10-28 00:48

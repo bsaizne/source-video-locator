@@ -938,3 +938,20 @@
 - **追溯说明**：VDF(AGPLv3) 同理不再被许可挡，但其选型判负是 merit 口径（5.46 < VCSL 6.00），维持不变。
 - **后续筛选规则**：调研/选型任务书不再写「AGPL/CC-NC 一律 no」；许可字段保留如实标注。
 - 载体：`mvp/docs/FINDINGS_OPENSOURCE_SURVEY_20261024.md`（含该轮调研全量候选与裁定后修订）。
+
+## 2026-10-28 — XFeat 起点精修翻默认开（用户口令「1，翻默认」）
+
+- **裁定**：`pipeline.xfeat_start_enabled` 默认 False → True（`mvp/src/infrastructure/config.py`）。
+- **依据**：四片生产 A/B（2026-10-27）严格 **147→148** · 仅主 span **142→144** · 假阳 **4→4** · 四片
+  导出计划不变式 **FAILED=0**；离线去重 101 独立段 **49 better / 47 tie / 5 worse**，退化样例
+  t1r14a/t1r15/t1r19/p28/t2r04b 已登记为 runtime 回归锁。**成本 ≈7~8s/行、增量未闭合**——
+  用户拍板即接受该成本（"只报收益不报耗时"的反面：成本已如实报出后再拍板）。
+- **默认路径同一性**：A/B 腿 = `load_config()` + `setattr(...,True)`，生产唯一消费点
+  `locator_service.py:1463`，`settings.json` 只存 `device.preferred` ⇒ 默认开态 = A/B 腿。
+- **默认值锁**：`test_xfeat_start.test_default_on`（原 `test_opt_in_default_off`）。
+- **边界**：只移主 span 起点、宽度不变，不碰 confidence/子 span/alternatives；资产缺失整层降级、
+  单行失败保留原起点。现役 r29 包（10-25 构建）不含 XFeat 代码与资产 ⇒ 本翻默认对 r29 无效、
+  下次构建生效；mac 侧需先授权改 workflow。
+- **验收**：默认开态四片不变式 FAILED=0、三指标复算 148/150 · 144/150 · 假阳 4/9；
+  专项 5 OK · 后端 758 OK(skipped=2) · API 150 OK。
+- 载体：`mvp/docs/FINDINGS_XFEAT_ARCFACE_20261027.md` §6。
