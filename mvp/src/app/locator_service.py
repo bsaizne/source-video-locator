@@ -30,6 +30,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from engine.confidence import ConfidenceEngine
 from engine.face_identity import FaceIdentityAnalyzer, resolve_face_models_auto
+from engine.xfeat_start import XFeatStartRefiner, resolve_xfeat_models_auto
 from engine.feature_store import FeatureStore, FeatureStoreError, IndexBundle
 from engine.localization.evidence_localize import EvidenceLocalizer, EvidenceResult
 from engine.localization.degradation_gate import (annotate_degenerate_duplicates,
@@ -168,6 +169,7 @@ class SourceLocatorService:
         self._last_seq_items: list[dict] = []
         # 候选 B 人脸身份标注：None=未建, False=资产缺失/不可用（本次会话不再重试）
         self._face_analyzer: FaceIdentityAnalyzer | None | bool = None
+        self._xfeat_refiner: XFeatStartRefiner | None | bool = None
 
     @property
     def ffmpeg(self) -> FFmpegIO:
@@ -1064,6 +1066,7 @@ class SourceLocatorService:
             crf=rcfg.crf, preset=rcfg.preset, prefer_hw=rcfg.prefer_hw,
             workers=rcfg.workers, stall_timeout_s=rcfg.stall_timeout_s,
             timeout_s=rcfg.timeout_s, sample_rate=rcfg.sample_rate,
+            smart_render=rcfg.smart_render_enabled,
             log=lambda fmt, *a: self._log.info(fmt, *a))
 
         def _progress(frac, message):
@@ -1457,6 +1460,13 @@ class SourceLocatorService:
             else:
                 self._log.warning("isc refine enabled but no ISC onnx asset; skipped")
         _fix_leg_done("isc_refine", None)
+        if bool(getattr(self.config.pipeline, "xfeat_start_enabled", False)):
+            try:
+                self._apply_xfeat_start_refinement(results, edited, orig_path)
+            except ApplicationError:
+                raise
+            except Exception:
+                self._log.exception("xfeat start refinement failed (non-fatal)")
         # 候选 B 旁路标注：必须在修复链全部完成之后（起点已定案）；失败不影响结果。
         try:
             self._annotate_face_identity(results, orig_path)
@@ -1918,6 +1928,40 @@ class SourceLocatorService:
                 pass
         return dense
 
+    def _apply_xfeat_start_refinement(self, results, edited_path, orig_path) -> None:
+        refiner = self._xfeat_refiner
+        if refiner is None:
+            model_root = paths.models_root()
+            models = resolve_xfeat_models_auto(model_root)
+            refiner = XFeatStartRefiner(models, self.ffmpeg) if models else False
+            self._xfeat_refiner = refiner
+            if refiner is False:
+                self._log.info("xfeat models missing (root=%s env=%s); refinement skipped",
+                               Path(model_root) / "xfeat",
+                               os.environ.get("SVL_XFEAT_MODELS_ROOT", "<unset>"))
+        if refiner is False:
+            return
+        margin = float(getattr(self.config.pipeline, "xfeat_start_margin_s", 4.0))
+        applied = 0
+        for index, result in enumerate(results):
+            if result.not_in_source or result.failure_reason or result.original is None:
+                continue
+            span = result.original
+            try:
+                refined = refiner.refine(
+                    edited_path, orig_path, result.edited.start, result.edited.end,
+                    float(span.start), margin_s=margin)
+                if refined is None or span.end - refined["start"] < 0.1:
+                    continue
+                result.original = TimeSpan(refined["start"], span.end)
+                applied += 1
+                self._log.info("segment %d/%d xfeat start: %.2f -> %.2f inliers %d -> %d",
+                               index + 1, len(results), span.start, refined["start"],
+                               refined["current_inliers"], refined["best_inliers"])
+            except Exception:
+                self._log.exception("xfeat start row failed (non-fatal) index=%d", index)
+        self._log.info("xfeat start refined %d/%d rows", applied, len(results))
+
     def _annotate_face_identity(self, results: list[Result], orig_path) -> None:
         """候选 B（2026-10-25）：结果行素材起点边界的人脸身份一致性**旁路标注**。
 
@@ -1943,7 +1987,7 @@ class SourceLocatorService:
                                os.environ.get("SVL_FACE_MODELS_ROOT", "<unset>"))
         if analyzer is False:
             return
-        thr = float(getattr(cfg, "face_identity_cos_thresh", 0.57))
+        thr = float(getattr(cfg, "face_identity_cos_thresh", 0.51))
         n = 0
         for r in results:
             if r.not_in_source or r.failure_reason:

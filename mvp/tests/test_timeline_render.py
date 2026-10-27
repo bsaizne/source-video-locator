@@ -24,12 +24,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))  # -> mvp/s
 
 from media.ffmpeg import MediaError
 from media.ffmpeg.timeline_render import (
+    Keyframe,
+    RenderJob,
     RenderPlan,
+    SegmentResult,
     TimelineMovieRenderer,
     audio_encoder_args,
     cfr_video_filter,
     concat_copy_command,
     concat_reencode_command,
+    copy_middle_command,
     disabled_hardware_encoders,
     even_dimension,
     expected_frames,
@@ -39,11 +43,14 @@ from media.ffmpeg.timeline_render import (
     h264_chain,
     merge_stage_frac,
     parse_frame_count,
+    parse_keyframes,
     parse_video_encoders,
     render_output_name,
     reset_disabled_hardware_encoders,
     segment_command,
     silent_source_args,
+    smart_clip_parts,
+    smart_render_block_reason,
     swap_video_encoder,
     verify_segment_frames,
 )
@@ -197,6 +204,16 @@ class CommandBuilderTest(unittest.TestCase):
         self.assertEqual(cmd.count("1:a:0"), 1)             # 音频映射到输入 1
         self.assertNotIn("-shortest", cmd)                  # 长度由 -t 统一决定
 
+    def test_copy_middle_has_exact_frame_cap_and_pcm_audio(self):
+        cmd = copy_middle_command(ffmpeg="ffmpeg", source=Path("D:/v/om.mp4"),
+                                  out_path=Path("D:/o.mov"), start_s=12.0, frames=50,
+                                  fps=self.fr, has_audio=True, sample_rate=48000)
+        self.assertEqual(cmd[cmd.index("-c:v") + 1], "copy")
+        self.assertEqual(cmd[cmd.index("-frames:v") + 1], "50")
+        self.assertEqual(cmd[cmd.index("-c:a") + 1], "pcm_s24le")
+        self.assertNotIn("-vf", cmd)
+        self.assertNotIn("-shortest", cmd)
+
     def test_audio_args_are_pcm_in_segments_aac_in_movie(self):
         args = audio_encoder_args(sample_rate=48000)
         self.assertEqual(args[:2], ["-c:a", "pcm_s24le"])
@@ -300,6 +317,82 @@ class FrameCountTest(unittest.TestCase):
             return "48\n" if "-count_frames" not in args else "N/A"
         frames, strict = verify_segment_frames("ffprobe", Path("D:/o.mp4"), 50, run=run)
         self.assertEqual((frames, strict), (48, True))
+
+
+class SmartRenderTest(unittest.TestCase):
+    def setUp(self):
+        self.fps = Fraction(25, 1)
+        self.keys = tuple(Keyframe(float(i), i * 25) for i in range(6))
+
+    def test_smart_render_is_opt_in(self):
+        renderer = TimelineMovieRenderer("ffmpeg", "ffprobe", Path("."))
+        self.assertFalse(renderer.smart_render)
+
+    def test_smart_final_validation_uses_strict_decode_count(self):
+        calls = []
+
+        def run(args):
+            calls.append(args)
+            return "4513\n" if "-count_frames" not in args else "1975\n"
+
+        renderer = TimelineMovieRenderer("ffmpeg", "ffprobe", Path("."), run=run)
+        plan = _tiny_plan(smart_render=True, total_frames=4513)
+        with self.assertRaises(MediaError) as ctx:
+            renderer._verify_output_frames(plan)
+        self.assertIn("预期 4513，实际 1975", str(ctx.exception))
+        self.assertEqual(len(calls), 1)
+        self.assertIn("-count_frames", calls[0])
+
+    def test_reused_smart_output_is_strictly_validated(self):
+        renderer = TimelineMovieRenderer(
+            "ffmpeg", "ffprobe", Path("."), run=lambda args: "1975\n")
+        plan = _tiny_plan(smart_render=True, total_frames=4513, reused=True)
+        renderer.plan = lambda *args, **kwargs: plan
+        with self.assertRaises(MediaError):
+            renderer.render([], Path("unused"))
+
+    def test_parse_keyframes_keeps_packet_positions(self):
+        got = parse_keyframes('{"packets":[{"pts_time":"0.0","flags":"K__"},'
+                              '{"pts_time":"0.04","flags":"___"},'
+                              '{"pts_time":"1.0","flags":"K__"}]}')
+        self.assertEqual(got, (Keyframe(0.0, 0), Keyframe(1.0, 2)))
+
+    def test_split_uses_next_head_and_previous_tail_keyframes(self):
+        job = RenderJob(0, 0.4, 3.6, 80, Path("D:/o.mov"))
+        parts = smart_clip_parts(job, self.keys, self.fps)
+        self.assertEqual([(p.kind, p.start_s, p.frames) for p in parts],
+                         [("head", 0.4, 15), ("copy", 1.0, 50), ("tail", 3.0, 15)])
+
+    def test_split_rejects_short_middle_and_frame_mismatch(self):
+        short = RenderJob(0, 0.4, 1.6, 30, Path("D:/o.mov"))
+        self.assertIsNone(smart_clip_parts(short, self.keys, self.fps))
+        mismatch = RenderJob(0, 0.4, 3.6, 79, Path("D:/o.mov"))
+        self.assertIsNone(smart_clip_parts(mismatch, self.keys, self.fps))
+
+    def test_eligibility_allows_container_average_rounding_but_rejects_vfr(self):
+        v = _vstream(r_frame_rate="24000/1001",
+                     avg_frame_rate="1559673568/65051385", sample_aspect_ratio="1:1")
+        fps = Fraction("1559673568/65051385")
+        self.assertIsNone(smart_render_block_reason(v, fps))
+        self.assertEqual(smart_render_block_reason(
+            {**v, "avg_frame_rate": "25/1"}, Fraction(25, 1)), "vfr")
+        self.assertEqual(smart_render_block_reason(
+            {**v, "codec_name": "hevc"}, fps), "codec_not_h264")
+        self.assertEqual(smart_render_block_reason(
+            {**v, "sample_aspect_ratio": "4:3"}, fps), "sar_not_1")
+
+    def test_smart_failure_falls_back_to_whole_segment_transcode(self):
+        renderer = TimelineMovieRenderer("ffmpeg", "ffprobe", Path("."))
+        plan = _tiny_plan(smart_render=True, keyframes=self.keys)
+        job = RenderJob(0, 0.4, 3.6, 80, Path("D:/o.mov"))
+
+        def fail(*args):
+            raise MediaError("bad copy")
+
+        sentinel = SegmentResult(0, job.out_path, 80, "libx264")
+        renderer._run_one_smart = fail
+        renderer._run_one_transcode = lambda *args: sentinel
+        self.assertIs(renderer._run_one(plan, job, lambda *args: None, None), sentinel)
 
 
 class StableNameTest(unittest.TestCase):
@@ -447,13 +540,15 @@ class RealFfmpegTest(unittest.TestCase):
         cls._make_source(cls.src, audio=True)
         cls.src_noaudio = cls.root / "src_noaudio.mp4"
         cls._make_source(cls.src_noaudio, audio=False)
+        cls.src_smart = cls.root / "src_smart.mp4"
+        cls._make_source(cls.src_smart, audio=True, fixed_gop=True)
 
     @classmethod
     def tearDownClass(cls):
         cls.td.cleanup()
 
     @classmethod
-    def _make_source(cls, out: Path, *, audio: bool):
+    def _make_source(cls, out: Path, *, audio: bool, fixed_gop: bool = False):
         args = [str(FFMPEG), "-hide_banner", "-loglevel", "error", "-y",
                 "-f", "lavfi", "-i", "testsrc=duration=6:size=320x240:rate=25"]
         if audio:
@@ -461,7 +556,10 @@ class RealFfmpegTest(unittest.TestCase):
                      "-map", "0:v", "-map", "1:a", "-c:a", "aac"]
         else:
             args += ["-map", "0:v", "-an"]
-        args += ["-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p", str(out)]
+        args += ["-c:v", "libx264", "-preset", "veryfast", "-pix_fmt", "yuv420p"]
+        if fixed_gop:
+            args += ["-g", "25", "-keyint_min", "25", "-sc_threshold", "0"]
+        args.append(str(out))
         subprocess.run(args, check=True, capture_output=True, timeout=180)
 
     def _renderer(self, sub: str) -> TimelineMovieRenderer:
@@ -508,6 +606,26 @@ class RealFfmpegTest(unittest.TestCase):
         self.assertIn("codec_name=aac", st)
         self.assertIn("sample_rate=48000", st)
         self.assertIn("channels=2", st)
+
+    def test_smart_render_copies_middle_gops_and_preserves_timeline(self):
+        renderer = TimelineMovieRenderer(
+            FFMPEG, FFPROBE, self.root / "smart", prefer_hw=False, workers=1,
+            preset="veryfast", crf=28, smart_render=True)
+        smart = renderer.render([(0.4, 3.6)], self.src_smart)
+        self.assertTrue(smart["smart_render"])
+        self.assertEqual(smart["smart_segments"], 1)
+        self.assertEqual(smart["smart_copy_frames"], 50)
+        self.assertEqual(smart["total_frames"], 80)
+        self.assertEqual(set(self._frame_delta_histogram(Path(smart["movie_path"]))), {0.04})
+
+        baseline_renderer = TimelineMovieRenderer(
+            FFMPEG, FFPROBE, self.root / "smart_baseline", prefer_hw=False,
+            workers=1, preset="veryfast", crf=28, smart_render=False)
+        baseline = baseline_renderer.render([(0.4, 3.6)], self.src_smart)
+        self.assertFalse(baseline["smart_render"])
+        self.assertEqual(baseline["total_frames"], smart["total_frames"])
+        self.assertAlmostEqual(baseline["duration_s"], smart["duration_s"], places=3)
+        self.assertEqual(set(self._frame_delta_histogram(Path(baseline["movie_path"]))), {0.04})
 
     def test_second_render_reuses_stable_named_output(self):
         r = self._renderer("reuse")

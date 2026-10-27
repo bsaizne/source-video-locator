@@ -1,8 +1,7 @@
 """素材边界人脸身份标注 `face_identity`（候选 B，2026-10-25，PLAN_EXISTENCE_SIGNAL §2）。
 
-判据：两侧各 3 帧（±0.10/0.25/0.40s，**480 宽口径**——判据阈值只在探针分辨率上标定过）
-最大脸 SFace 质心余弦；**仅两侧每帧恰好一张脸才给 same/different**（阈 0.57 = 扩上界
-双样本互证 suggest，FINDINGS_GT_PATCH_PROBES §3）；多脸/无脸/失败一律 unknown/None。
+判据：两侧各 3 帧（±0.10/0.25/0.40s，**480 宽口径**）最大脸 ArcFace 质心余弦；
+**仅两侧每帧恰好一张脸才给 same/different**（阈 0.51）；多脸/无脸/失败一律 unknown/None。
 
 锁六件事：
 1. 资产缺失 → 整层降级（analyzer=False，本次会话不重试），结果无标注。
@@ -50,7 +49,7 @@ class _StubAnalyzer:
         self.out = out
         self.calls = []
 
-    def measure_boundary(self, video, t, *, cos_thresh=0.57):
+    def measure_boundary(self, video, t, *, cos_thresh=0.51):
         self.calls.append(float(t))
         return self.out
 
@@ -69,19 +68,26 @@ class ResolveAndContractTest(unittest.TestCase):
             tdp = Path(td)
             env_dir = tdp / "packaged"          # env 指向 models 父目录（resolve 拼 /face）
             (env_dir / "face").mkdir(parents=True)
-            (env_dir / "face" / "face_detection_yunet_2023mar.onnx").write_bytes(b"x")
-            (env_dir / "face" / "face_recognition_sface_2021dec.onnx").write_bytes(b"y")
+            (env_dir / "face" / "det_2.5g.onnx").write_bytes(b"x")
+            (env_dir / "face" / "w600k_mbf.onnx").write_bytes(b"y")
             # env 有两份资产 ⇒ 从 env 解析成功，不受 models_root 缺失影响
             got = resolve_face_models_auto(Path("Z:/no/such/dir"),
                                            env={"SVL_FACE_MODELS_ROOT": str(env_dir)})
             self.assertIsNotNone(got)
             self.assertEqual(got[0].parent, env_dir / "face")
-            # env 目录缺 SFace ⇒ None（整层降级）
-            (env_dir / "face" / "face_recognition_sface_2021dec.onnx").unlink()
+            # env 目录缺 ArcFace ⇒ None（整层降级）
+            (env_dir / "face" / "w600k_mbf.onnx").unlink()
             self.assertIsNone(resolve_face_models_auto(
                 Path("Z:/no/such/dir"), env={"SVL_FACE_MODELS_ROOT": str(env_dir)}))
             # 未设 env ⇒ 回退 models_root（也缺失 ⇒ None）
             self.assertIsNone(resolve_face_models_auto(Path("Z:/no/such/dir"), env={}))
+
+    def test_near_threshold_is_unknown(self):
+        from engine.face_identity import _identity_verdict
+        self.assertEqual(_identity_verdict(0.5358, 1, 1, 0.51), "unknown")
+        self.assertEqual(_identity_verdict(0.4864, 1, 1, 0.51), "unknown")
+        self.assertEqual(_identity_verdict(0.70, 1, 1, 0.51), "same")
+        self.assertEqual(_identity_verdict(0.30, 1, 1, 0.51), "different")
 
     def test_contract_roundtrip_and_legacy_json(self):
         r = Result(edited=TimeSpan(0.0, 1.0), original=TimeSpan(10.0, 11.0))
@@ -134,7 +140,7 @@ class AnnotateBehaviorTest(unittest.TestCase):
                               "n_faces_left": 1, "n_faces_right": 1})
         self.srv._face_analyzer = stub
 
-        def _row_fail(video, t, *, cos_thresh=0.57):
+        def _row_fail(video, t, *, cos_thresh=0.51):
             if abs(t - 40.0) < 1e-6:
                 raise RuntimeError("row-level failure must not kill the pass")
             return {"cos": 0.9, "verdict": "same", "n_faces_left": 1, "n_faces_right": 1}

@@ -279,12 +279,17 @@ def main() -> int:
         # 资产不入 git，构建脚本从源目录拷入（SVL_FACE_MODEL_SOURCE）；缺它 =
         # face_identity 在包内整层降级不标注。r28 及以前的包无此目录 = 预期红。
         face_dir = RES / "models" / "face"
-        face_expect = {"face_detection_yunet_2023mar.onnx": 232589,
-                       "face_recognition_sface_2021dec.onnx": 38696353}
+        face_expect = {"det_2.5g.onnx": 3292009,
+                       "w600k_mbf.onnx": 13616099}
         face_got = {n: ((face_dir / n).stat().st_size
                         if (face_dir / n).exists() else -1) for n in face_expect}
         check("人脸身份资产进包（face_identity 包内可用）",
               face_got == face_expect, "实得 %s（r28 及以前无此目录=预期红）" % face_got)
+        xfeat_dir = RES / "models" / "xfeat"
+        xfeat_expect = {"xfeat.pt": 6247949, "xfeat-lighterglue.pt": 10820795}
+        xfeat_got = {n: ((xfeat_dir / n).stat().st_size if (xfeat_dir / n).exists() else -1)
+                     for n in xfeat_expect}
+        check("XFeat 起点精修资产进包", xfeat_got == xfeat_expect, "实得 %s" % xfeat_got)
 
     else:
         check("冒烟产物可读", False, str(summary_path))

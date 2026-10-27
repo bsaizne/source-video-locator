@@ -202,7 +202,8 @@ class RenderMoviePlanTest(unittest.TestCase):
     def test_config_knobs_passed_to_renderer(self):
         call = self._call(_one(), render=dict(crf=23, preset="fast", workers=1,
                                               prefer_hw=False, stall_timeout_s=7.0,
-                                              timeout_s=9.0, sample_rate=44100))
+                                              timeout_s=9.0, sample_rate=44100,
+                                              smart_render_enabled=False))
         kw = call["kw"]
         self.assertEqual(kw["crf"], 23)
         self.assertEqual(kw["preset"], "fast")
@@ -211,10 +212,12 @@ class RenderMoviePlanTest(unittest.TestCase):
         self.assertEqual(kw["stall_timeout_s"], 7.0)
         self.assertEqual(kw["timeout_s"], 9.0)
         self.assertEqual(kw["sample_rate"], 44100)
+        self.assertIs(kw["smart_render"], False)
 
     def test_default_out_dir_is_app_data_rendered_root(self):
         call = self._call(_one())
         self.assertEqual(Path(call["out_dir"]), self.tmp / "rendered")
+        self.assertIs(call["kw"]["smart_render"], False)
 
     def test_config_out_dir_then_explicit_out_dir_win(self):
         call = self._call(_one(), render=dict(out_dir=self.tmp / "cache"))

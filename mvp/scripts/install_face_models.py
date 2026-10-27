@@ -1,8 +1,6 @@
 # -*- coding: utf-8 -*-
-"""安装人脸身份标注资产（候选 B）到 ``models_root()/face/``。
+"""安装 SCRFD + ArcFace 人脸身份资产到 ``models_root()/face/``。
 
-源 = 本仓研究探针目录 ``work/face_probe_20261024/models/``（YuNet 2023mar 232,589B +
-SFace 2021dec 38,696,353B；SFace 2023mar 官方 404，见 FINDINGS_GT_PATCH_PROBES §3 权重注记）。
 目标缺失才复制（幂等）；逐文件校验字节数。资产不在 git / 不进包 ⇒ 首跑缺失时
 face_identity 整层降级不标注（engine/face_identity.py resolve_face_models → None）。
 
@@ -15,9 +13,9 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 sys.stdout.reconfigure(encoding="utf-8")
 
-SRC = Path(__file__).resolve().parents[2] / "work/face_probe_20261024/models"
-FILES = {"face_detection_yunet_2023mar.onnx": 232589,
-         "face_recognition_sface_2021dec.onnx": 38696353}
+SRC = Path(__file__).resolve().parents[2] / "work/_research/face-reidentification/weights"
+FILES = {"det_2.5g.onnx": 3292009,
+         "w600k_mbf.onnx": 13616099}
 
 
 def main() -> int:

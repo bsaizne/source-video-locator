@@ -296,6 +296,12 @@ class PipelineConfig:
     # 主要构成）；粗跳不影响判据语义——经验保守阈值, 以四片 A/B 零差为翻转默认的前提。
     dense_recheck_coarse_enabled: bool = False
     dense_recheck_coarse_gain_factor: float = 0.5
+    # --- XFeat 局部起点精修（2026-10-27 四片离线逐图净正；2026-10-28 用户拍板翻默认开）---
+    # 四片生产 A/B(2026-10-27): 严格 147→148 / 仅主 span 142→144 / 假阳 4→4 / 导出不变式 FAILED=0;
+    # 198/309 行移动起点, max shift ≤3.98s, 只动主 span 起点不动宽度/置信。离线去重 101 独立段
+    # 49 better / 47 tie / 5 worse。代价 ≈7~8s/行（离线同脚本实测）；资产缺失整层降级为原起点。
+    xfeat_start_enabled: bool = True
+    xfeat_start_margin_s: float = 4.0
     # --- 偏移投票起点先验（2026-09-27 续10m/续11 立项, 竞品 coarse_retrieval 语义重建; 用户拍板）---
     # 段内采样帧逐帧独立检索全片源索引 -> 0.05s 分桶加权偏移投票 -> 共识簇质心 = 起点种子。
     # 跨查询全局共识信号（与 P0 密集复核的局部窗本质不同）。沙盒四片截等长严格 89 -> 100/139
@@ -361,11 +367,11 @@ class PipelineConfig:
     query_cross_cut_thresh: float = 0.5
     # --- 素材边界人脸身份标注（候选 B，2026-10-25：只标注、不改定位、不改置信度、
     # 不自动改镜头表）---
-    # 判据 = 两侧各 3 帧最大脸 SFace 质心余弦；**仅两侧每帧恰好一张脸才给 same/different**
-    # （多脸 max 脸换人是已实测的失败模式）。0.57 = 扩上界双样本互证的 suggest
-    # （0.5689/0.60，FINDINGS_GT_PATCH_PROBES §3）。资产缺失自动降级不标注。
+    # 判据 = 两侧各 3 帧最大脸 ArcFace 质心余弦；**仅两侧每帧恰好一张脸才给 same/different**
+    # （多脸 max 脸换人是已实测的失败模式）。0.51 = SCRFD+ArcFace 扩样双带 p5/p95 中点，
+    # 阈值 ±0.10 灰带判 unknown（现役近阈翻转逐图复核后落地）。资产缺失自动降级不标注。
     face_identity_enabled: bool = True
-    face_identity_cos_thresh: float = 0.57
+    face_identity_cos_thresh: float = 0.51
     # --- 编辑侧分析持久缓存（A4 性能优化 2026-09-05）---
     # 缓存两级切分产物 + 每段 8fps 密帧特征到 app data（键=文件身份+feature_version+管线配置+
     # 设备数值口径）。同一编辑片重复定位免重切分/重 embed; 任一口径变化自动失效。纯缓存零语义。
@@ -573,6 +579,7 @@ class RenderConfig:
     stall_timeout_s: float = 120.0  # 竞品确证停滞阈值语义（blob 数值 120.0 在位）
     timeout_s: float = 1800.0       # 单条 ffmpeg 命令总超时（blob 数值 1800.0 在位）
     sample_rate: int = 48000        # 统一音频采样率（blob 数值 48000 在位）——concat 流复制前提
+    smart_render_enabled: bool = False  # 实验开关：真实 H.264 拼接时间轴未通过验收，默认走现役重编
     out_dir: str | Path | None = None   # None -> app data 下 ``rendered/``
 
 

@@ -75,10 +75,14 @@ if (app.isPackaged) {
   // ISC 第二意见 ONNX（2026-10-03 续44 翻默认）。缺它 isc_refine 整体跳过（config 默认开）。
   backendConfig.spawnEnv.SVL_ISC_ONNX = path.join(
     process.resourcesPath, 'models', 'isc_ft_v107', 'isc_ft_v107.onnx')
-  // 人脸身份标注资产（候选 B，2026-10-25 续95 接包）：YuNet 检测 + SFace 嵌入。
+  // 人脸身份标注资产：SCRFD 检测 + ArcFace 嵌入。
   // 指到 models 父目录（后端 resolve_face_models_auto 拼 /face，与 models_root 语义一致）。
   // 缺它 face_identity 整层降级不标注。
   backendConfig.spawnEnv.SVL_FACE_MODELS_ROOT = path.join(
+    process.resourcesPath, 'models')
+}
+if (!backendConfig.spawnEnv.SVL_XFEAT_MODELS_ROOT) {
+  backendConfig.spawnEnv.SVL_XFEAT_MODELS_ROOT = path.join(
     process.resourcesPath, 'models')
 }
 

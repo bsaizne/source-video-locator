@@ -239,6 +239,32 @@ def segment_command(*, ffmpeg: str, source: Path, out_path: Path, start_s: float
     return cmd
 
 
+def copy_middle_command(*, ffmpeg: str, source: Path, out_path: Path,
+                        start_s: float, frames: int, fps: Fraction,
+                        has_audio: bool, sample_rate: int) -> list[str]:
+    duration_s = frames_to_seconds(frames, fps)
+    cmd = [ffmpeg, "-hide_banner", "-loglevel", "error", "-nostdin", "-y",
+           "-fflags", "+genpts", "-ss", f"{start_s:.6f}", "-i", str(source)]
+    if not has_audio:
+        cmd += silent_source_args(sample_rate=sample_rate)
+    cmd += ["-t", f"{duration_s:.6f}",
+            "-map", "0:v:0", "-map", "0:a:0" if has_audio else "1:a:0",
+            "-c:v", "copy", "-frames:v", str(frames)]
+    cmd += audio_encoder_args(sample_rate=sample_rate)
+    cmd += ["-avoid_negative_ts", "make_zero", "-map_metadata", "-1",
+            "-progress", "pipe:1", str(out_path)]
+    return cmd
+
+
+def concat_parts_copy_command(*, ffmpeg: str, list_path: Path,
+                              out_path: Path) -> list[str]:
+    return [ffmpeg, "-hide_banner", "-loglevel", "error", "-nostdin", "-y",
+            "-fflags", "+genpts", "-f", "concat", "-safe", "0", "-i", str(list_path),
+            "-map", "0:v:0", "-map", "0:a:0", "-c:v", "copy", "-c:a", "copy",
+            "-avoid_negative_ts", "make_zero", "-map_metadata", "-1",
+            "-progress", "pipe:1", str(out_path)]
+
+
 def concat_copy_command(*, ffmpeg: str, list_path: Path, out_path: Path) -> list[str]:
     """最终合并（视频流复制 + 音频统一转 AAC，竞品 ``_final_concat_copy_command`` 同位）。
 
@@ -336,6 +362,59 @@ def verify_segment_frames(ffprobe: str, path: Path, expected: int, *,
 # 探测辅助
 # --------------------------------------------------------------------------- #
 
+@dataclass(frozen=True)
+class Keyframe:
+    pts_s: float
+    packet_index: int
+
+
+def smart_render_block_reason(vstream: dict, fps: Fraction) -> str | None:
+    if vstream.get("codec_name") != "h264":
+        return "codec_not_h264"
+    if vstream.get("pix_fmt") != "yuv420p" or is_high_bit_depth(vstream):
+        return "not_8bit_yuv420p"
+    if is_hdr(vstream):
+        return "hdr"
+    if int(vstream.get("width") or 0) % 2 or int(vstream.get("height") or 0) % 2:
+        return "odd_dimensions"
+    if vstream.get("sample_aspect_ratio") != "1:1":
+        return "sar_not_1"
+    if vstream.get("field_order") not in (None, "progressive"):
+        return "interlaced"
+    try:
+        source_fps = Fraction(str(vstream.get("avg_frame_rate")))
+        nominal_fps = Fraction(str(vstream.get("r_frame_rate")))
+        if source_fps <= 0 or nominal_fps <= 0:
+            return "invalid_fps"
+        mismatch = abs(float(source_fps - nominal_fps)) / float(nominal_fps)
+    except (ValueError, ZeroDivisionError):
+        return "invalid_fps"
+    if fps != source_fps:
+        return "fps_override"
+    if mismatch > 0.001:
+        return "vfr"
+    return None
+
+
+def keyframe_packets_args(ffprobe: str, path: Path) -> list[str]:
+    return [ffprobe, "-v", "error", "-select_streams", "v:0", "-show_packets",
+            "-show_entries", "packet=pts_time,flags", "-of", "json", str(path)]
+
+
+def parse_keyframes(stdout: str) -> tuple[Keyframe, ...]:
+    payload = json.loads(stdout)
+    found = []
+    for i, packet in enumerate(payload.get("packets") or []):
+        if "K" not in str(packet.get("flags") or ""):
+            continue
+        try:
+            pts = float(packet["pts_time"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        found.append(Keyframe(pts_s=pts, packet_index=i))
+    return tuple(found)
+
+
 def _default_run(args: list[str], *, timeout: float = 180.0) -> str:
     """前台执行短命令（ffprobe 类）；失败/超时返回空串，由上层判「不可信」。"""
     try:
@@ -360,6 +439,20 @@ def probe_streams(path: Path, ffprobe: str, *,
         return json.loads(text)
     except json.JSONDecodeError as exc:
         raise MediaError(f"原片信息解析失败: {Path(path).name}") from exc
+
+
+def probe_keyframes(path: Path, ffprobe: str, *,
+                    run: Callable[[list[str]], str] = _default_run) -> tuple[Keyframe, ...]:
+    text = run(keyframe_packets_args(ffprobe, Path(path)))
+    if not text.strip():
+        raise MediaError(f"关键帧索引无输出: {Path(path).name}")
+    try:
+        frames = parse_keyframes(text)
+    except (json.JSONDecodeError, TypeError) as exc:
+        raise MediaError(f"关键帧索引解析失败: {Path(path).name}") from exc
+    if len(frames) < 2:
+        raise MediaError(f"关键帧索引不足: {Path(path).name}")
+    return frames
 
 
 def first_video_stream(probe: dict) -> dict | None:
@@ -480,6 +573,8 @@ class RenderPlan:
     reused: bool = False
     reason: str = ""
     hdr_downgraded: bool = False
+    smart_render: bool = False
+    keyframes: tuple[Keyframe, ...] = ()
 
 
 @dataclass
@@ -488,6 +583,43 @@ class SegmentResult:
     path: Path
     frames: int
     encoder: str
+    copy_frames: int = 0
+
+
+@dataclass(frozen=True)
+class SmartPart:
+    kind: str
+    start_s: float
+    frames: int
+
+
+def smart_clip_parts(job: RenderJob, keyframes: tuple[Keyframe, ...],
+                     fps: Fraction) -> tuple[SmartPart, ...] | None:
+    eps = 1e-6
+    k2 = next((k for k in keyframes if k.pts_s + eps >= job.start_s), None)
+    if k2 is None:
+        return None
+    later = [k for k in keyframes if k.packet_index > k2.packet_index
+             and k.pts_s <= job.end_s + eps]
+    k3 = later[-1] if later else None
+    if k3 is None:
+        return None
+    copy_frames = k3.packet_index - k2.packet_index
+    if copy_frames < max(2, round(float(fps) * 2)):
+        return None
+    head_frames = (expected_frames(k2.pts_s - job.start_s, fps)
+                   if k2.pts_s > job.start_s + eps else 0)
+    tail_frames = (expected_frames(job.end_s - k3.pts_s, fps)
+                   if job.end_s > k3.pts_s + eps else 0)
+    if head_frames + copy_frames + tail_frames != job.frames:
+        return None
+    parts = []
+    if head_frames:
+        parts.append(SmartPart("head", job.start_s, head_frames))
+    parts.append(SmartPart("copy", k2.pts_s, copy_frames))
+    if tail_frames:
+        parts.append(SmartPart("tail", k3.pts_s, tail_frames))
+    return tuple(parts)
 
 
 # 进度契约（与 SourceVideoMerger 一致）：frac∈[0,1]；``None`` = 无进展心跳
@@ -510,6 +642,7 @@ class TimelineMovieRenderer:
                  workers: int = 2, stall_timeout_s: float = DEFAULT_STALL_TIMEOUT_S,
                  timeout_s: float = DEFAULT_TIMEOUT_S,
                  sample_rate: int = DEFAULT_SAMPLE_RATE,
+                 smart_render: bool = False,
                  log: Callable[..., None] | None = None,
                  run: Callable[[list[str]], str] | None = None,
                  popen: Callable[[list[str]], object] | None = None):
@@ -523,6 +656,7 @@ class TimelineMovieRenderer:
         self.stall_timeout_s = float(stall_timeout_s)
         self.timeout_s = float(timeout_s)
         self.sample_rate = int(sample_rate)
+        self.smart_render = bool(smart_render)
         self._log = log or (lambda *a, **k: None)
         self._run = run or _default_run
         # 子进程启动器可注入：单测用它伪造进度流/停滞/取消，生产 = subprocess.Popen
@@ -574,6 +708,8 @@ class TimelineMovieRenderer:
         if not chain:
             raise MediaError("ffmpeg 没有可用的 H.264 编码器，无法渲染成片")
         pix_fmt = render_pix_fmt(v)
+        smart_block = smart_render_block_reason(v, fr)
+        smart_allowed = self.smart_render and smart_block is None
         frames_per_clip = [expected_frames(b - a, fr) for a, b in pairs]
         total = sum(frames_per_clip)
         if total <= 0:
@@ -581,7 +717,8 @@ class TimelineMovieRenderer:
 
         out_name = render_output_name(src, pairs, [
             fps_text(fr), f"{width}x{height}", pix_fmt, chain[0], self.crf,
-            self.preset, int(audio), self.sample_rate, SEGMENT_CONTAINER])
+            self.preset, int(audio), self.sample_rate, SEGMENT_CONTAINER,
+            *(["smart1"] if smart_allowed else [])])
         out_path = self.out_dir / out_name
         seg_dir = self.out_dir / "segments"
         common = dict(source=src, output=out_path, fps=fr, width=width, height=height,
@@ -590,14 +727,48 @@ class TimelineMovieRenderer:
                       clip_count=len(pairs),
                       segment_dir=seg_dir,
                       concat_list=out_path.parent / f"{out_path.stem}.concat.txt",
-                      hdr_downgraded=bool(is_hdr(v) or is_high_bit_depth(v)))
+                      hdr_downgraded=bool(is_hdr(v) or is_high_bit_depth(v)),
+                      smart_render=smart_allowed)
         if out_path.exists() and out_path.stat().st_size > 0:
             return RenderPlan(jobs=[], reused=True,
                               reason="命中既有成片（同原片、同片段清单、同参数）", **common)
+        if smart_allowed:
+            try:
+                common["keyframes"] = self._load_keyframes(src)
+            except MediaError as exc:
+                self._log("smart render 关键帧索引不可用，回退逐段重编: %s", exc)
+                common["smart_render"] = False
+        else:
+            common["smart_render"] = False
         jobs = [RenderJob(index=i, start_s=a, end_s=b, frames=f,
                           out_path=seg_dir / f"{out_path.stem}_{i:04d}.{SEGMENT_CONTAINER}")
                 for i, ((a, b), f) in enumerate(zip(pairs, frames_per_clip)) if f > 0]
         return RenderPlan(jobs=jobs, **common)
+
+    def _load_keyframes(self, source: Path) -> tuple[Keyframe, ...]:
+        stat = source.stat()
+        identity = {"path": str(source), "size": stat.st_size,
+                    "mtime_ns": stat.st_mtime_ns}
+        digest = hashlib.md5(json.dumps(identity, sort_keys=True).encode("utf-8")).hexdigest()[:16]
+        cache = self.out_dir / ".smart_render" / f"{_safe_stem(source)}-{digest}.json"
+        try:
+            payload = json.loads(cache.read_text(encoding="utf-8"))
+            if payload.get("version") == 1 and payload.get("identity") == identity:
+                frames = tuple(Keyframe(float(pts), int(index))
+                               for pts, index in payload["keyframes"])
+                if len(frames) >= 2:
+                    return frames
+        except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError):
+            pass
+        frames = probe_keyframes(source, self.ffprobe, run=self._run)
+        payload = {"version": 1, "identity": identity,
+                   "keyframes": [[k.pts_s, k.packet_index] for k in frames]}
+        try:
+            cache.parent.mkdir(parents=True, exist_ok=True)
+            cache.write_text(json.dumps(payload, separators=(",", ":")), encoding="utf-8")
+        except OSError:
+            pass
+        return frames
 
     def segment_args(self, plan: RenderPlan, job: RenderJob,
                      encoder: str | None = None) -> list[str]:
@@ -608,6 +779,16 @@ class TimelineMovieRenderer:
             width=plan.width, height=plan.height, pix_fmt=plan.pix_fmt,
             encoder=encoder or plan.encoder, crf=self.crf, preset=self.preset,
             has_audio=plan.has_audio, sample_rate=self.sample_rate)
+
+    def _verify_output_frames(self, plan: RenderPlan) -> None:
+        actual = _probe_frames(self.ffprobe, plan.output, strict=plan.smart_render,
+                               run=self._run)
+        if actual is None and not plan.smart_render:
+            actual = _probe_frames(self.ffprobe, plan.output, strict=True, run=self._run)
+        tol = 0 if plan.smart_render else max(2, round(plan.total_frames * 0.005))
+        if actual is None or abs(actual - plan.total_frames) > tol:
+            raise MediaError(f"输出帧数错误: 预期 {plan.total_frames}，"
+                             f"实际 {actual if actual is not None else '未知'}")
 
     # ---------------------------------------------------------------- 渲染
     def render(self, clips: Sequence[tuple[float, float]], source: str | Path, *,
@@ -622,6 +803,8 @@ class TimelineMovieRenderer:
         """
         plan = self.plan(clips, source, fps=fps)
         if plan.reused:
+            if plan.smart_render:
+                self._verify_output_frames(plan)
             if progress is not None:
                 progress(1.0, "成片已存在，直接复用")
             return self._result(plan, mode="reused", reused=True,
@@ -659,26 +842,24 @@ class TimelineMovieRenderer:
 
         _emit(0.96, "合并视频")
         mode, encoder = self._concat(plan, results, emit=_emit, cancel=cancel)
-        actual = _probe_frames(self.ffprobe, plan.output, run=self._run)
-        if actual is None:
-            actual = _probe_frames(self.ffprobe, plan.output, strict=True, run=self._run)
-        tol = max(2, round(plan.total_frames * 0.005))
-        if actual is None or abs(actual - plan.total_frames) > tol:
-            raise MediaError(f"输出帧数错误: 预期 {plan.total_frames}，"
-                             f"实际 {actual if actual is not None else '未知'}")
+        self._verify_output_frames(plan)
         _emit(1.0, "最终视频生成成功")
         for r in results:
             _try_unlink(r.path)
         return self._result(plan, mode=mode, reused=False, segments=len(results),
-                            encoder=encoder)
+                            encoder=encoder, results=results)
 
     @staticmethod
     def _result(plan: RenderPlan, *, mode: str, reused: bool, segments: int,
-                encoder: str) -> dict:
+                encoder: str, results: list[SegmentResult] | None = None) -> dict:
+        rows = results or []
         return {"movie_path": plan.output, "mode": mode, "reused": reused,
                 "segments": segments, "fps": fps_text(plan.fps),
                 "duration_s": plan.total_seconds, "total_frames": plan.total_frames,
-                "actual_encoder": encoder, "hdr_downgraded": plan.hdr_downgraded}
+                "actual_encoder": encoder, "hdr_downgraded": plan.hdr_downgraded,
+                "smart_render": plan.smart_render,
+                "smart_segments": sum(r.copy_frames > 0 for r in rows),
+                "smart_copy_frames": sum(r.copy_frames for r in rows)}
 
     # ---------------------------------------------------------------- 并发
     def _run_jobs(self, plan: RenderPlan, *, seg_cb: SegmentCb,
@@ -705,6 +886,20 @@ class TimelineMovieRenderer:
 
     def _run_one(self, plan: RenderPlan, job: RenderJob, seg_cb: SegmentCb,
                  cancel) -> SegmentResult:
+        parts = smart_clip_parts(job, plan.keyframes, plan.fps) if plan.smart_render else None
+        if parts:
+            try:
+                return self._run_one_smart(plan, job, parts, seg_cb, cancel)
+            except MediaError as exc:
+                if cancel is not None and cancel():
+                    raise
+                self._log("片段 %d smart render 失败，回退整段重编: %s",
+                          job.index + 1, exc)
+                _try_unlink(job.out_path)
+        return self._run_one_transcode(plan, job, seg_cb, cancel)
+
+    def _run_one_transcode(self, plan: RenderPlan, job: RenderJob, seg_cb: SegmentCb,
+                           cancel) -> SegmentResult:
         job.out_path.parent.mkdir(parents=True, exist_ok=True)
         _try_unlink(job.out_path)
         cmd = self.segment_args(plan, job)
@@ -721,6 +916,73 @@ class TimelineMovieRenderer:
             raise MediaError(f"渲染失败: 第 {job.index + 1} 段产物无法读取帧数")
         return SegmentResult(index=job.index, path=job.out_path, frames=frames,
                              encoder=encoder)
+
+    def _run_one_smart(self, plan: RenderPlan, job: RenderJob,
+                       parts: tuple[SmartPart, ...], seg_cb: SegmentCb,
+                       cancel) -> SegmentResult:
+        job.out_path.parent.mkdir(parents=True, exist_ok=True)
+        _try_unlink(job.out_path)
+        part_paths = [job.out_path.with_name(f"{job.out_path.stem}.{p.kind}.mov")
+                      for p in parts]
+        list_path = job.out_path.with_suffix(".parts.txt")
+        results: list[SegmentResult] = []
+        completed = 0
+        encoders = set()
+        try:
+            for part, out_path in zip(parts, part_paths):
+                _try_unlink(out_path)
+                if part.kind == "copy":
+                    cmd = copy_middle_command(
+                        ffmpeg=self.ffmpeg, source=plan.source, out_path=out_path,
+                        start_s=part.start_s, frames=part.frames, fps=plan.fps,
+                        has_audio=plan.has_audio, sample_rate=self.sample_rate)
+                else:
+                    cmd = segment_command(
+                        ffmpeg=self.ffmpeg, source=plan.source, out_path=out_path,
+                        start_s=part.start_s, frames=part.frames, fps=plan.fps,
+                        width=plan.width, height=plan.height, pix_fmt=plan.pix_fmt,
+                        encoder=plan.encoder, crf=self.crf, preset=self.preset,
+                        has_audio=plan.has_audio, sample_rate=self.sample_rate)
+
+                def on_frac(frac, *, _part=part, _completed=completed):
+                    seg_cb(job, None if frac is None else
+                           (_completed + frac * _part.frames) / job.frames)
+
+                rc, stderr, encoder = self._run_monitored(
+                    cmd, total_seconds=frames_to_seconds(part.frames, plan.fps), plan=plan,
+                    on_frac=on_frac, cancel=cancel,
+                    label=f"片段 {job.index + 1} {part.kind}")
+                if rc != 0:
+                    raise MediaError(f"{part.kind}: {error_summary(stderr) or f'ffmpeg rc={rc}'}")
+                if part.kind != "copy":
+                    encoders.add(encoder)
+                frames, _strict = verify_segment_frames(
+                    self.ffprobe, out_path, part.frames, run=self._run)
+                if frames != part.frames:
+                    raise MediaError(f"{part.kind} 帧数错误: 预期 {part.frames}，实际 {frames}")
+                results.append(SegmentResult(job.index, out_path, frames, encoder))
+                completed += part.frames
+            if len(encoders) > 1:
+                raise MediaError("首尾重编使用了不同编码器")
+            list_path.write_text(concat_list_text(part_paths), encoding="utf-8")
+            rc, stderr, _ = self._run_monitored(
+                concat_parts_copy_command(ffmpeg=self.ffmpeg, list_path=list_path,
+                                          out_path=job.out_path),
+                total_seconds=frames_to_seconds(job.frames, plan.fps), plan=plan,
+                on_frac=None, cancel=cancel, label=f"片段 {job.index + 1} 拼接")
+            if rc != 0:
+                raise MediaError(f"段内拼接: {error_summary(stderr) or f'ffmpeg rc={rc}'}")
+            frames, _strict = verify_segment_frames(
+                self.ffprobe, job.out_path, job.frames, run=self._run)
+            if frames != job.frames:
+                raise MediaError(f"段内拼接帧数错误: 预期 {job.frames}，实际 {frames}")
+            return SegmentResult(index=job.index, path=job.out_path, frames=frames,
+                                 encoder=next(iter(encoders), plan.encoder),
+                                 copy_frames=sum(p.frames for p in parts if p.kind == "copy"))
+        finally:
+            for path in part_paths:
+                _try_unlink(path)
+            _try_unlink(list_path)
 
     # ---------------------------------------------------------------- 合并
     def _concat(self, plan: RenderPlan, results: list[SegmentResult], *,

@@ -99,16 +99,16 @@ foreach ($f in @($iscOnnx, $iscData)) {
 }
 Write-Host "== ISC ONNX 资产就位（图 + 外部权重 209MB） ==" -ForegroundColor Green
 
-# --- 人脸身份标注资产（候选 B：YuNet 检测 + SFace 嵌入，2026-10-25 续95 接包）-------
-# 缺它 = 包内 face_identity 整层降级不标注。232,589B + 38,696,353B，不入 git，
+# --- 人脸身份标注资产（SCRFD 检测 + ArcFace 嵌入）-------------------------------
+# 缺它 = 包内 face_identity 整层降级不标注。3,292,009B + 13,616,099B，不入 git，
 # 构建时从源目录拷入 + 字节数 fail-fast（同 mvp/scripts/install_face_models.py 口径）。
 $faceDir = Join-Path $ui 'resources\models\face'
-$faceSizes = @{ 'face_detection_yunet_2023mar.onnx' = 232589;
-                'face_recognition_sface_2021dec.onnx' = 38696353 }
+$faceSizes = @{ 'det_2.5g.onnx' = 3292009;
+                'w600k_mbf.onnx' = 13616099 }
 $faceComplete = ($faceSizes.Keys | ForEach-Object { Test-Path (Join-Path $faceDir $_) }) -notcontains $false
 if (-not $faceComplete) {
     $fsrc = if ($env:SVL_FACE_MODEL_SOURCE) { $env:SVL_FACE_MODEL_SOURCE } else {
-        Join-Path $benchmark 'work\face_probe_20261024\models'
+        Join-Path $benchmark 'work\_research\face-reidentification\weights'
     }
     foreach ($f in $faceSizes.Keys) {
         if (-not (Test-Path (Join-Path $fsrc $f))) {
@@ -125,7 +125,27 @@ foreach ($f in $faceSizes.Keys) {
     $got = (Get-Item $p).Length
     if ($got -ne $faceSizes[$f]) { throw "人脸资产字节数不符: $f 期望 $($faceSizes[$f]) 实得 $got" }
 }
-Write-Host "== 人脸身份资产就位（YuNet + SFace，face_identity 可用） ==" -ForegroundColor Green
+Write-Host "== 人脸身份资产就位（SCRFD + ArcFace，face_identity 可用） ==" -ForegroundColor Green
+
+# --- XFeat + LighterGlue 起点精修资产 -------------------------------------------------
+$xfeatDir = Join-Path $ui 'resources\models\xfeat'
+$xfeatSizes = @{ 'xfeat.pt' = 6247949; 'xfeat-lighterglue.pt' = 10820795 }
+$xfeatComplete = ($xfeatSizes.Keys | ForEach-Object { Test-Path (Join-Path $xfeatDir $_) }) -notcontains $false
+if (-not $xfeatComplete) {
+    $xsrc = if ($env:SVL_XFEAT_MODEL_SOURCE) { $env:SVL_XFEAT_MODEL_SOURCE } else {
+        Join-Path $benchmark 'work\_research\accelerated_features\weights'
+    }
+    foreach ($f in $xfeatSizes.Keys) {
+        if (-not (Test-Path (Join-Path $xsrc $f))) { throw "XFeat 资产缺失: $xsrc\$f" }
+    }
+    New-Item -ItemType Directory -Force -Path $xfeatDir | Out-Null
+    foreach ($f in $xfeatSizes.Keys) { Copy-Item (Join-Path $xsrc $f) (Join-Path $xfeatDir $f) -Force }
+}
+foreach ($f in $xfeatSizes.Keys) {
+    $got = (Get-Item (Join-Path $xfeatDir $f)).Length
+    if ($got -ne $xfeatSizes[$f]) { throw "XFeat 资产字节数不符: $f 期望 $($xfeatSizes[$f]) 实得 $got" }
+}
+Write-Host "== XFeat 资产就位 ==" -ForegroundColor Green
 
 Write-Host "== [1/4] 渲染层构建 (vite) ==" -ForegroundColor Cyan
 npm run build
