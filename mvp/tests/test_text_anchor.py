@@ -36,6 +36,22 @@ class NormalizeTest(unittest.TestCase):
         a = line_vs_lines("WHAT is YOURNAME?", ["WHAT is YOUR NAME?"])
         self.assertGreater(a, 0.85)
 
+    def test_cjk_preserved(self):
+        """中文字卡必须存活(2026-10-28 修复):旧 [^a-z0-9]+ 把汉字剥光 → 中文
+        整行归一成空串、被 filter_watermark 当噪声丢弃,OCR 字牌信号对中文失效。"""
+        self.assertEqual(normalize_text("请问你是谁？"), "请问你是谁")
+        self.assertEqual(normalize_text("三件事"), "三件事")
+        self.assertEqual(normalize_text("。！？"), "")
+
+    def test_mixed_cjk_ascii(self):
+        self.assertEqual(normalize_text("第3集 WHAT is YOUR NAME?"),
+                         "第3集whatisyourname")
+
+    def test_cjk_similarity_and_watermark(self):
+        """中文行可互相匹配(3-gram),且不再被水印过滤当短噪声丢掉。"""
+        self.assertGreater(line_vs_lines("请问你是谁", ["请问你是谁啊"]), 0.5)
+        self.assertEqual(filter_watermark(["请问你是谁", "你好"]), ["请问你是谁"])
+
 
 class WatermarkTest(unittest.TestCase):
     def test_tiktok_watermark_filtered(self):

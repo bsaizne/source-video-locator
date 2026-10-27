@@ -18,12 +18,16 @@ from __future__ import annotations
 
 import re
 
-_NORM_RE = re.compile(r"[^a-z0-9]+")
+# 归一化保留字符 = ASCII 字母数字 + CJK 汉字(含扩展A)。2026-10-28 修复：旧口径
+# ``[^a-z0-9]+`` 在 lower 之后把全部汉字剥光 → 中文字卡整行归一成空串、被
+# filter_watermark 当 <3 噪声丢弃 → OCR 字牌信号对中文内容整条失效(而本模块的
+# 设计目标正是中文字牌，docstring 的实证案例即中文问句字牌)。
+_NORM_RE = re.compile(r"[^0-9a-z\u3400-\u9fff]+")
 DEFAULT_WATERMARKS = ("tiktok", "fyprecap")
 
 
 def normalize_text(s: str) -> str:
-    """小写、去非字母数字、压缩——OCR 噪声容错('YOURNAME?'→'yourname')。"""
+    """小写、去标点/空白(保留汉字)、压缩——OCR 噪声容错('YOURNAME?'→'yourname')。"""
     return _NORM_RE.sub("", (s or "").lower())
 
 
