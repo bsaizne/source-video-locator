@@ -8,7 +8,10 @@
      —— 用 ``orig_times`` 时间轴定位（``searchsorted``），不硬编码 fps。
   2. ``sim = cosine_similarity(edited_query, R)``            -> [nq, nr]
   3. ``cover = sim.max(axis=0)``                             -> per-original max-over-query coverage
-  4. ``cs = convolve(cover, ones(3)/3, mode=same)``          -> 3 帧平滑
+  4. ``cs`` = cover 的 3 帧平滑，窗两端按**实际参与样本数**归一
+     （2026-10-28 修：旧 ``np.convolve(mode="same")`` 是零填充，两端 cover 被
+     ÷3 稀释 ⇒ 贴候选窗边的真 span 内缩 1-2 帧；窗口 <3 帧时旧码输出长度还会
+     变成 3 ≠ 窗长，mask 越界取 orig_times）
   5. ``mask = cs >= thresh``（FINLOC_THRESH=0.4，冻结）
   6. longest_run(mask)  ->  精确 span [tr0, tr1]
 
@@ -145,7 +148,17 @@ def finloc_window(candidate: Candidate, ed_feats: np.ndarray,
     R = orig_feats[r_lo:r_hi + 1]
     sim = cosine_similarity(ed_feats, R)                 # [nq, nr]
     cover = sim.max(axis=0)                              # [nr]  per-orig max-over-query
-    cs = np.convolve(cover, np.ones(3) / 3.0, mode="same")
+    # 3 帧平滑（2026-10-28 修两点）：① 旧 ``np.convolve(mode="same")`` 是**零**填充，
+    # 窗两端 cs 被稀释成 (c0+c1)/3 ⇒ 贴候选窗边的真 span mask 掉点、run 内缩 1-2 帧；
+    # 改按实际参与样本数归一（内部点逐位不变，仅首/尾两点修正为 (c0+c1)/2）。
+    # ② 旧码在窗口 <3 帧时 convolve 输出长度=3 ≠ 窗长，mask 越过候选窗边界取
+    # orig_times ⇒ span 时刻可能静默取错；短窗退化为均值（无平滑意义）。
+    if cover.shape[0] >= 3:
+        _num = np.convolve(cover, np.ones(3), mode="same")
+        _den = np.convolve(np.ones(cover.shape[0]), np.ones(3), mode="same")
+        cs = _num / _den
+    else:
+        cs = np.full(cover.shape[0], float(np.mean(cover)))
     mask = cs >= thresh
     nr = int(mask.shape[0])
     best_cover = float(mask.sum()) / float(nr) if nr else 0.0

@@ -62,6 +62,35 @@ class FinlocTest(unittest.TestCase):
         self.assertEqual((ln, s, e), (3, 1, 4))
         self.assertEqual(longest_run(np.array([False, False]))[0], 0)
 
+    def test_window_edge_not_diluted(self):
+        """2026-10-28 修：旧 mode="same" 零填充把候选窗两端 cover ÷3 ⇒ 贴窗边的真
+        span 被内缩。cover=[0.5,0.5,1,1]：旧码首点 cs=(0+.5+.5)/3=1/3<thresh 掉点
+        （span 从第 2 帧起），修复后首点=(0.5+0.5)/2=0.5≥0.4 保住（span 覆盖全窗）。"""
+        a = np.zeros((1, 384), dtype=np.float32); a[0, 0] = 1.0
+        b = np.zeros((1, 384), dtype=np.float32); b[0, 1] = 1.0
+        s = float(np.sqrt(0.75))
+        orig = np.vstack([0.5 * a + s * b, 0.5 * a - s * b, a, a]).astype(np.float32)
+        orig = orig / np.linalg.norm(orig, axis=1, keepdims=True)
+        times = np.array([0.0, 2.0, 4.0, 6.0], dtype=np.float32)
+        q = a                                             # 单查询帧, cover=[0.5,0.5,1,1]
+        cand = Candidate(0, 6, 6, 0.99, 0.9, 0.9, 0, 4, 1.0, 0.05, 1.5)
+        loc = finloc_window(cand, q, orig, times)
+        self.assertIsNotNone(loc.span)
+        self.assertEqual(loc.span[0], 0.0)                # 首点不再被零填充稀释掉
+        self.assertEqual(loc.run_len_frames, 4)
+
+    def test_tiny_window_mask_length_matches(self):
+        """2026-10-28 修：窗口 <3 帧时旧 convolve 输出长度=3≠窗长，mask 越界取
+        orig_times ⇒ span 可能静默取错；修复后短窗退化为均值，mask 与窗等长。"""
+        a = np.zeros((1, 384), dtype=np.float32); a[0, 0] = 1.0
+        orig = np.vstack([a, a]).astype(np.float32)
+        times = np.array([10.0, 12.0], dtype=np.float32)
+        cand = Candidate(10, 12, 2, 0.99, 0.9, 0.9, 10, 2, 1.0, 0.05, 1.5)
+        loc = finloc_window(cand, a, orig, times)
+        self.assertIsNotNone(loc.span)
+        self.assertEqual(loc.span, (10.0, 12.0))
+        self.assertEqual(loc.run_len_frames, 2)
+
     def test_continuous_span(self):
         q, _, bundle = _continuous_bundle()
         cand = Candidate(40, 58, 18, 0.99, 0.9, 0.9, 40, 10, 1.0, 0.05, 1.5)
