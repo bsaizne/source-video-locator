@@ -328,6 +328,21 @@ class SmartRenderTest(unittest.TestCase):
         renderer = TimelineMovieRenderer("ffmpeg", "ffprobe", Path("."))
         self.assertFalse(renderer.smart_render)
 
+    def test_reencoded_part_matches_source_b_frames(self):
+        # 2026-10-28 实测（test3）：源 has_b_frames=2，重编件默认 bf=0 时与 copy 件拼接
+        # 严格解码只出头段 93/312 帧；补 -bf 2 后 312/312。锁住「smart 路径必须传源 B 帧数」。
+        cmd = segment_command(ffmpeg="ffmpeg", source=Path("D:/v/om.mkv"), out_path=Path("o.mov"),
+                              start_s=1.0, frames=10, fps=Fraction(25, 1), width=640, height=360,
+                              pix_fmt="yuv420p", encoder="h264_amf", crf=20, preset="balanced",
+                              has_audio=True, sample_rate=48000, b_frames=2)
+        self.assertIn("-bf", cmd)
+        self.assertEqual(cmd[cmd.index("-bf") + 1], "2")
+        plain = segment_command(ffmpeg="ffmpeg", source=Path("D:/v/om.mkv"), out_path=Path("o.mov"),
+                                start_s=1.0, frames=10, fps=Fraction(25, 1), width=640, height=360,
+                                pix_fmt="yuv420p", encoder="h264_amf", crf=20, preset="balanced",
+                                has_audio=True, sample_rate=48000)
+        self.assertNotIn("-bf", plain)      # 串行重编路径行为不变
+
     def test_smart_final_validation_uses_strict_decode_count(self):
         calls = []
 

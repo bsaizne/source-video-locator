@@ -212,7 +212,7 @@ def merge_stage_frac(frac: float | None, *, base: float = 0.96,
 def segment_command(*, ffmpeg: str, source: Path, out_path: Path, start_s: float,
                     frames: int, fps: Fraction, width: int, height: int, pix_fmt: str,
                     encoder: str, crf: int, preset: str, has_audio: bool,
-                    sample_rate: int) -> list[str]:
+                    sample_rate: int, b_frames: int | None = None) -> list[str]:
     """构造单片段渲染命令（fast input seek + CFR 重编码 + 帧数硬上限）。
 
     - ``-ss`` 前置于 ``-i``（既有产品冻结口径：fast seek，长源不从 0 解码）。
@@ -233,6 +233,12 @@ def segment_command(*, ffmpeg: str, source: Path, out_path: Path, start_s: float
             "-vf", cfr_video_filter(width=width, height=height, pix_fmt=pix_fmt, fps=fps),
             "-r", fps_text(fps), "-fps_mode", "cfr", "-frames:v", str(frames)]
     cmd += h264_encoder_args(encoder, pix_fmt=pix_fmt, crf=crf, preset=preset)
+    if b_frames is not None:
+        # smart render 专用：重编件的 B 帧数必须与**源片**一致。实测（2026-10-28，test3）
+        # 源片 has_b_frames=2 而 AMF 默认 bf=0 时，段内与 copy 件拼接后严格解码只出到头段
+        # 93/312 帧（容器帧数正常、解码器在参数集切换处停住）；只对齐 profile/level 无效，
+        # 补 `-bf 2` 后 312/312 全解码。串行重编路径不传此参数（行为不变）。
+        cmd += ["-bf", str(b_frames)]
     cmd += audio_encoder_args(sample_rate=sample_rate)
     cmd += ["-avoid_negative_ts", "make_zero", "-map_metadata", "-1",
             "-progress", "pipe:1", str(out_path)]
@@ -575,6 +581,7 @@ class RenderPlan:
     hdr_downgraded: bool = False
     smart_render: bool = False
     keyframes: tuple[Keyframe, ...] = ()
+    b_frames: int = 0
 
 
 @dataclass
@@ -728,7 +735,8 @@ class TimelineMovieRenderer:
                       segment_dir=seg_dir,
                       concat_list=out_path.parent / f"{out_path.stem}.concat.txt",
                       hdr_downgraded=bool(is_hdr(v) or is_high_bit_depth(v)),
-                      smart_render=smart_allowed)
+                      smart_render=smart_allowed,
+                      b_frames=int(v.get("has_b_frames") or 0))
         if out_path.exists() and out_path.stat().st_size > 0:
             return RenderPlan(jobs=[], reused=True,
                               reason="命中既有成片（同原片、同片段清单、同参数）", **common)
@@ -942,7 +950,8 @@ class TimelineMovieRenderer:
                         start_s=part.start_s, frames=part.frames, fps=plan.fps,
                         width=plan.width, height=plan.height, pix_fmt=plan.pix_fmt,
                         encoder=plan.encoder, crf=self.crf, preset=self.preset,
-                        has_audio=plan.has_audio, sample_rate=self.sample_rate)
+                        has_audio=plan.has_audio, sample_rate=self.sample_rate,
+                        b_frames=plan.b_frames)
 
                 def on_frac(frac, *, _part=part, _completed=completed):
                     seg_cb(job, None if frac is None else
