@@ -5814,3 +5814,27 @@ v2 每条 GT 行只看「编辑侧重叠最大的**那一条**结果」，而编
 - Created `checkpoint-2026-10-28-215158.md` checkpoint (2 modified/untracked file(s)).
 
 - Created `checkpoint-2026-10-28-004802.md` checkpoint (27 modified/untracked file(s)).
+
+## 2026-10-28（批次1 收口）· develop 并入 master + push + 远端实况订正
+
+口令「分支并入master吧」→「push」→「是的，写入档案并一起推送」。**`mvp/src` 零改动**（纯 git/档案）。
+
+### 1. 并入
+
+`develop` 7 笔（`6271b19` 计划 → `0085d9c`/`13d199c`/`c92ec9b` 三 bug → `7e5ee73` 尺子 → `12c7f5f` 收口 → `5142107` 成本闭合补记 + checkpoint）**快进**并入 `master`（`--ff-only`，无合并提交，两分支树哈希同为 `5d58b3e`）。
+
+合并前工作树有 4 处未提交改动，一并入库（`5142107`）：`agent-context checkpoint` 生成的三件（STATE 时间戳 / CHANGELOG 一行 / `archive/checkpoint-2026-10-28-215158.md`）+ **03:06 写的 XFeat 成本闭合补记**（此前只进了 STATE、漏进 `FINDINGS_XFEAT_ARCFACE_20261027.md §6`，该档此前仍写着「成本未闭合」，已就地订正）。
+
+### 2. push 与远端实况订正
+
+`git push origin master` rc=0，输出区间为 **`4b9e0cc..5142107`（33 笔）**，而非预期的 `ef8ffe5..5142107`（7 笔）。核查：本地追踪引用记 `origin/master = ef8ffe5`（显示 ahead 26），**远端实际停在 26 笔之前的 `4b9e0cc`（续85）**。未查原因（当时未推成 / 远端被回退），只记实况。最终 `ls-remote` 回读 `refs/heads/master = 5142107` == 本地 `rev-parse`。无强推、无历史改写。
+
+⇒ 档案里旧「已推远端 `e5b5d90..ad7cec4`」「origin/master = `4fe0d96`」等表述与远端不符，**以 STATE `Completed` 顶部本条为准**；旧行不逐一改写。`develop` 仍为纯本地分支（远端无此 ref）。
+
+### 3. 教训
+
+进 `Known Issues` ㉒：**「已推」以 `git ls-remote` 回读为准**；`git push` 输出的起始 sha 与预期不符时必须停下查清（本次正是靠它暴露偏差）；推送成功判据 = 远端 sha == 本地 sha，不是「本地 ahead 归零」。
+
+### 4. 门槛
+
+快进合并零内容变化，未重跑测试；批次1 终门禁读数（后端 765 OK(skipped=2) / API 150）对应同一棵树。
