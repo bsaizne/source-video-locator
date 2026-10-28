@@ -18,7 +18,7 @@
 > 门禁：基线 758 → 终 **765 OK(skipped=2) + API 150 OK**；单测 +7。回滚点 5 笔
 > （`6271b19`→`0085d9c`→`13d199c`→`c92ec9b`→`7e5ee73`）。
 > **待用户**：① bug1 四片 A/B（并出包批）；② 批次2 立项（Drop-DTW/置信三件套/VQ2D 扩窗/XFeat 加固）；
-> ③ develop push / 合 master 时机；④ 未 push、未出包、未动 GT、未翻默认值。
+> ③ push 时机（master 已本地并入，未 push）；④ 未出包、未动 GT、未翻默认值。
 
 ## P1 — Next
 

@@ -711,7 +711,8 @@
 > （自包含）。**一句话**：三 bug 复核属实已修（bug1 修复即激活 OCR 字牌腿，出包前建议四片 A/B）+
 > mAP@δ 尺子落地（池化 AP@0.5s=0.447）；develop 分支 5 笔提交**未 push**。
 > **下一步（需用户）**：① bug1 生产四片 A/B（建议并出包批）；② 批次2 离线实验立项
-> （Drop-DTW/置信三件套/VQ2D 扩窗/XFeat 加固）；③ develop push / 合回 master 时机；
+> （Drop-DTW/置信三件套/VQ2D 扩窗/XFeat 加固）；③ push 时机（**master 已本地并入 develop
+> 全部 5 笔**，`12c7f5f`，未 push）；
 > ④ 若 04:00 兜底自检触发，按 TODO P0 接续。
 > **▶ 交接指针（2026-10-27 续99，最新）**：**先读**
 > `mvp/docs/FINDINGS_XFEAT_ARCFACE_20261027.md`（本批自包含：离线逐图、生产 A/B、ArcFace 解混、
@@ -1105,4 +1106,4 @@
 
 ## Last Updated
 
-2026-10-28 03:4x（批次1 定时批收口）
+2026-10-28 21:51
