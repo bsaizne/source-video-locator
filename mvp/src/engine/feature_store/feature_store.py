@@ -161,16 +161,17 @@ class FeatureStore:
         # 默认关：并发会让两阶段进度消息交错，等四片等价性验收后再决定是否翻默认。
         scan_thread = None
         scan_holder: dict[str, object] = {}
+        merged = _merged_progress(progress) if self.parallel_passes else progress
         if self.parallel_passes:
             def _run_scan() -> None:
                 try:
-                    scan_holder["pixel"] = self._scan_pixel_boundaries(video, vmeta, progress)
+                    scan_holder["pixel"] = self._scan_pixel_boundaries(video, vmeta, merged)
                 except BaseException as exc:       # 线程内异常必须回传主线程，不能静默吞
                     scan_holder["error"] = exc
             scan_thread = threading.Thread(target=_run_scan, name="pixel-scan", daemon=True)
             scan_thread.start()
 
-        feats, times = self._embed_stream(video, backend, vmeta, progress)
+        feats, times = self._embed_stream(video, backend, vmeta, merged)
 
         _notify(progress, IndexProgress("writing"))
         np.save(d / "features.npy", feats)
@@ -618,3 +619,33 @@ class FeatureStore:
 def _notify(progress: ProgressFn | None, event: IndexProgress) -> None:
     if progress is not None:
         progress(event)
+
+
+# 并发两遍解码时的进度合成权重（实测 2.mkv 300s 窗：嵌入解码 9.5s / 像素预扫 10.2s，
+# 但整片嵌入阶段含 DML 推理后约占 60%）⇒ 0.6 / 0.4。
+_MERGE_W_EMBED = 0.6
+_MERGE_W_PIXEL = 0.4
+
+
+def _merged_progress(progress: ProgressFn | None) -> ProgressFn | None:
+    """把「嵌入 / 像素预扫」两条并发进度合成**单调**的单一进度（stage=index_combined）。
+
+    两个阶段各自 done/total 都在涨，直接透传会让同一条进度条在两个百分比之间来回跳
+    （UI 侧 INDEX_BUILD 直接拿 current/total 当百分比）⇒ 用加权和 + 历史最大值保证单调。
+    """
+    if progress is None:
+        return None
+    state = {"embed": 0.0, "pixel": 0.0, "last": 0.0}
+    lock = threading.Lock()
+
+    def cb(p: IndexProgress) -> None:
+        frac = (p.done / p.total) if p.total else 0.0
+        with lock:
+            key = "pixel" if p.stage == "pixel_scan" else "embed"
+            state[key] = max(state[key], frac)
+            combined = _MERGE_W_EMBED * state["embed"] + _MERGE_W_PIXEL * state["pixel"]
+            combined = max(state["last"], combined)
+            state["last"] = combined
+        progress(IndexProgress("index_combined", done=int(round(combined * 1000)), total=1000))
+
+    return cb

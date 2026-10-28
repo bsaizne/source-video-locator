@@ -2970,8 +2970,13 @@ class SourceLocatorService:
                 return
             # 像素预扫的帧数是索引 fps 的 10 倍：文案要跟着换，否则同一根进度条
             # 会在「母片索引构建」名义下突然从 N/10 涨回 0/10N，看着像卡住重来。
-            text = (f"正在扫描母片镜头边界 {p.done}/{p.total} 帧" if p.stage == "pixel_scan"
-                    else f"母片索引构建中 {p.done}/{p.total} 帧")
+            # index_combined = 并发两遍解码时的合成进度（千分制，已保证单调）。
+            if p.stage == "pixel_scan":
+                text = f"正在扫描母片镜头边界 {p.done}/{p.total} 帧"
+            elif p.stage == "index_combined":
+                text = f"母片索引构建中 {int(round(100.0 * p.done / max(1, p.total)))}%"
+            else:
+                text = f"母片索引构建中 {p.done}/{p.total} 帧"
             on_progress(ProgressEvent(ProgressStage.INDEX_BUILD,
                                       current=p.done, total=p.total, message=text))
         return cb

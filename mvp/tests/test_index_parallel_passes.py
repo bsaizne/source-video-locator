@@ -15,7 +15,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))  # -> mvp/src
 
 from app import SourceLocatorService
-from engine.feature_store.feature_store import FeatureStore
+from engine.feature_store.feature_store import FeatureStore, _merged_progress
+from domain.models import IndexProgress
 from infrastructure.config import PipelineConfig
 from media.ffmpeg import FFmpegIO
 
@@ -26,8 +27,9 @@ FFPROBE = (BENCH.parent / "video-dedup-tool" / ".venv" / "Lib" / "site-packages"
 
 
 class IndexParallelPassesTest(unittest.TestCase):
-    def test_default_off(self):
-        self.assertFalse(PipelineConfig().index_parallel_passes)
+    def test_default_on(self):
+        # 2026-10-28 全片双臂验收通过后翻默认（关掉即回串行老路径）
+        self.assertTrue(PipelineConfig().index_parallel_passes)
 
     def _service(self, parallel):
         tmp = tempfile.mkdtemp()
@@ -40,8 +42,21 @@ class IndexParallelPassesTest(unittest.TestCase):
     def test_store_receives_flag_from_config(self):
         self.assertTrue(self._service(True).store.parallel_passes)
 
-    def test_store_default_off(self):
+    def test_store_receives_false(self):
         self.assertFalse(self._service(False).store.parallel_passes)
+
+    def test_merged_progress_monotone(self):
+        seen = []
+        cb = _merged_progress(lambda p: seen.append((p.stage, p.done, p.total)))
+        self.assertIsNotNone(cb)
+        seq = [("embedding", 10, 100), ("pixel_scan", 500, 1000), ("embedding", 20, 100),
+               ("pixel_scan", 900, 1000), ("embedding", 100, 100), ("pixel_scan", 1000, 1000)]
+        for st, d, t in seq:
+            cb(IndexProgress(st, done=d, total=t))
+        dones = [d for _, d, _ in seen]
+        self.assertEqual(dones, sorted(dones), "合成进度必须单调不回退")
+        self.assertEqual(seen[0][0], "index_combined")
+        self.assertEqual(seen[-1][1:], (1000, 1000))
 
     def test_parallel_branch_still_calls_same_two_passes(self):
         src = inspect.getsource(FeatureStore.create_index)

@@ -131,8 +131,9 @@ class PipelineConfig:
     """冻结流水线参数（MVP 基线，见 MVP_ARCHITECTURE §8）。"""
 
     # 索引期两遍全片解码（像素预扫 / 特征嵌入）并发执行。零语义（产物逐字节相同），
-    # 只省墙钟；默认关，四片等价性验收通过后再议是否翻默认（见 PLAN_BATCH3_20261028）。
-    index_parallel_passes: bool = False
+    # 只省墙钟。2026-10-28 全片双臂验收通过（2mkv 723->582s / test3 954->818s，
+    # 六件产物逐字节相同、合成进度单调）⇒ 默认 True。关闭即回到串行老路径。
+    index_parallel_passes: bool = True
     index_sampling_fps: float = 1.0   # 索引密度（0.5→1.0，1-2s 短镜头定位更细；feature_version @1_l2 自动重建）
     edited_segment_fps: float = 2.0
     # 原始 span 宽度上限（峰值覆盖核心 + 按编辑支持比例，短镜头不定位成 30s 场景）
