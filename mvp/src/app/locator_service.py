@@ -211,6 +211,7 @@ class SourceLocatorService:
             self._store = FeatureStore(
                 self.ffmpeg, self.index_root,
                 sampling_fps=pc.index_sampling_fps,
+                parallel_passes=bool(pc.index_parallel_passes),
                 scene_cfg=SceneDetectConfig(
                     pixel_enabled=bool(pc.scene_pixel_enabled),
                     pixel_fps=float(pc.scene_pixel_fps),

@@ -22,6 +22,7 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
@@ -120,13 +121,15 @@ class FeatureStore:
     def __init__(self, ffmpeg: FFmpegIO, index_root: str | Path, *,
                  sampling_fps: float = 0.5, chunk_frames: int = 32,
                  feature_version: str | None = None,
-                 scene_cfg: SceneDetectConfig | None = None):
+                 scene_cfg: SceneDetectConfig | None = None,
+                 parallel_passes: bool = False):
         self.ffmpeg = ffmpeg
         self.index_root = Path(index_root)
         self.sampling_fps = sampling_fps
         self.chunk_frames = chunk_frames
         self.scene_cfg = scene_cfg or SceneDetectConfig()
         self.feature_version = feature_version or _feature_version(sampling_fps)
+        self.parallel_passes = parallel_passes
 
     # ------------------------------------------------------------------ #
     # Index location
@@ -153,12 +156,32 @@ class FeatureStore:
         d.mkdir(parents=True, exist_ok=True)
 
         _notify(progress, IndexProgress("extracting_frames"))
+        # 两遍全片解码（像素预扫 10fps 低分辨率 / 特征嵌入 1fps 全分辨率）互相独立，
+        # 并发执行不改变任何产物（同一 ffmpeg 过滤器链、同一帧集），只省墙钟。
+        # 默认关：并发会让两阶段进度消息交错，等四片等价性验收后再决定是否翻默认。
+        scan_thread = None
+        scan_holder: dict[str, object] = {}
+        if self.parallel_passes:
+            def _run_scan() -> None:
+                try:
+                    scan_holder["pixel"] = self._scan_pixel_boundaries(video, vmeta, progress)
+                except BaseException as exc:       # 线程内异常必须回传主线程，不能静默吞
+                    scan_holder["error"] = exc
+            scan_thread = threading.Thread(target=_run_scan, name="pixel-scan", daemon=True)
+            scan_thread.start()
+
         feats, times = self._embed_stream(video, backend, vmeta, progress)
 
         _notify(progress, IndexProgress("writing"))
         np.save(d / "features.npy", feats)
         np.save(d / "times.npy", times)
-        pixel = self._scan_pixel_boundaries(video, vmeta, progress)
+        if scan_thread is not None:
+            scan_thread.join()
+            if "error" in scan_holder:
+                raise scan_holder["error"]           # type: ignore[misc]
+            pixel = scan_holder.get("pixel")         # type: ignore[assignment]
+        else:
+            pixel = self._scan_pixel_boundaries(video, vmeta, progress)
         scenes, scene_feats = self._build_scene_table(feats, times, pixel=pixel)
         np.save(d / "scenes.npy", scenes)
         np.save(d / "scene_feats.npy", scene_feats)
