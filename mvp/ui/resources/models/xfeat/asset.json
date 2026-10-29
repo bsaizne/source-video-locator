@@ -1,0 +1,15 @@
+{
+  "name": "xfeat",
+  "model": "XFeat + XFeat-LighterGlue (official Apache-2.0 weights)",
+  "consumed_by": "engine/xfeat_start.py XFeatStartRefiner (SVL_XFEAT_MODELS_ROOT)",
+  "license": "Apache-2.0 (upstream verlab/accelerated_features)",
+  "notes": "起点精修腿；缺失时整层降级为不移起点（2026-10-28 已翻默认开）",
+  "files": [
+    "xfeat.pt",
+    "xfeat-lighterglue.pt"
+  ],
+  "sha256": {
+    "xfeat.pt": "0f5187fd7bedd26c7fe6acc9685444493a165a35ecc087b33c2db3627f3ea10b",
+    "xfeat-lighterglue.pt": "766102df37f11189efe5b0811d1f47c72b22629b79bfabfcfff9d2a2f84654b8"
+  }
+}

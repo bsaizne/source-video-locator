@@ -128,7 +128,7 @@ jobs:
       - name: Install backend build deps
         run: |
           python -m pip install --upgrade pip
-          pip install torch numpy opencv-python fastapi uvicorn pyinstaller rapidocr-onnxruntime static-ffmpeg pyJianYingDraft
+          pip install torch numpy opencv-python fastapi uvicorn pyinstaller rapidocr-onnxruntime static-ffmpeg pyJianYingDraft kornia
 
       - name: Fetch model assets for mac bundle (patch + ISC ONNX)
         env:
@@ -179,11 +179,17 @@ jobs:
           get "$M/dinov2_cls_patch" dinov2_cls_patch.onnx.data || miss=$((miss+1))
           get "$M/isc_ft_v107" isc_ft_v107.onnx || miss=$((miss+1))
           get "$M/isc_ft_v107" isc_ft_v107.onnx.data || miss=$((miss+1))
+          # 2026-10-29 起 XFeat（起点精修，已翻默认开）与人脸身份资产也必须进 mac 包：
+          # 缺 XFeat ⇒ 起点精修整层降级（与 Windows 包不同档）；缺 face ⇒ 人脸标注整层降级。
+          get "$M/xfeat" xfeat.pt || miss=$((miss+1))
+          get "$M/xfeat" xfeat-lighterglue.pt || miss=$((miss+1))
+          get "$M/face" det_2.5g.onnx || miss=$((miss+1))
+          get "$M/face" w600k_mbf.onnx || miss=$((miss+1))
           if [ "$miss" != 0 ]; then
-            echo "::error::缺 $miss 份模型资产：release $SRC_TAG 上必须挂着 dinov2_cls_patch.onnx.data(88,342,528B) / isc_ft_v107.onnx(1,613,211B) / isc_ft_v107.onnx.data(209,190,912B)，sha256 见 mvp/ui/resources/models/*/asset.json。缺任一份 ⇒ 包内 patch 精排静默回退 CPU torch、ISC 第二意见整条跳过 ⇒ 不放行。"
+            echo "::error::缺 $miss 份模型资产：release $SRC_TAG 上必须挂着 dinov2_cls_patch.onnx.data(88,342,528B) / isc_ft_v107.onnx(1,613,211B) / isc_ft_v107.onnx.data(209,190,912B) / xfeat.pt(6,247,949B) / xfeat-lighterglue.pt(10,820,795B) / det_2.5g.onnx(3,292,009B) / w600k_mbf.onnx(13,616,099B)，sha256 见 mvp/ui/resources/models/*/asset.json。缺任一份 ⇒ 包内 patch 精排静默回退 CPU torch / ISC 第二意见整条跳过 / XFeat 起点精修整层降级 / 人脸标注降级 ⇒ 不放行。"
             exit 91
           fi
-          python3 mvp/scripts/verify_model_asset_shas.py "$M/dinov2_cls_patch" "$M/isc_ft_v107"
+          python3 mvp/scripts/verify_model_asset_shas.py "$M/dinov2_cls_patch" "$M/isc_ft_v107" "$M/xfeat" "$M/face"
       - name: Download DINOv2 weights
         run: |
           mkdir -p .cache/dinov2_weights

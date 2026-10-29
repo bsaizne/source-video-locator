@@ -1,0 +1,15 @@
+{
+  "name": "face",
+  "model": "SCRFD-2.5G + ArcFace w600k_mbf (insightface 系，非商业许可)",
+  "consumed_by": "engine/face_identity.py（旁路标注，不进 confidence）",
+  "license": "insightface model zoo (non-commercial research use)",
+  "notes": "人脸身份标注；缺失时整层降级不标注（不改三指标）",
+  "files": [
+    "det_2.5g.onnx",
+    "w600k_mbf.onnx"
+  ],
+  "sha256": {
+    "det_2.5g.onnx": "041f73f47371333d1d17a6fee6c8ab4e6aecabefe398ff32cca4e2d5eaee0af9",
+    "w600k_mbf.onnx": "9cc6e4a75f0e2bf0b1aed94578f144d15175f357bdc05e815e5c4a02b319eb4f"
+  }
+}
