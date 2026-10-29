@@ -19,6 +19,7 @@ from engine.feature_store.feature_store import FeatureStore, _merged_progress
 from domain.models import IndexProgress
 from infrastructure.config import PipelineConfig
 from media.ffmpeg import FFmpegIO
+from media.ffmpeg._runner import MediaError, resolve_binaries
 
 BENCH = Path(__file__).resolve().parents[2]
 FFMPEG = BENCH / "tools" / "ffmpeg.exe"
@@ -32,8 +33,16 @@ class IndexParallelPassesTest(unittest.TestCase):
         self.assertTrue(PipelineConfig().index_parallel_passes)
 
     def _service(self, parallel):
+        # 本机（Windows）用仓内 tools/ 二进制；mac/linux CI 用各自的解析顺序，
+        # 都没有就跳过——这两项只验「config → FeatureStore 注入链」，不触解码。
+        try:
+            ff, fp = resolve_binaries(
+                FFMPEG if FFMPEG.exists() else None,
+                FFPROBE if FFPROBE.exists() else None)
+        except MediaError as exc:
+            self.skipTest("ffmpeg/ffprobe 不可解析，跳过注入链测试: %s" % exc)
         tmp = tempfile.mkdtemp()
-        srv = SourceLocatorService(ffmpeg=FFmpegIO(ffmpeg=FFMPEG, ffprobe=FFPROBE),
+        srv = SourceLocatorService(ffmpeg=FFmpegIO(ffmpeg=ff, ffprobe=fp),
                                    index_root=tmp, export_root=tmp)
         srv.config.pipeline.index_parallel_passes = parallel
         srv._store = None
