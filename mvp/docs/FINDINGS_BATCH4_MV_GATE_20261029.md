@@ -22,12 +22,26 @@
 - 三个时刻取样（含快动作段），全部 0~1 个变化像素 ⇒ 不是"恰好这一帧没有运动"。
 - build：`ffmpeg 7.1-essentials_build-www.gyan.dev`；`-flags2 +export_mvs` + `codecview=mv=pf+bf+bb`。
 
+## PyAV 复核（2026-10-29 补，隔离安装，未污染产品 venv）
+
+`av==19.0.2`（wheel 28MB，自带 libavcodec 63.1.102 ≈ ffmpeg 8.x）装到 `work/b3_20261028/pylibs`
+（`pip install --target`，产品环境零改动）。两种置位法都试了：
+
+| 方法 | flags2 | H.264 (test3) 20 帧带 MOTION_VECTORS |
+|---|---|---|
+| `av.open(options={'flags2': '+export_mvs'})` | 0x0（未生效） | 0 |
+| `stream.codec_context.flags2 \|= 0x20000` | **0x20000（已生效）** | **0** |
+
+⇒ **PyAV 这条路在本机拿不到 MV（连 H.264 也拿不到）**，是解码栈/API 层面的问题，不是 HEVC 特有。
+因此：
+
+- **"HEVC 无 MV"的结论只对 ffmpeg CLI 7.1 成立**（该 CLI 上 H.264 正控通过、HEVC 三个时刻全 0）；
+- 换解码栈是否可行**仍未知且未闭合**，但已确认 PyAV 19 不行；要再试得换别的栈（成本高于本问题价值）。
+
 ## 未闭合
 
-- **PyAV 数值口径未验**（`pip install av` 在本机网络下超时，两次均未完成）。PyAV 若上位，
-  其自带 ffmpeg 若版本不同，HEVC 的 `MOTION_VECTORS` side data 可能可用 ⇒ 但这属于换解码栈，
-  不是"现役依赖能做的事"，落地要新增 ~100MB 级依赖。**未验证前不下"永远不行"的结论**，
-  只下"现役工具链不行"。
+- 换解码栈能否导出 HEVC MV：**未知**。已排除 PyAV 19；ffmpeg CLI 7.1 不行。
+  再往下试需另找带 `export_mvs` 的 build，成本高于该候选的预期收益。
 
 ## 影响与可选路径
 
