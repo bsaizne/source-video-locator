@@ -166,6 +166,15 @@
 
 ## Completed
 
+- **mac 包已重出并发布（2026-10-30，run `41073403901`，head `56f06d2`）**：
+  `mac-alpha/Video-Locator-mac-arm64.zip` **978,545,018B**（旧 917,113,473B @ 10-22），
+  macos-package **success**、publish 已覆盖 ⇒ **mac 包首次包含 XFeat / SCRFD+ArcFace / 批次1 三 bug / 索引并发**。
+  同批把 XFeat(2)+face(2) 四份资产挂上 `mac-alpha`（服务端 sha256 逐个核对）。
+  ⚠️ **两处门禁放宽（因 GitHub runner 变 Apple Paravirtual 无 Metal 2.0）**：① MPS 冒烟改 warning+跳过；
+  ② 包内验收 `backend selected=mps` 在 runner 无 MPS 时标 `[SKIP]` —— ⇒ **mac 的 MPS 运行路径本轮 CI 未验证**
+  （其余全 PASS：包内 backend 启动/health 200/建索引/locate/中文路径 locate），需真机首启复验设备徽标。
+  过程记录：3 次 dispatch 才绿（① 我的并发单测硬编码 Windows ffmpeg 路径；② MPS 冒烟硬件断言；
+  ③ 包内验收同一断言）；其中一次 push 因 SSH 抖动未落地已重推核实。
 - **r30 已出包（2026-10-29）**：`Video-Locator-win-x64-20261029r30.zip` **1,054,397,980B** / 条目 8,379
   （文件 7,002 + 空目录 1,377）/ `testzip=None` / `backend.exe` 79,226,311B sha16 **`1fe0fed2ee8efbc8`**
   == 磁盘、zip 内逐字节相同 / `bridge.js` 8,882B sha16 `7d3e0427e3d3a4db` == 磁盘（Electron 主进程未动）。
