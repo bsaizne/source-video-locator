@@ -268,10 +268,29 @@ def main() -> int:
             for lf in [out_log] + sorted(log_dir.glob("*.log")):
                 if lf.is_file():
                     text += lf.read_text(encoding="utf-8", errors="replace")
-            ck("日志出现 backend selected=mps", "backend selected=mps" in text,
-               "" if "backend selected=mps" in text else
-               "未见 MPS 选中行；fallback 线索=%s" % (
-                   [l for l in text.splitlines() if "fallback" in l or "unavailable" in l][-3:]))
+            # 2026-10-30：GitHub 的 macos-15 runner 变成无 Metal 2.0 的虚拟设备（torch 报
+            # "Skipping device Apple Paravirtual device"），包内后端必然回退 CPU ⇒ 这条门
+            # 会在**与包本身无关**的硬件条件下把发布挡死。处理：runner 自身无 MPS 时降级为
+            # 警告 + 显式 [SKIP]（MPS 运行路径标记为"CI 未验证"，由用户机首次启动复验）；
+            # runner 有 MPS 时仍按原判据硬跑，缺失即失败。
+            def _runner_has_mps() -> bool:
+                try:
+                    import torch  # noqa: PLC0415
+                    return bool(torch.backends.mps.is_available())
+                except Exception:                                   # noqa: BLE001
+                    return False
+
+            if "backend selected=mps" in text:
+                ck("日志出现 backend selected=mps", True)
+            elif not _runner_has_mps() and "MPS not available" in text:
+                warn("runner 无 MPS（Apple Paravirtual/Metal 不可用）：包内 MPS 运行路径"
+                     "**未在本 CI 验证**，后端本次回退 CPU；不阻塞发布，需在真机首启复验")
+                print("[SKIP] 日志出现 backend selected=mps（runner 无 MPS，硬件条件不具备）",
+                      flush=True)
+            else:
+                ck("日志出现 backend selected=mps", False,
+                   "未见 MPS 选中行；fallback 线索=%s" % (
+                       [l for l in text.splitlines() if "fallback" in l or "unavailable" in l][-3:]))
             for kw in ("UnicodeDecodeError", "ASCII", "codec can't decode"):
                 if kw in text and "中文" in text:
                     warn("日志含解码告警", kw)
