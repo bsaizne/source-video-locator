@@ -166,6 +166,14 @@
 
 ## Completed
 
+- **r30 已出包（2026-10-29）**：`Video-Locator-win-x64-20261029r30.zip` **1,054,397,980B** / 条目 8,379
+  （文件 7,002 + 空目录 1,377）/ `testzip=None` / `backend.exe` 79,226,311B sha16 **`1fe0fed2ee8efbc8`**
+  == 磁盘、zip 内逐字节相同 / `bridge.js` 8,882B sha16 `7d3e0427e3d3a4db` == 磁盘（Electron 主进程未动）。
+  五道包内验收：bundle **37 PASS/FAILED=0**（新增 XFeat 资产锁通过）· render 8 PASS/0 ·
+  导出计划不变式 FAILED=0（4 片×4 通道）· 合并腿 baseline vs merged 逐项相同（strict 43/43、fp 3、零翻转）。
+  包内新资产：`models/xfeat/{xfeat.pt 6,247,949, xfeat-lighterglue.pt 10,820,795}`、`models/face/{det_2.5g, w600k_mbf}`。
+  对 r29：严格 147→148、仅主 span 142→144、假阳 4→4；包体 +36.3MB。
+  release 现三档 = r30 现役 + r29 + r28（删旧档等口令）。
 - **批次3 B3-3 smart render 第二次判负（2026-10-28/29，永久关闭）**：先修对了 10-27 的失败根因
   （源 `has_b_frames=2` 而 AMF 编 `bf=0` ⇒ 段内拼接后严格解码只出头段 93/312；profile/setts/genpts/
   timescale 四种对齐手段全无效，补 `-bf <源值>` 后 **4513/4513** 全解码）。但修好后真读数 = **copy 仅 6.18%**
