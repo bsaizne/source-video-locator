@@ -742,7 +742,11 @@
 
 ## Next Actions
 
-> **▶ 交接指针（2026-10-29 批次3 收口，最新）**：**先读** `.agent/archive/HANDOFF_20261029_batch3_closeout.md`
+> **▶ 交接指针（2026-10-30 发布批收口，最新）**：**先读** `.agent/archive/HANDOFF_20261030_release_closeout.md`
+> （自包含：r30 + mac 包身份 / 五道验收 / **两处 MPS 门禁放宽与未验证边界** / 未闭合 5 项 / 环境坑）。
+> **一句话**：Windows r30（1,054,397,980B）与 mac（978,545,018B，run 41073403901）均已发布；
+> 剩余待办 = mac 真机 MPS 复验 · text_anchor 去留 · UI 呈现层 · GT 两笔 · 删 r28。
+> **▶ 交接指针（2026-10-29 批次3 收口）**：**先读** `.agent/archive/HANDOFF_20261029_batch3_closeout.md`
 > （自包含：批次1~3 全结状态 / 读数表 / 别再试清单 / 未闭合项 / 复现命令 / 回滚点）。
 > 细节读 `mvp/docs/FINDINGS_BATCH3_20261028.md`
 > （自包含）。**一句话**：B3-1 索引两遍解码并发**成立并翻默认**（全片 2mkv 1.24× / test3 1.17×，
